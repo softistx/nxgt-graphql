@@ -1,0 +1,62 @@
+{
+	"name": "@nxgt/graphql-validation",
+	"version": "0.0.0",
+	"description": "Validate GraphQL arguments and input fields with @constraint directives, checked by Zod schemas, for graphql 16 and 17",
+	"license": "MIT",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"docs",
+		"README.md",
+		"package.json",
+		"LICENSE"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"keywords": [
+		"graphql",
+		"validation",
+		"constraint",
+		"directive",
+		"zod",
+		"bun",
+		"typescript"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/softistx/nxgt-graphql.git",
+		"directory": "packages/graphql-validation"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "bun run ../../build.ts",
+		"test": "bun test src",
+		"typecheck": "tsc --noEmit"
+	},
+	"nxgt": {
+		"entrypoints": [
+			"src/index.ts"
+		]
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.0",
+		"graphql": "16.11.0",
+		"zod": "4.6.5"
+	},
+	"peerDependencies": {
+		"graphql": "^16.11.0 || ^17.0.0",
+		"typescript": "^6.0.3",
+		"zod": ">=4.6.5 <5"
+	}
+}
