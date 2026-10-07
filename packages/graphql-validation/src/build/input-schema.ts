@@ -11,7 +11,7 @@ import {
 	isNonNullType,
 } from 'graphql';
 import { z } from 'zod';
-import type { Targets } from '../rules/rule';
+import { applyRule } from '../rules';
 import { type Constraint, constraintsOn } from './constraints';
 import { describe, leafSchema } from './leaf';
 
@@ -95,16 +95,8 @@ export class InputSchemas {
 			// minItems and maxItems are the list's; every other rule is its items'.
 			const own = constraints.filter(({ rule }) => rule.target === 'list');
 			const items = constraints.filter(({ rule }) => rule.target !== 'list');
-			let list: Targets['list'] = z.array(
-				this.#typed(type.ofType, items, where),
-			);
-			for (const { rule, value } of own) {
-				const apply = rule.toZod as (
-					schema: Targets['list'],
-					value: number,
-				) => Targets['list'];
-				list = apply(list, value as number);
-			}
+			let list: z.ZodType = z.array(this.#typed(type.ofType, items, where));
+			for (const { rule, value } of own) list = applyRule(rule, list, value);
 			return list;
 		}
 		if (isInputObjectType(type)) {

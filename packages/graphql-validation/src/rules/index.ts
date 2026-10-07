@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import * as all from './all';
 
 /**
@@ -19,3 +20,20 @@ export const rules = Object.fromEntries(
 ) as {
 	readonly [A in ConstraintArgument]: Extract<RegisteredRule, { argument: A }>;
 };
+
+/**
+ * Applies a rule to a schema its caller has already matched to the rule's
+ * target: the one place the rule's typed `toZod` meets a schema built from
+ * GraphQL types, which the compiler cannot relate.
+ */
+export function applyRule(
+	rule: RegisteredRule,
+	schema: z.ZodType,
+	value: string | number,
+): z.ZodType {
+	const toZod = rule.toZod as unknown as (
+		schema: z.ZodType,
+		value: string | number,
+	) => z.ZodType;
+	return toZod(schema, value);
+}

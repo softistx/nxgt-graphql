@@ -6,7 +6,8 @@ import {
 	GraphQLString,
 } from 'graphql';
 import { z } from 'zod';
-import type { Target, Targets } from '../rules/rule';
+import { applyRule } from '../rules';
+import type { Target } from '../rules/rule';
 import type { Constraint } from './constraints';
 
 /** The kind of value each built-in scalar holds once graphql parsed it. */
@@ -42,11 +43,7 @@ export function leafSchema(
 				`@constraint(${rule.argument}) on ${where} needs ${describe(rule.target)}, not ${type.name}.`,
 			);
 		}
-		const apply = rule.toZod as (
-			schema: Targets[typeof kind],
-			value: string | number,
-		) => z.ZodType;
-		schema = apply(schema as Targets[typeof kind], value);
+		schema = applyRule(rule, schema, value);
 	}
 	return schema;
 }

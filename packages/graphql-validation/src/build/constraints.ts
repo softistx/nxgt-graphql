@@ -24,7 +24,8 @@ export function constraintsOn(
 		| undefined,
 ): Constraint[] {
 	if (!directive || !node) return [];
-	const values = getDirectiveValues(directive, node) ?? {};
+	const values =
+		getDirectiveValues(directive, { directives: node.directives ?? [] }) ?? {};
 	return Object.entries(values)
 		.filter(([, value]) => value !== undefined && value !== null)
 		.map(([argument, value]) => ({
