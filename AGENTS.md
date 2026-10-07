@@ -120,6 +120,9 @@ that weakens one is a breaking change, even when every spec stays green.
   accepts as they are (`IPv6`'s compressed and full forms in either case, `MAC` in either
   case), the scalar accepts them and passes them through unchanged: no
   rewrite, so nothing is silently normalised.
+  `ObjectID` (24 hex digits) takes either case on the owner's decision, kept
+  as sent. Where the format's own reference reads one case only (rs/xid's
+  `XID`), the scalar takes that case only.
 
 ## The green bar
 

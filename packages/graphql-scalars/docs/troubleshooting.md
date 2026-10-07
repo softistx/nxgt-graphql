@@ -49,6 +49,17 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `Hostname cannot represent this input: Invalid hostname` | an empty value, a space, an underscore, a label that starts or ends with `-`, or a label of more than 63 characters |
 | `PhoneNumber cannot represent this input: Invalid E.164 number` | no leading `+`, a country code starting with 0, spaces or dashes, or more than 15 digits; send `+33612345678` |
 | `UUID cannot represent this input: Invalid UUID` | not the 8-4-4-4-12 form |
+| `UUIDv4 cannot represent this input: Invalid UUID` | not a version 4 UUID: another version (a `v7`, a `v1`) or a wrong variant; use `UUID` to take any version |
+| `UUIDv7 cannot represent this input: Invalid UUID` | not a version 7 UUID: another version or a wrong variant |
+| `GUID cannot represent this input: Invalid GUID` | not 8-4-4-4-12 hex digits: braces (`{…}`), no hyphens or a non-hex digit |
+| `ULID cannot represent this input: Invalid ULID` | not 26 Crockford base32 characters, a first character above 7, or an `I`, `L`, `O` or `U` |
+| `Cuid2 cannot represent this input: Invalid cuid2` | not a lower-case letter then lower-case letters and digits, 2 to 32 in all: starts with a digit (`1abc`), a single character, upper case or a `-` |
+| `NanoID cannot represent this input: Invalid nanoid` | not 21 characters of `A-Za-z0-9_-` (a custom size or alphabet needs your own scalar) |
+| `KSUID cannot represent this input: Invalid KSUID` | not 27 base62 characters, or past the 160-bit maximum `aWgEPTl1tmebfsQzFP4bxwgy80V` |
+| `XID cannot represent this input: Invalid XID` | not 20 lowercase base32hex characters (`0-9`, `a-v`), or a last character other than `0` or `g` |
+| `ObjectID cannot represent this input: Invalid ObjectID` | not 24 hex digits: a wrong length, a non-hex digit or a space around it |
+| `ISBN cannot represent this input: Invalid ISBN` | a wrong check digit, hyphens or spaces (`978-0-306-40615-7`), a lower-case `x`, an ISBN-13 not starting 978 or 979-1 to 979-9 (`979-0` is the ISMN), or a wrong length; send the bare digits |
+| `SemVer cannot represent this input: Invalid semantic version` | a `v` prefix, fewer than three parts, a leading zero (`01.2.3`) or an empty pre-release or build |
 | `NonEmptyString cannot represent this input: Must not be empty or blank` | empty or only white space |
 | `PositiveInt cannot represent this input: Too small: expected number to be >0` | `0` or negative |
 | `PositiveInt cannot represent this input: Too big: expected number to be <=2147483647` | above 32 bits |

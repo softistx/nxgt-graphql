@@ -60,6 +60,24 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
 - **`MAC`** is six hex pairs separated by `:`, all lowercase or all uppercase.
   graphql-scalars also accepts `-` separators, no separator (`001a2b3c4d5e`),
   `.` groups (`001a.2b3c.4d5e`) and mixed case.
+- **`GUID`** is `z.guid()`: 8-4-4-4-12 hex, no braces. graphql-scalars takes
+  `{…}` and strips the braces from the value it returns.
+- **`ULID`** is kept as sent. graphql-scalars takes either case but returns
+  the value upper-cased, so `01arz3…` comes back as `01ARZ3…`; here it comes
+  back unchanged. The rule (26 Crockford base32 characters, first 0 to 7) is
+  the same.
+- **`ObjectID`** is 24 hex digits in either case, as in graphql-scalars, and
+  kept as sent in both; the rule is the same. It is a string, not a driver
+  `ObjectId`.
+- **`ISBN`** takes bare digits only, with its check digit verified (an ISBN-13
+  starts 978 or 979-1 to 979-9; an ISBN-10 may end in an uppercase `X`). graphql-scalars
+  accepts hyphens, spaces and an `ISBN`/`ISBN-13:` prefix, a lower-case `x`,
+  and does not check the digit: `0306406153` and `9780306406158` pass there
+  and fail here. Strip the hyphens before you send.
+- **`SemVer`** is the same rule: the semver.org regular expression, no `v`
+  prefix. Only the message differs (`Invalid semantic version`).
+- **`Cuid2`** is the same rule (`^[a-z][a-z0-9]{1,31}$`), so `1abc` is refused
+  in both. Only the message differs (`Invalid cuid2`).
 - **`PhoneNumber`** is strict E.164: `+`, a country code not starting with 0,
   at most 15 digits, no separator. The graphql-scalars regex makes the `+`
   optional, allows spaces, dashes and parentheses, and has no length limit, so
@@ -81,7 +99,8 @@ LongScalar.serialize(9223372036854775807n); // '9223372036854775807'
 
 ## Only here
 
-`CIDRv4`, `CIDRv6` and `Hostname` have no graphql-scalars counterpart.
+`CIDRv4`, `CIDRv6`, `Hostname`, `UUIDv4`, `UUIDv7`, `NanoID`, `KSUID` and
+`XID` have no graphql-scalars counterpart.
 
 ## Aliases we do not repeat
 
@@ -98,7 +117,7 @@ One name per rule, so use the name on the right.
 
 `PostalCode`, `USCurrency`, `SESSN`, `AccountNumber`, `RoutingNumber`,
 `DeweyDecimal`, `LCCSubclass`, `IPCPatent`, `CountryName`, `Byte` and `Cuid`
-(v1) are not planned; `Cuid2` is a separate scalar, coming. Write the one you
+(v1; `Cuid2` is a different format) are not planned. Write the one you
 need with `zodScalar`:
 
 ```ts

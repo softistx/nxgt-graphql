@@ -41,7 +41,7 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 | Category | Scalars |
 | --- | --- |
 | [date-time](scalars/date-time.md) | `DateTime`, `Date` |
-| [identifier](scalars/identifier.md) | `UUID` |
+| [identifier](scalars/identifier.md) | `UUID`, `UUIDv4`, `UUIDv7`, `GUID`, `ULID`, `Cuid2`, `NanoID`, `KSUID`, `XID`, `ObjectID`, `ISBN`, `SemVer` |
 | [network](scalars/network.md) | `URL`, `EmailAddress`, `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`, `PhoneNumber` |
 | [number](scalars/number.md) | `PositiveInt`, `NegativeInt`, `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long`, `BigInt` |
 | [string](scalars/string.md) | `NonEmptyString` |
