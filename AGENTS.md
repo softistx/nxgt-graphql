@@ -17,6 +17,15 @@ by every nxgt repository, and `scalars` alone would not say what it is for.
 
 It is **Bun-first**: ESM, tested with `bun test`, no Bun-only API in the library.
 
+## Layout
+
+One scalar per file in `packages/graphql-scalars/src/scalars/`
+(`date-time.ts`, `url.ts`, ...): its Zod schema, then the scalar built on it
+with `zodScalar`. `src/scalars/index.ts` gathers them into `schemas`,
+`scalarResolvers` and `scalarTypeDefs`; `src/zod-scalar.ts` is the factory. A
+new scalar is a new file there and one line in each of the three maps — and a
+spec case in `src/scalars/scalars.spec.ts`, and a row in the README table.
+
 ## Layering
 
 `@nxgt/graphql-scalars` depends on nothing at runtime; `graphql` and `zod` are

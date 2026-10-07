@@ -17,7 +17,7 @@ import {
 	scalarTypeDefs,
 	URLScalar,
 	UUIDScalar,
-} from './scalars';
+} from './index';
 
 /** Each scalar, with values it accepts and refuses on the wire. */
 const cases: [GraphQLScalarType, accepted: unknown[], refused: unknown[]][] = [
