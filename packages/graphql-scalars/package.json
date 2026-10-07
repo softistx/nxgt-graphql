@@ -1,6 +1,6 @@
 {
 	"name": "@nxgt/graphql-scalars",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "GraphQL scalars defined by Zod schemas: DateTime, Date, EmailAddress, URL, UUID, NonEmptyString, PositiveInt, and zodScalar for your own",
 	"license": "MIT",
 	"type": "module",
