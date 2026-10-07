@@ -42,7 +42,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 | date-time | `DateTime`, `Date` |
 | identifier | `UUID` |
 | network | `URL`, `EmailAddress` |
-| number | `PositiveInt` |
+| number | `PositiveInt`, `NegativeInt`, `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long`, `BigInt` |
 | string | `NonEmptyString` |
 
 The rule, the accepted and refused values and the exports of each scalar are
@@ -206,11 +206,14 @@ Every message is in [Troubleshooting](docs/troubleshooting.md).
   result is encoded; use `z.codec`.
 - `DateTime` serializes a `Date` only: parse a stored string before returning it.
 - `Date` is a string on both sides, never a `Date` object.
+- `Long` and `BigInt` are a `bigint` in resolvers and always a string on the
+  wire: return `BigInt(row.count)`, not a `number`.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
 - Guides: [Scalars](docs/guide/scalars.md),
-  [Custom scalars](docs/guide/custom-scalars.md)
+  [Custom scalars](docs/guide/custom-scalars.md),
+  [Migrating from graphql-scalars](docs/guide/migrating-from-graphql-scalars.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Roadmap](docs/roadmap.md)

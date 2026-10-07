@@ -10,7 +10,7 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category — `DateTime`, `Date`, `EmailAddress`, `URL`, `UUID`, `NonEmptyString`, `PositiveInt` — with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (listed in `docs/guide/scalars.md`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -35,6 +35,8 @@ packages/graphql-scalars/src/
       index.ts             one `export *` line per scalar
       <name>.ts            one scalar: `<name>Schema`, then `<Name>Scalar`
       <name>.spec.ts       its cases, through test/scalar-cases.ts
+  rules/                   building blocks several scalars share, never
+                           exported from the package (big-integer.ts)
 ```
 
 - **A new scalar is a file, its spec, and one line** in its category's
@@ -97,7 +99,16 @@ that weakens one is a breaking change, even when every spec stays green.
   `javascript:` (measured on zod 4.6.5), and a client is likely to put the
   value in an `href`. The pattern must stay exactly `/^https?$/`: Zod reads
   that source to also refuse `https:example.com`, and a spec pins it.
-- **`PositiveInt` is 32 bits**, as GraphQL's `Int` is.
+- **The `*Int` scalars are 32 bits**, as GraphQL's `Int` is; `SafeInt`,
+  `Long` and `BigInt` are the wider ones, and say so in their name.
+- **`Long` and `BigInt` are a string on the wire, always.** A `bigint` in the
+  resolvers; as input a canonical decimal string or a safe-integer number. A
+  number past 2⁵³ is refused, never rounded, and a resolver's `number` is
+  refused rather than converted (`src/rules/big-integer.ts`).
+- **An input is taken in its canonical form only.** A scalar refuses a
+  variant spelling rather than rewriting it (`007`, `-0`), so the value a
+  resolver receives is the one the client sent. The exceptions are Zod's own
+  (`URL` trims).
 
 ## The green bar
 

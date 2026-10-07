@@ -46,6 +46,26 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `PositiveInt cannot represent this input: Too big: expected number to be <=2147483647` | above 32 bits |
 | `PositiveInt cannot represent this input: Invalid input: expected int, received number` | not an integer, such as `1.5` |
 | `PositiveInt cannot represent this input: Invalid input: expected number, received string` | `"1"` is a string; send `1` |
+| `Port cannot represent this input: Too big: expected number to be <=65535` | above 65535 |
+| `SafeInt cannot represent this input: Too big: expected int to be <=9007199254740991` | past 2^53; use `Long` or `BigInt` |
+| `Long cannot represent this input: Expected a decimal integer, with no leading zero and no "-0"` | a string such as `"007"`, `"-0"`, `"+1"` or `" 1"` |
+
+### `Long cannot represent this input: Expected a decimal integer string or a safe integer`
+
+**When:** a query writes a number literal past 2^53 for a `Long` or `BigInt`
+(`views(id: 9223372036854775807)`), or a variable carries a float or an unsafe number.
+**Why:** a literal that large is read as a float by the parser and would lose
+precision, so it is refused rather than rounded. The same family holds
+`Expected a decimal integer, with no leading zero and no "-0"` for a string such
+as `"007"`, and `Too big: expected bigint to be <=9223372036854775807` for a
+`Long` out of range.
+**Fix:** write the value as a string literal, or pass it as a string variable.
+
+```graphql
+query {
+  views(id: "9223372036854775807")
+}
+```
 
 ### `<Name> cannot represent a ListValue literal`
 
@@ -89,6 +109,18 @@ resolve: (row) => new Date(row.createdAt), // not row.createdAt
 **Why:** `new Date(Number.NaN)` is a `Date` with no time, so it names no
 instant to write.
 **Fix:** validate the source before building the `Date`.
+
+### `Long cannot serialize this value: Invalid input: expected bigint, received number`
+
+**When:** a resolver returns a `number` for a `Long` or `BigInt` field, such as
+a count read from a database driver. `BigInt` says the same with its own name.
+**Why:** both are a `bigint` in resolvers; a `number` past 2^53 may already have
+lost digits, so it is not guessed at.
+**Fix:**
+
+```ts
+resolve: (row) => BigInt(row.count), // not row.count
+```
 
 ### `URL cannot serialize this value: Invalid URL`
 

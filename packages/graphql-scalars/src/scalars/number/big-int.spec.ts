@@ -1,0 +1,50 @@
+import { describe, expect, test } from 'bun:test';
+import { Kind } from 'graphql';
+import { scalarCases } from '../../../test/scalar-cases';
+import { BigIntScalar } from './big-int';
+
+describe('BigInt', () => {
+	scalarCases(BigIntScalar, {
+		accepted: ['0', '-1', '9223372036854775807', '-9223372036854775808', 42],
+		refused: ['007', '-0', '1.5', '1e3', ' 1', '', 1.5, 2 ** 53, true, null],
+		passThrough: false,
+	});
+
+	test('a string becomes a bigint, and a bigint goes out as its string', () => {
+		expect(BigIntScalar.parseValue('9223372036854775807')).toBe(
+			9223372036854775807n,
+		);
+		expect(BigIntScalar.parseValue(42)).toBe(42n);
+		expect(BigIntScalar.serialize(-9223372036854775808n)).toBe(
+			'-9223372036854775808',
+		);
+	});
+
+	test('a number resolver result is refused: the resolver returns a bigint', () => {
+		expect(() => BigIntScalar.serialize(42)).toThrow(
+			'BigInt cannot serialize this value',
+		);
+	});
+
+	test('a literal past 2^53 written as a number is refused, not rounded', () => {
+		expect(() =>
+			BigIntScalar.parseLiteral(
+				{ kind: Kind.INT, value: '9007199254740993' },
+				undefined,
+			),
+		).toThrow('BigInt cannot represent this input');
+		expect(
+			BigIntScalar.parseLiteral(
+				{ kind: Kind.STRING, value: '9007199254740993' },
+				undefined,
+			),
+		).toBe(9007199254740993n);
+	});
+
+	test('it has no bound', () => {
+		expect(BigIntScalar.parseValue('123456789012345678901234567890')).toBe(
+			123456789012345678901234567890n,
+		);
+		expect(BigIntScalar.serialize(-(10n ** 40n))).toBe(`-1${'0'.repeat(40)}`);
+	});
+});

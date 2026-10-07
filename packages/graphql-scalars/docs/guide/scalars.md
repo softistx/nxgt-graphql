@@ -43,7 +43,7 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 | [date-time](#date-time) | `DateTime`, `Date` |
 | [identifier](#identifier) | `UUID` |
 | [network](#network) | `URL`, `EmailAddress` |
-| [number](#number) | `PositiveInt` |
+| [number](#number) | `PositiveInt`, `NegativeInt`, `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long`, `BigInt` |
 | [string](#string) | `NonEmptyString` |
 
 ## date-time
@@ -145,6 +145,9 @@ It is `z.email()`.
 
 ## number
 
+Integers of 32 bits (as GraphQL's `Int`), finite floats, then the integers
+beyond 32 bits. A float refuses `NaN` and `Infinity`.
+
 ### `PositiveInt`
 
 Export `PositiveIntScalar`, schema `positiveIntSchema`. A number on both
@@ -161,6 +164,127 @@ import { PositiveIntScalar } from '@nxgt/graphql-scalars';
 
 PositiveIntScalar.parseValue(2147483648);
 // throws: PositiveInt cannot represent this input: Too big: expected number to be <=2147483647
+```
+
+### `NegativeInt`
+
+Export `NegativeIntScalar`, schema `negativeIntSchema`. A number on both
+sides. An integer from -2147483648 to -1; refuses `0` and `1`.
+
+### `NonNegativeInt`
+
+Export `NonNegativeIntScalar`, schema `nonNegativeIntSchema`. A number on both
+sides. An integer from 0 to 2147483647; refuses `-1`.
+
+### `NonPositiveInt`
+
+Export `NonPositiveIntScalar`, schema `nonPositiveIntSchema`. A number on both
+sides. An integer from -2147483648 to 0; refuses `1`.
+
+### `PositiveFloat`
+
+Export `PositiveFloatScalar`, schema `positiveFloatSchema`. A number on both
+sides. A finite number above 0: accepts `0.5`; refuses `0`, `-0.5`, `NaN` and
+`Infinity`.
+
+### `NegativeFloat`
+
+Export `NegativeFloatScalar`, schema `negativeFloatSchema`. A number on both
+sides. A finite number below 0: accepts `-0.5`; refuses `0`.
+
+### `NonNegativeFloat`
+
+Export `NonNegativeFloatScalar`, schema `nonNegativeFloatSchema`. A number on
+both sides. A finite number, 0 or above: accepts `0` and `1.5`; refuses `-0.5`.
+
+### `NonPositiveFloat`
+
+Export `NonPositiveFloatScalar`, schema `nonPositiveFloatSchema`. A number on
+both sides. A finite number, 0 or below: accepts `0` and `-1.5`; refuses `0.5`.
+
+### `SafeInt`
+
+Export `SafeIntScalar`, schema `safeIntSchema`. A number on both sides.
+Accepts `-9007199254740991` and `9007199254740991`; refuses `9007199254740992`
+and `1.5`.
+
+An integer JavaScript holds exactly, ±(2^53 - 1). It is beyond 32 bits, so it
+is not GraphQL's `Int`: a client that follows the spec cannot write it as a
+literal. Past 2^53 use `Long` or `BigInt`.
+
+```ts
+import { SafeIntScalar } from '@nxgt/graphql-scalars';
+
+SafeIntScalar.parseValue(9007199254740992);
+// throws: SafeInt cannot represent this input: Too big: expected int to be <=9007199254740991
+```
+
+### `Port`
+
+Export `PortScalar`, schema `portSchema`. A number on both sides. A TCP or UDP
+port, 0 to 65535; refuses `-1`, `65536` and `80.5`.
+
+```ts
+import { PortScalar } from '@nxgt/graphql-scalars';
+
+PortScalar.parseValue(65536);
+// throws: Port cannot represent this input: Too big: expected number to be <=65535
+```
+
+### `Long`
+
+Export `LongScalar`, schema `longSchema`. A `bigint` in resolvers, a decimal
+string on the wire. A signed 64-bit integer, -9223372036854775808 to
+9223372036854775807.
+
+JSON numbers past 2^53 lose precision in most clients, so the way **out** is
+always a string, whatever the size. The way in accepts a canonical decimal
+string (no leading zero, no `-0`, no `+`, no spaces) or a safe-integer number.
+
+```ts
+import { LongScalar } from '@nxgt/graphql-scalars';
+
+LongScalar.parseValue('9223372036854775807'); // 9223372036854775807n
+LongScalar.parseValue(42); // 42n
+LongScalar.serialize(-9223372036854775808n); // '-9223372036854775808'
+
+LongScalar.parseValue('007');
+// throws: Long cannot represent this input: Expected a decimal integer, with no leading zero and no "-0"
+LongScalar.parseValue(1.5);
+// throws: Long cannot represent this input: Expected a decimal integer string or a safe integer
+LongScalar.parseValue('9223372036854775808');
+// throws: Long cannot represent this input: Too big: expected bigint to be <=9223372036854775807
+```
+
+A resolver must return a `bigint`; a `number` is refused
+(`BigInt(row.count)` fixes it, see [Troubleshooting](../troubleshooting.md)).
+In a query, a literal past 2^53 written as a number is refused, not rounded:
+write it as a string, `"9223372036854775807"`, or pass a variable.
+
+```ts
+import { createSchema } from 'graphql-yoga';
+import { pickScalars } from '@nxgt/graphql-scalars';
+
+const { typeDefs, resolvers } = pickScalars('Long');
+
+export const schema = createSchema({
+  typeDefs: [typeDefs, /* GraphQL */ `type Query { views(id: ID!): Long! }`],
+  resolvers: { ...resolvers, Query: { views: () => 9007199254740993n } },
+});
+// { data: { views: '9007199254740993' } }
+```
+
+### `BigInt`
+
+Export `BigIntScalar`, schema `bigIntSchema`. The same as `Long` with no
+range: an integer of any size, a `bigint` in resolvers and a decimal string on
+the wire.
+
+```ts
+import { BigIntScalar } from '@nxgt/graphql-scalars';
+
+BigIntScalar.parseValue('123456789012345678901234567890'); // a bigint
+BigIntScalar.serialize(2n ** 80n); // '1208925819614629174706176'
 ```
 
 ## string
@@ -183,6 +307,9 @@ const URLScalar: ZodScalar<typeof urlSchema, 'URL'>;
 const UUIDScalar: ZodScalar<typeof uuidSchema, 'UUID'>;
 const NonEmptyStringScalar: ZodScalar<typeof nonEmptyStringSchema, 'NonEmptyString'>;
 const PositiveIntScalar: ZodScalar<typeof positiveIntSchema, 'PositiveInt'>; // GraphQLScalarType<number, number>
+// NegativeInt, NonNegativeInt, NonPositiveInt, the four floats, SafeInt and Port: the same shape
+const LongScalar: ZodScalar<typeof longSchema, 'Long'>; // GraphQLScalarType<bigint, string | number>
+const BigIntScalar: ZodScalar<typeof bigIntSchema, 'BigInt'>; // GraphQLScalarType<bigint, string | number>
 
 // every scalar, keyed by its GraphQL name
 type ScalarResolvers = { DateTime: typeof DateTimeScalar /* , Date, ... */ };
@@ -196,11 +323,10 @@ const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scala
 ```
 
 `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order
-of their export: `Date`, `DateTime`, `EmailAddress`, `NonEmptyString`,
-`PositiveInt`, `URL`, `UUID`.
+of their export.
 
-`EmailAddress`, `NonEmptyString` and `PositiveInt` have no `specifiedBy`; the
-others point at RFC 3339, the WHATWG URL standard and RFC 9562.
+Only `DateTime`, `Date`, `URL` and `UUID` have a `specifiedBy`, pointing at
+RFC 3339, the WHATWG URL standard and RFC 9562; the others have none.
 
 ## Schema-first with a server
 
@@ -287,7 +413,7 @@ picked: a field typed with another one fails when the schema is built.
 
 Each scalar's Zod schema is exported on its own (`dateTimeSchema`, a codec
 between the wire string and a `Date`; `dateSchema`; `emailAddressSchema`;
-`urlSchema`; `uuidSchema`; `nonEmptyStringSchema`; `positiveIntSchema`), and
+`urlSchema`; `uuidSchema`; `nonEmptyStringSchema`; `positiveIntSchema`, `longSchema`, …), and
 `schemas` holds them all under the name without `Schema`: `schemas.dateTime`
 is `dateTimeSchema`.
 
@@ -309,4 +435,4 @@ const parsed = body.parse({
 }); // parsed.at is a Date
 ```
 
-Next: [Custom scalars](custom-scalars.md).
+Next: [Custom scalars](custom-scalars.md), or [Migrating from graphql-scalars](migrating-from-graphql-scalars.md).
