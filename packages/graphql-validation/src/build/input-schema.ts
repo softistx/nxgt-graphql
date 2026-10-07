@@ -57,6 +57,16 @@ export class InputSchemas {
 		return isInputObjectType(named) && this.#constrained.has(named.name);
 	}
 
+	/**
+	 * Builds every constrained input type, reached by an argument or not, so
+	 * a constraint that cannot apply fails at startup wherever it is written.
+	 */
+	buildAll(schema: GraphQLSchema): void {
+		for (const type of Object.values(schema.getTypeMap())) {
+			if (isInputObjectType(type)) this.#object(type);
+		}
+	}
+
 	/** Whether an argument or input field needs checking at all. */
 	needsCheck(input: GraphQLArgument | GraphQLInputField): boolean {
 		return (
