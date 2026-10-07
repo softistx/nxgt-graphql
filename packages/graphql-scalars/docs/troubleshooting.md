@@ -8,6 +8,7 @@ For the built-in scalars, the scalar's own message never contains the value.
 - [Input](#input)
 - [Output](#output)
 - [Custom scalars](#custom-scalars)
+- [pickScalars](#pickscalars)
 
 ## Install
 
@@ -120,3 +121,35 @@ export const Len = zodScalar(
 ```
 
 See [Custom scalars](guide/custom-scalars.md#codecs-when-the-value-changes).
+
+## pickScalars
+
+### `TypeError: pickScalars: no scalar is named "<name>". The names are <list>.`
+
+**When:** calling `pickScalars` with a name the package does not have, for
+example `pickScalars('Datetime' as never)` or a name read from configuration.
+The message lists every valid name.
+**Why:** names are case-sensitive GraphQL names, not export names
+(`DateTime`, not `DateTimeScalar`).
+**Fix:** use a name from the list in the message.
+
+```ts
+import { pickScalars } from '@nxgt/graphql-scalars';
+
+pickScalars('DateTime'); // not 'Datetime', not 'DateTimeScalar'
+```
+
+### `TS2345: Argument of type '"Datetime"' is not assignable to parameter of type 'ScalarName'`
+
+**When:** type-checking `pickScalars('Datetime')`.
+**Why:** the names are typed (`ScalarName`), so a misspelling is caught
+before it runs.
+**Fix:** spell the name as the GraphQL scalar, or type a name that comes from
+elsewhere:
+
+```ts
+import { pickScalars, type ScalarName } from '@nxgt/graphql-scalars';
+
+const wanted: ScalarName[] = ['DateTime', 'URL'];
+pickScalars(...wanted);
+```

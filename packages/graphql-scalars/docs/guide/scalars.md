@@ -1,7 +1,7 @@
 # Scalars
 
-The seven scalars of the package, the exact rule of each, and how to put them
-in a schema. For your own scalars see [Custom scalars](custom-scalars.md).
+The scalars of the package, grouped by category, the exact rule of each, and
+how to put them in a schema. For your own scalars see [Custom scalars](custom-scalars.md).
 
 ## The smallest example
 
@@ -29,22 +29,31 @@ const result = await graphql({
 // { data: { next: '2024-01-01T00:00:01.000Z' } }
 ```
 
-## Every rule
+## Every scalar
 
 Every scalar checks its value both ways: an input is validated before your
 resolver sees it, a result before it goes on the wire.
 
-| GraphQL name | Export | Wire | Resolver | Accepts | Refuses |
-| --- | --- | --- | --- | --- | --- |
-| `DateTime` | `DateTimeScalar` | string | `Date` | `2024-03-10T12:00:00+02:00`, `2024-03-10T10:00:00Z` | no offset, impossible day, `2024-03-10` |
-| `Date` | `DateScalar` | string | string | `2024-02-29` | `2023-02-29`, `2024-2-1`, a date-time, a number |
-| `EmailAddress` | `EmailAddressScalar` | string | string | `ada@example.com`, `a.b+c@sub.example.org` | `ada`, `ada@`, `a b@example.com` |
-| `URL` | `URLScalar` | string | string | `https://example.com/a?b=c`, `http://localhost:3000` | `javascript:`, `data:`, `mailto:`, `example.com` |
-| `UUID` | `UUIDScalar` | string | string | `550e8400-e29b-41d4-a716-446655440000` | no hyphens, `not-a-uuid` |
-| `NonEmptyString` | `NonEmptyStringScalar` | string | string | `a`, ` a ` | `""`, `"   "`, `"\n\t"` |
-| `PositiveInt` | `PositiveIntScalar` | number | number | `1`, `2147483647` | `0`, `-1`, `1.5`, `2147483648`, `"1"` |
+Scalars live in categories, and the page follows them. A scalar `X` is
+exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
+`schemas.x`.
 
-### DateTime
+| Category | Scalars |
+| --- | --- |
+| [date-time](#date-time) | `DateTime`, `Date` |
+| [identifier](#identifier) | `UUID` |
+| [network](#network) | `URL`, `EmailAddress` |
+| [number](#number) | `PositiveInt` |
+| [string](#string) | `NonEmptyString` |
+
+## date-time
+
+### `DateTime`
+
+Export `DateTimeScalar`, schema `dateTimeSchema`. Wire value a string,
+resolver value a `Date`. Accepts `2024-03-10T12:00:00+02:00` and
+`2024-03-10T10:00:00Z`; refuses a time with no offset, an impossible day and
+`2024-03-10`.
 
 An RFC 3339 date-time **with its offset** (`Z` or `±hh:mm`). A time without an
 offset names no instant, so it is refused. A variable becomes a `Date`; the
@@ -76,9 +85,12 @@ DateTimeScalar.serialize(new Date('2024-03-10T10:00:00.000Z')); // fine
 
 An invalid `Date` (`new Date(Number.NaN)`) is refused too.
 
-### Date
+### `Date`
 
-A calendar date, `YYYY-MM-DD`, a string on both sides. It is not a `Date`
+Export `DateScalar`, schema `dateSchema`. A string on both sides. Accepts
+`2024-02-29`; refuses `2023-02-29`, `2024-2-1`, a date-time and a number.
+
+A calendar date, `YYYY-MM-DD`. It is not a `Date`
 because a `Date` is an instant: turning a birthday into one shifts it by a day
 in half the time zones. An impossible day (`2021-02-30`) is refused. If you
 need arithmetic, parse it yourself where the zone is known.
@@ -91,7 +103,23 @@ DateScalar.parseValue('2023-02-29');
 // throws: Date cannot represent this input: Invalid ISO date
 ```
 
-### URL
+## identifier
+
+### `UUID`
+
+Export `UUIDScalar`, schema `uuidSchema`. A string on both sides. Accepts
+`550e8400-e29b-41d4-a716-446655440000`; refuses a value with no hyphens and
+`not-a-uuid`.
+
+It is `z.uuid()`, the 8-4-4-4-12 form (RFC 9562).
+
+## network
+
+### `URL`
+
+Export `URLScalar`, schema `urlSchema`. A string on both sides. Accepts
+`https://example.com/a?b=c` and `http://localhost:3000`; refuses
+`javascript:`, `data:`, `mailto:` and `example.com`.
 
 An absolute `http:` or `https:` URL, and nothing else. `javascript:` and
 `data:` URLs are refused because a client is likely to put the value in an
@@ -107,7 +135,21 @@ URLScalar.parseValue('javascript:alert(1)');
 // throws: URL cannot represent this input: Invalid URL
 ```
 
-### PositiveInt
+### `EmailAddress`
+
+Export `EmailAddressScalar`, schema `emailAddressSchema`. A string on both
+sides. Accepts `ada@example.com` and `a.b+c@sub.example.org`; refuses `ada`,
+`ada@` and `a b@example.com`.
+
+It is `z.email()`.
+
+## number
+
+### `PositiveInt`
+
+Export `PositiveIntScalar`, schema `positiveIntSchema`. A number on both
+sides. Accepts `1` and `2147483647`; refuses `0`, `-1`, `1.5`, `2147483648`
+and `"1"`.
 
 An integer from 1 to 2147483647. GraphQL's own `Int` is 32 bits, so this one
 is too: a larger number could not be written by a client that follows the spec.
@@ -121,41 +163,48 @@ PositiveIntScalar.parseValue(2147483648);
 // throws: PositiveInt cannot represent this input: Too big: expected number to be <=2147483647
 ```
 
-### EmailAddress, UUID, NonEmptyString
+## string
 
-`EmailAddress` is `z.email()`, `UUID` is `z.uuid()` and `NonEmptyString` is a
-string with at least one non-white-space character (`" a "` is kept as it is,
-not trimmed).
+### `NonEmptyString`
+
+Export `NonEmptyStringScalar`, schema `nonEmptyStringSchema`. A string on both
+sides. Accepts `a` and ` a `; refuses `""`, `"   "` and `"\n\t"`.
+
+A string with at least one non-white-space character; `" a "` is kept as it
+is, not trimmed.
 
 ## Signatures
 
 ```ts
-const DateTimeScalar: GraphQLScalarType<Date, string>;
-const DateScalar: GraphQLScalarType<string, string>;
-const EmailAddressScalar: GraphQLScalarType<string, string>;
-const URLScalar: GraphQLScalarType<string, string>;
-const UUIDScalar: GraphQLScalarType<string, string>;
-const NonEmptyStringScalar: GraphQLScalarType<string, string>;
-const PositiveIntScalar: GraphQLScalarType<number, number>;
+const DateTimeScalar: ZodScalar<typeof dateTimeSchema, 'DateTime'>; // GraphQLScalarType<Date, string>
+const DateScalar: ZodScalar<typeof dateSchema, 'Date'>; // GraphQLScalarType<string, string>
+const EmailAddressScalar: ZodScalar<typeof emailAddressSchema, 'EmailAddress'>;
+const URLScalar: ZodScalar<typeof urlSchema, 'URL'>;
+const UUIDScalar: ZodScalar<typeof uuidSchema, 'UUID'>;
+const NonEmptyStringScalar: ZodScalar<typeof nonEmptyStringSchema, 'NonEmptyString'>;
+const PositiveIntScalar: ZodScalar<typeof positiveIntSchema, 'PositiveInt'>; // GraphQLScalarType<number, number>
 
-const scalarResolvers: {
-  DateTime: typeof DateTimeScalar;
-  Date: typeof DateScalar;
-  EmailAddress: typeof EmailAddressScalar;
-  URL: typeof URLScalar;
-  UUID: typeof UUIDScalar;
-  NonEmptyString: typeof NonEmptyStringScalar;
-  PositiveInt: typeof PositiveIntScalar;
-};
+// every scalar, keyed by its GraphQL name
+type ScalarResolvers = { DateTime: typeof DateTimeScalar /* , Date, ... */ };
+type ScalarName = keyof ScalarResolvers;
+// every schema, keyed by its export name without `Schema`
+type Schemas = { dateTime: typeof dateTimeSchema /* , date, ... */ };
+
+const scalarResolvers: ScalarResolvers;
+const schemas: Schemas;
 const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scalar
 ```
+
+`scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order
+of their export: `Date`, `DateTime`, `EmailAddress`, `NonEmptyString`,
+`PositiveInt`, `URL`, `UUID`.
 
 `EmailAddress`, `NonEmptyString` and `PositiveInt` have no `specifiedBy`; the
 others point at RFC 3339, the WHATWG URL standard and RFC 9562.
 
 ## Schema-first with a server
 
-Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both whole, so every scalar a resolver names is declared.
+Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both whole, so every scalar a resolver names is declared. To declare only some, use [`pickScalars`](#pickscalars).
 
 ```ts
 import { createSchema } from 'graphql-yoga';
@@ -188,15 +237,65 @@ export const schema = createSchema({
 });
 ```
 
+## pickScalars
+
+`pickScalars(...names)` returns the SDL and the `resolvers` entries of the
+named scalars only, for a schema-first server that does not want every scalar
+in its SDL.
+
+```ts
+import { createSchema } from 'graphql-yoga';
+import { pickScalars } from '@nxgt/graphql-scalars';
+
+const { typeDefs, resolvers } = pickScalars('UUID', 'EmailAddress');
+
+export const schema = createSchema({
+  typeDefs: [
+    typeDefs,
+    /* GraphQL */ `
+      type Query {
+        owner(id: UUID!): EmailAddress
+      }
+    `,
+  ],
+  resolvers: { ...resolvers, Query: { owner: () => 'ada@example.com' } },
+});
+```
+
+```ts
+function pickScalars<const N extends readonly ScalarName[]>(
+  ...names: N
+): {
+  readonly typeDefs: string;
+  readonly resolvers: Pick<ScalarResolvers, N[number]>;
+};
+```
+
+| Call | Result |
+| --- | --- |
+| `pickScalars('DateTime', 'URL')` | `typeDefs` is `scalar DateTime @specifiedBy(...)` and `scalar URL @specifiedBy(...)`, in the order given; `resolvers` has those two keys |
+| `pickScalars()` | `{ typeDefs: '', resolvers: {} }` |
+| `pickScalars('URL', 'URL')` | `URL` declared once |
+| `pickScalars('Datetime')` | does not compile (`TS2345`): not a `ScalarName` |
+| a name that got past the compiler | throws `TypeError: pickScalars: no scalar is named "Datetime". The names are Date, DateTime, ….` |
+
+`resolvers` is typed by the names you pass, so `resolvers.URL` exists and
+`resolvers.UUID` does not. Declare in your own SDL only the scalars you
+picked: a field typed with another one fails when the schema is built.
+
 ## The same rules outside GraphQL
 
-`schemas` exports the Zod schema of each scalar: `dateTime` (a codec between
-the wire string and a `Date`), `date`, `emailAddress`, `url`, `uuid`,
-`nonEmptyString`, `positiveInt`.
+Each scalar's Zod schema is exported on its own (`dateTimeSchema`, a codec
+between the wire string and a `Date`; `dateSchema`; `emailAddressSchema`;
+`urlSchema`; `uuidSchema`; `nonEmptyStringSchema`; `positiveIntSchema`), and
+`schemas` holds them all under the name without `Schema`: `schemas.dateTime`
+is `dateTimeSchema`.
 
 ```ts
 import { z } from 'zod';
-import { schemas } from '@nxgt/graphql-scalars';
+import { emailAddressSchema, schemas } from '@nxgt/graphql-scalars';
+
+emailAddressSchema.parse('ada@example.com'); // 'ada@example.com'
 
 const body = z.object({
   email: schemas.emailAddress,

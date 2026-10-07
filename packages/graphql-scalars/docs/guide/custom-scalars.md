@@ -31,20 +31,36 @@ interface ZodScalarOptions {
   readonly specifiedByURL?: string;
 }
 
-function zodScalar<S extends z.ZodType>(
+function zodScalar<S extends z.ZodType, const N extends string>(
   schema: S,
-  options: ZodScalarOptions,
-): GraphQLScalarType<z.output<S>, z.input<S>>;
+  options: ZodScalarOptions<N>,
+): ZodScalar<S, N>;
+
+// what zodScalar returns: a GraphQLScalarType whose `name` is the literal N
+type ZodScalar<S extends z.ZodType = z.ZodType, N extends string = string> =
+  GraphQLScalarType<z.output<S>, z.input<S>> & { readonly name: N };
 ```
 
 | Option | Type | Default | Effect |
 | --- | --- | --- | --- |
-| `name` | `string` | required | the scalar's GraphQL name, and the prefix of every error |
+| `name` | `string` (kept as a literal type) | required | the scalar's GraphQL name, and the prefix of every error |
 | `description` | `string` | none | shown in introspection |
 | `specifiedByURL` | `string` | none | the `@specifiedBy(url:)` of the scalar |
 
 The type parameters are `z.output<S>` (what a resolver receives) and
-`z.input<S>` (what goes on the wire).
+`z.input<S>` (what goes on the wire). `ZodScalar<S, N>` also keeps the name as
+a literal: `Slug.name` is typed `'Slug'`, not `string`, so scalars can be put
+in a map keyed by their name, the way the package types `pickScalars`:
+
+```ts
+import { z } from 'zod';
+import { type ZodScalar, zodScalar } from '@nxgt/graphql-scalars';
+
+const Slug = zodScalar(z.string().regex(/^[a-z-]+$/), { name: 'Slug' });
+
+const name: 'Slug' = Slug.name;
+const scalars: { Slug: ZodScalar<z.ZodString, 'Slug'> } = { Slug };
+```
 
 ## Two directions
 

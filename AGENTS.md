@@ -10,12 +10,51 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and seven built on it — `DateTime`, `Date`, `EmailAddress`, `URL`, `UUID`, `NonEmptyString`, `PositiveInt` — with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, and the `schemas` behind them for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category — `DateTime`, `Date`, `EmailAddress`, `URL`, `UUID`, `NonEmptyString`, `PositiveInt` — with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
 
 It is **Bun-first**: ESM, tested with `bun test`, no Bun-only API in the library.
+
+## Layout
+
+The package is laid out for a hundred scalars, not seven: adding one touches
+one category and nothing else.
+
+```
+packages/graphql-scalars/src/
+  zod-scalar.ts            the factory
+  type-defs.ts             the SDL of a set of scalars
+  pick-scalars.ts          pickScalars(...names)
+  scalars/
+    all.ts                 one `export *` line per category
+    index.ts               derives scalarResolvers, schemas, scalarTypeDefs from all.ts
+    registry.spec.ts       the guards below
+    <category>/            date-time, identifier, network, number, string, ...
+      index.ts             one `export *` line per scalar
+      <name>.ts            one scalar: `<name>Schema`, then `<Name>Scalar`
+      <name>.spec.ts       its cases, through test/scalar-cases.ts
+```
+
+- **A new scalar is a file, its spec, and one line** in its category's
+  `index.ts`. A new category is a folder and one line in `all.ts`. Nothing is
+  listed by hand anywhere else: `scalarResolvers`, `schemas` and
+  `scalarTypeDefs` are derived from what `all.ts` exports, in the
+  code-unit order of a module namespace (`IPv4` before `Iban`).
+- **`registry.spec.ts` fails when one is forgotten**: a file that is not
+  registered, has no spec beside it, exports anything but one scalar and one
+  schema (a helper would reach the package root), is not named after its
+  scalar, or whose GraphQL name is not in `docs/guide/scalars.md`. The name
+  rule: the file is the GraphQL name's letters, lowercase, hyphens at word
+  breaks (`DateTime` in `date-time.ts`, `IPv4` in `ipv4.ts`); the exports are
+  `<Name>Scalar` and the same letters camelCased plus `Schema`
+  (`dateTimeSchema`, `ipv4Schema`). Two categories exporting the same name
+  fail `tsc` (TS2308, an ambiguous `export *`); two files with the same
+  GraphQL name fail the count. A type-only export is invisible at runtime, so
+  the guard does not see it.
+- **The schema export ends in `Schema`.** `export *` lifts it to the package
+  root, where a bare `url` or `date` would read as something else.
 
 ## Layering
 

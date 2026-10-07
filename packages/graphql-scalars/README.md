@@ -1,7 +1,7 @@
 # @nxgt/graphql-scalars
 
-Ready-made GraphQL scalars (`DateTime`, `Date`, `EmailAddress`, `URL`, `UUID`,
-`NonEmptyString`, `PositiveInt`) whose every rule is a Zod schema, and
+Ready-made GraphQL scalars, by category (dates and times, identifiers,
+network, numbers, strings), whose every rule is a Zod schema, and
 `zodScalar` to turn any Zod schema of your own into one. An input is decoded
 into the value your resolver receives; a resolver's result is encoded and
 checked on the way out as strictly as on the way in. It works with `graphql`
@@ -34,17 +34,19 @@ Your `tsconfig.json` needs:
 
 ## The scalars
 
-| GraphQL name | Export | Wire value | Resolver value | Rule |
-| --- | --- | --- | --- | --- |
-| `DateTime` | `DateTimeScalar` | string | `Date` | RFC 3339 with an offset (`Z` or `±hh:mm`); written in UTC |
-| `Date` | `DateScalar` | string | string | `YYYY-MM-DD`, a real calendar day |
-| `EmailAddress` | `EmailAddressScalar` | string | string | Zod's `z.email()` |
-| `URL` | `URLScalar` | string | string | absolute `http:` or `https:` URL |
-| `UUID` | `UUIDScalar` | string | string | `z.uuid()`, the 8-4-4-4-12 form |
-| `NonEmptyString` | `NonEmptyStringScalar` | string | string | at least one non-white-space character |
-| `PositiveInt` | `PositiveIntScalar` | number | number | integer from 1 to 2147483647 |
+Scalars are grouped in categories. Each one `X` is exported as `XScalar`
+(`DateTimeScalar`) and its Zod schema as `xSchema` (`dateTimeSchema`).
 
-Each rule in detail is in [Scalars](docs/guide/scalars.md).
+| Category | Scalars |
+| --- | --- |
+| date-time | `DateTime`, `Date` |
+| identifier | `UUID` |
+| network | `URL`, `EmailAddress` |
+| number | `PositiveInt` |
+| string | `NonEmptyString` |
+
+The rule, the accepted and refused values and the exports of each scalar are
+in the [Scalars reference](docs/guide/scalars.md).
 
 ## Usage
 
@@ -75,7 +77,7 @@ export const schema = new GraphQLSchema({
 
 ### Schema-first
 
-`scalarTypeDefs` declares all seven scalars (with their `@specifiedBy`) and
+`scalarTypeDefs` declares every scalar (with its `@specifiedBy`) and
 `scalarResolvers` binds them.
 
 ```ts
@@ -103,6 +105,38 @@ export const schema = makeExecutableSchema({
 
 GraphQL Yoga's `createSchema` takes the same `typeDefs` and `resolvers`.
 
+### Some of the scalars
+
+`pickScalars(...names)` returns the `typeDefs` and `resolvers` of the named
+scalars only, so the SDL declares just what the schema uses. The names are
+checked by the compiler (`ScalarName`) and again at run time.
+
+```ts
+import { createSchema } from 'graphql-yoga';
+import { pickScalars } from '@nxgt/graphql-scalars';
+
+const { typeDefs, resolvers } = pickScalars('DateTime', 'URL');
+
+export const schema = createSchema({
+  typeDefs: [
+    typeDefs,
+    /* GraphQL */ `
+      type Query {
+        visit(url: URL!): DateTime!
+      }
+    `,
+  ],
+  resolvers: {
+    ...resolvers,
+    Query: { visit: () => new Date() },
+  },
+});
+```
+
+An unknown name throws a `TypeError`; no names gives
+`{ typeDefs: '', resolvers: {} }`; a name given twice is declared once. See
+[Scalars](docs/guide/scalars.md#pickscalars).
+
 ### Your own scalar
 
 `zodScalar(schema, { name, description?, specifiedByURL? })` makes a scalar
@@ -129,12 +163,15 @@ See [Custom scalars](docs/guide/custom-scalars.md).
 
 ### The same rules outside GraphQL
 
-`schemas` holds the Zod schema behind each scalar: validate a form or a REST
-body with the rule the API uses.
+`schemas` holds the Zod schema behind each scalar, and each one is also
+exported on its own (`emailAddressSchema`, `dateSchema`, …): validate a form or
+a REST body with the rule the API uses.
 
 ```ts
 import { z } from 'zod';
-import { schemas } from '@nxgt/graphql-scalars';
+import { emailAddressSchema, schemas } from '@nxgt/graphql-scalars';
+
+emailAddressSchema.parse('ada@example.com'); // same schema as schemas.emailAddress
 
 const signUp = z.object({
   email: schemas.emailAddress,
@@ -152,7 +189,7 @@ A refusal is a `GraphQLError`:
 - `<Name> cannot serialize this value: <zod issue>` for a resolver's result;
 - `<Name> cannot represent a <Kind> literal` for a list, object or enum literal.
 
-The message names the scalar and Zod's first issue. For the seven scalars here
+The message names the scalar and Zod's first issue. For the scalars here
 the issue never contains the value, so a resolver's bad result does not leak
 to the client; a schema of your own can put input in its issue (a custom
 message, a strict object's `Unrecognized key`). graphql 16 prefixes a bad

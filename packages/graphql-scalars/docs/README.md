@@ -4,8 +4,8 @@
 
 | Page | Read it when |
 | --- | --- |
-| [Scalars](guide/scalars.md) | you want the exact rule of `DateTime`, `Date`, `EmailAddress`, `URL`, `UUID`, `NonEmptyString` or `PositiveInt`, or to wire them into a schema |
-| [Custom scalars](guide/custom-scalars.md) | you write your own scalar with `zodScalar`, with a codec, or support both graphql 16 and 17 |
+| [Scalars](guide/scalars.md) | you want the exact rule of a scalar, by category (date-time, identifier, network, number, string), the schema behind it, or to wire some or all of them into a schema with `pickScalars` |
+| [Custom scalars](guide/custom-scalars.md) | you write your own scalar with `zodScalar` and `ZodScalar`, with a codec, or support both graphql 16 and 17 |
 
 ## Reference
 
