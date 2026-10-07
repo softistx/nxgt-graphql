@@ -11,6 +11,7 @@ export const longSchema = bigIntegerCodec(z.int64());
 
 export const LongScalar = zodScalar(longSchema, {
 	name: 'Long',
+	literals: 'integer',
 	description:
 		'A signed 64-bit integer, as a decimal string (a safe-integer number is accepted as input).',
 });

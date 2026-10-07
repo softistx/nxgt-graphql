@@ -16,9 +16,8 @@ Next release (a minor):
 - **Scalars in categories** — date-time, identifier, network, number and
   string, so the package can grow to a hundred scalars and stay readable.
   `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order.
-
-- **Extended scalars, category by category** — the number category is done in
-  this effort (`NegativeInt`, `NonNegativeInt`, `NonPositiveInt`,
+- **Extended scalars, category by category** — the number category is in the
+  next release (`NegativeInt`, `NonNegativeInt`, `NonPositiveInt`,
   `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`,
   `SafeInt`, `Port`, `Long`, `BigInt`). Coming: network, identifier, encoding,
   date-time, locale, geo, finance, color, value (including `JSON`,

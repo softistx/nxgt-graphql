@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { scalarResolvers, schemas } from './index';
 
 const HERE = import.meta.dir;
-const GUIDE = join(HERE, '../../docs/guide/scalars.md');
+const GUIDES = join(HERE, '../../docs/guide/scalars');
 
 /** The letters of a name, case and hyphens aside: `IPv4` and `ipv4` match. */
 function letters(name: string): string {
@@ -81,11 +81,28 @@ describe('every scalar file', () => {
 		expect(Object.keys(schemas)).toHaveLength(files.length);
 	});
 
-	test('every scalar is in the scalars guide', async () => {
-		const guide = await Bun.file(GUIDE).text();
-		const missing = Object.keys(scalarResolvers).filter(
-			(name) => !guide.includes(`\`${name}\``),
+	test('every category has its guide page, and no page is left over', () => {
+		const categories = [
+			...new Set(files.map((file) => file.slice(0, file.indexOf('/')))),
+		];
+		const pages = [...new Glob('*.md').scanSync(GUIDES)].map((page) =>
+			page.slice(0, -'.md'.length),
 		);
+		expect(pages.sort()).toEqual(categories.sort());
+	});
+
+	test("every scalar has a section in its category's guide page", async () => {
+		const missing: string[] = [];
+		for (const file of files) {
+			const [category] = file.split('/');
+			const module: Record<string, unknown> = await import(join(HERE, file));
+			const { scalars } = exportsOf(module);
+			const [[, scalar]] = scalars as [[string, GraphQLScalarType]];
+			const page = await Bun.file(join(GUIDES, `${category}.md`)).text();
+			if (!page.split('\n').includes(`## \`${scalar.name}\``)) {
+				missing.push(`${scalar.name} in docs/guide/scalars/${category}.md`);
+			}
+		}
 		expect(missing).toEqual([]);
 	});
 });

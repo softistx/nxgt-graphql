@@ -19,7 +19,6 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
 
 | Name | Notes |
 | --- | --- |
-| `Date` | `YYYY-MM-DD`, a string on both sides |
 | `EmailAddress` | a string |
 | `UUID` | a string |
 | `NonEmptyString` | a string |
@@ -32,11 +31,15 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
 | `NonNegativeFloat` | a finite number, 0 or above |
 | `NonPositiveFloat` | a finite number, 0 or below |
 | `SafeInt` | ±(2^53 - 1) |
-| `Port` | 0 to 65535 |
 
 ## Same name, different rule
 
-- **`DateTime`** requires an offset (`Z` or `±hh:mm`) and resolves to a
+- **`Date`** is a string `YYYY-MM-DD` on both sides. In graphql-scalars 2.0.0
+  `Date` is a JavaScript `Date` object, and its `YYYY-MM-DD` string scalar is
+  `LocalDate`.
+- **`Port`** is 0 to 65535 here. graphql-scalars describes 0 to 65535 but
+  refuses `0`; this one accepts it.
+- **`DateTime`** (a `Date` in resolvers, as in graphql-scalars) requires an offset (`Z` or `±hh:mm`) and resolves to a
   `Date`, serialized in UTC. A time with no offset is refused.
 - **`URL`** is `http` and `https` only and stays a string; there is no `URL`
   object in resolvers.
@@ -44,6 +47,17 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   string on the wire. A resolver returning a `number` is refused. Input
   accepts a canonical decimal string or a safe-integer number; a literal past
   2^53 written as a number is refused, so write it as a string.
+  graphql-scalars serializes a safe value as a JSON number; here the result is
+  always a string, so a client that reads numbers must parse it
+  (`BigInt(data.views)`).
+
+### Stricter input
+
+graphql-scalars coerces a string with `parseInt` or `parseFloat`, so `"5"` is
+accepted for a number scalar; here a string for a number is refused
+(`Invalid input: expected number, received string`). `UUID` there accepts the
+brace form and any hex; here it is `z.uuid()`, which checks the version and
+the variant.
 
 ```ts
 import { LongScalar } from '@nxgt/graphql-scalars';
@@ -60,13 +74,14 @@ One name per rule, so use the name on the right.
 | `UnsignedInt` | `NonNegativeInt` |
 | `UnsignedFloat` | `NonNegativeFloat` |
 | `ISO8601Duration` | `Duration` (coming) |
-| `LocalDate` | `Date` |
+| `LocalDate` | `Date` (the `YYYY-MM-DD` string) |
 
 ## Not here
 
 `PostalCode`, `USCurrency`, `SESSN`, `AccountNumber`, `RoutingNumber`,
 `DeweyDecimal`, `LCCSubclass`, `IPCPatent`, `CountryName`, `Byte` and `Cuid`
-(v1) are not planned. Write the one you need with `zodScalar`:
+(v1) are not planned; `Cuid2` is a separate scalar, coming. Write the one you
+need with `zodScalar`:
 
 ```ts
 import { z } from 'zod';

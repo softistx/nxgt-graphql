@@ -10,7 +10,7 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (listed in `docs/guide/scalars.md`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -35,6 +35,7 @@ packages/graphql-scalars/src/
       index.ts             one `export *` line per scalar
       <name>.ts            one scalar: `<name>Schema`, then `<Name>Scalar`
       <name>.spec.ts       its cases, through test/scalar-cases.ts
+                           (scalarCases; integerCases for an integer one)
   rules/                   building blocks several scalars share, never
                            exported from the package (big-integer.ts)
 ```
@@ -47,7 +48,9 @@ packages/graphql-scalars/src/
 - **`registry.spec.ts` fails when one is forgotten**: a file that is not
   registered, has no spec beside it, exports anything but one scalar and one
   schema (a helper would reach the package root), is not named after its
-  scalar, or whose GraphQL name is not in `docs/guide/scalars.md`. The name
+  scalar, or has no `## \`<Name>\`` section in its category's page,
+  `docs/guide/scalars/<category>.md` (a category with no page, or a page
+  with no category, fails too). The name
   rule: the file is the GraphQL name's letters, lowercase, hyphens at word
   breaks (`DateTime` in `date-time.ts`, `IPv4` in `ipv4.ts`); the exports are
   `<Name>Scalar` and the same letters camelCased plus `Schema`
@@ -84,8 +87,9 @@ that weakens one is a breaking change, even when every spec stays green.
   must be a `z.codec`; a `.transform()` has no way back.
 - **A refusal never names the value.** `<Name> cannot represent this input:
   <issue>` and `<Name> cannot serialize this value: <issue>`, with Zod's
-  first issue only; no issue of the seven built-in schemas contains the
-  value. A refused literal carries its node, so the client gets its location.
+  first issue only; no issue of a built-in schema contains the value
+  (Zod's `received NaN` or `received Infinity` names a kind of number, not
+  the input). A refused literal carries its node, so the client gets its location.
   What Zod throws rather than fails on (a `.transform()` on the way out, an
   async check, a codec's own error) is a `GraphQLError` too, the original as
   its `originalError`. A user schema's own issue can hold input (a custom
@@ -105,6 +109,10 @@ that weakens one is a breaking change, even when every spec stays green.
   resolvers; as input a canonical decimal string or a safe-integer number. A
   number past 2⁵³ is refused, never rounded, and a resolver's `number` is
   refused rather than converted (`src/rules/big-integer.ts`).
+- **An integer scalar reads literals as GraphQL's `Int` does**: a float
+  literal (`1.0`, `1e3`) is refused, through `zodScalar`'s
+  `literals: 'integer'`, and `-0` is refused by `src/rules/integer.ts`.
+  `integerCases()` in `test/scalar-cases.ts` proves both for each one.
 - **An input is taken in its canonical form only.** A scalar refuses a
   variant spelling rather than rewriting it (`007`, `-0`), so the value a
   resolver receives is the one the client sent. The exceptions are Zod's own

@@ -1,12 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 import { Kind } from 'graphql';
-import { scalarCases } from '../../../test/scalar-cases';
+import { integerCases, scalarCases } from '../../../test/scalar-cases';
 import { LongScalar } from './long';
 
 describe('Long', () => {
+	integerCases(LongScalar);
+
 	scalarCases(LongScalar, {
 		accepted: ['0', '-1', '9223372036854775807', '-9223372036854775808', 42],
-		refused: ['007', '-0', '1.5', '1e3', ' 1', '', 1.5, 2 ** 53, true, null],
+		refused: [
+			'007',
+			'-0',
+			'1.5',
+			'1e3',
+			' 1',
+			'',
+			1.5,
+			2 ** 53,
+			true,
+			null,
+			5n,
+		],
 		passThrough: false,
 	});
 

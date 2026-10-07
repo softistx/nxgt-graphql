@@ -10,6 +10,7 @@ export const bigIntSchema = bigIntegerCodec(z.bigint());
 
 export const BigIntScalar = zodScalar(bigIntSchema, {
 	name: 'BigInt',
+	literals: 'integer',
 	description:
 		'An integer of any size, as a decimal string (a safe-integer number is accepted as input).',
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { noNegativeZero } from './integer';
 
 /**
  * What a 64-bit or unbounded integer looks like on the wire: a decimal
@@ -10,7 +11,7 @@ const wire = z.union(
 		z.string().regex(/^(0|-?[1-9]\d*)$/, {
 			error: 'Expected a decimal integer, with no leading zero and no "-0"',
 		}),
-		z.int(),
+		noNegativeZero(z.int()),
 	],
 	{ error: 'Expected a decimal integer string or a safe integer' },
 );
