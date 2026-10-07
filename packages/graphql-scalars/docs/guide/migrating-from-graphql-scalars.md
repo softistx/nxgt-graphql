@@ -21,6 +21,7 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
 | --- | --- |
 | `EmailAddress` | a string |
 | `UUID` | a string |
+| `Hexadecimal` | one or more hex digits, any case, kept as sent, no `0x`; only the messages differ (`Expected at least one hexadecimal digit` or `Invalid hex` here, `Value is not a valid hexadecimal value: …` there) |
 | `NonEmptyString` | a string |
 | `PositiveInt` | 1 to 2147483647 |
 | `NegativeInt` | -2147483648 to -1 |
@@ -78,6 +79,12 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   prefix. Only the message differs (`Invalid semantic version`).
 - **`Cuid2`** is the same rule (`^[a-z][a-z0-9]{1,31}$`), so `1abc` is refused
   in both. Only the message differs (`Invalid cuid2`).
+- **`JWT`** checks more. graphql-scalars is a regular expression over three
+  dot-separated parts, so `a.b.c` and an unsecured
+  `eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0.` pass there. Here the header and the
+  payload must be JSON objects, the signature not empty, and the header `alg`
+  not `none`. Neither verifies the signature; do it with
+  a JWT library in the resolver, see [Encoding](scalars/encoding.md#jwt).
 - **`PhoneNumber`** is strict E.164: `+`, a country code not starting with 0,
   at most 15 digits, no separator. The graphql-scalars regex makes the `+`
   optional, allows spaces, dashes and parentheses, and has no length limit, so
@@ -99,8 +106,11 @@ LongScalar.serialize(9223372036854775807n); // '9223372036854775807'
 
 ## Only here
 
-`CIDRv4`, `CIDRv6`, `Hostname`, `UUIDv4`, `UUIDv7`, `NanoID`, `KSUID` and
-`XID` have no graphql-scalars counterpart.
+These have no graphql-scalars counterpart:
+
+- network: `CIDRv4`, `CIDRv6`, `Hostname`;
+- identifier: `UUIDv4`, `UUIDv7`, `NanoID`, `KSUID`, `XID`;
+- encoding: `Base64`, `Base64URL`, `SHA256`, `SHA512`.
 
 ## Aliases we do not repeat
 
@@ -128,5 +138,9 @@ export const PostalCode = zodScalar(z.string().regex(/^\d{5}$/), {
   name: 'PostalCode',
 });
 ```
+
+`Byte` is a `Buffer` in graphql-scalars; `Base64` is the closest, and
+stays a string: decode it in the resolver (see
+[Bytes, not strings](scalars/encoding.md#bytes-not-strings)).
 
 See [Custom scalars](custom-scalars.md).

@@ -48,6 +48,15 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `MAC cannot represent this input: Invalid MAC address` | not six `:`-separated hex pairs, mixed case (`00:1a:2B:3c:4d:5e`), or `-` or `.` separators; use all lowercase or all uppercase with colons |
 | `Hostname cannot represent this input: Invalid hostname` | an empty value, a space, an underscore, a label that starts or ends with `-`, or a label of more than 63 characters |
 | `PhoneNumber cannot represent this input: Invalid E.164 number` | no leading `+`, a country code starting with 0, spaces or dashes, or more than 15 digits; send `+33612345678` |
+| `Base64 cannot represent this input: Invalid base64` | not the canonical spelling: `YR==` decodes to the same byte as `YQ==`; send what an encoder produces |
+| `Base64 cannot represent this input: Invalid base64-encoded string` | malformed: padding missing (`aGk`) or too long, a space or newline, or the URL-safe alphabet (`-`, `_`; use `Base64URL`) |
+| `Base64URL cannot represent this input: Invalid base64url` | not the canonical spelling: `YR` for `YQ` |
+| `Base64URL cannot represent this input: Invalid base64url-encoded string` | malformed: `=` padding, the standard alphabet (`+`, `/`; use `Base64`) or a space |
+| `Hexadecimal cannot represent this input: Expected at least one hexadecimal digit` | the empty string |
+| `Hexadecimal cannot represent this input: Invalid hex` | a `0x` prefix, a space or a non-hex digit |
+| `JWT cannot represent this input: Invalid JWT` | not three unpadded base64url parts; a header or payload that is not a JSON object; an empty signature; or a header `alg` that is missing, not a string, or `none` (an unsecured token): sign it |
+| `SHA256 cannot represent this input: Invalid SHA-256 digest: expected 64 hexadecimal digits` | not 64 hexadecimal digits (a SHA-512 is 128) |
+| `SHA512 cannot represent this input: Invalid SHA-512 digest: expected 128 hexadecimal digits` | not 128 hexadecimal digits (a SHA-256 is 64) |
 | `UUID cannot represent this input: Invalid UUID` | not the 8-4-4-4-12 form |
 | `UUIDv4 cannot represent this input: Invalid UUID` | not a version 4 UUID: another version (a `v7`, a `v1`) or a wrong variant; use `UUID` to take any version |
 | `UUIDv7 cannot represent this input: Invalid UUID` | not a version 7 UUID: another version or a wrong variant |

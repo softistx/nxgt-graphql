@@ -13,25 +13,27 @@ Next release (a minor):
 - **Each scalar's schema on its own** — `dateTimeSchema`, `urlSchema`, … beside
   `schemas`, plus the `ZodScalar<S, N>`, `ScalarName`, `ScalarResolvers` and
   `Schemas` types.
-- **Scalars in categories** — date-time, identifier, network, number and
-  string, so the package can grow to a hundred scalars and stay readable.
+- **Scalars in categories** — date-time, encoding, identifier, network, number
+  and string, so the package can grow to a hundred scalars and stay readable.
   `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order.
-- **Extended scalars, category by category** — the number, network and
-  identifier categories are in the next release: number adds `NegativeInt`,
-  `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`,
-  `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long` and
-  `BigInt`; network adds `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`,
-  `Hostname` and `PhoneNumber`; identifier adds `UUIDv4`, `UUIDv7`, `GUID`,
-  `ULID`, `Cuid2`, `NanoID`, `KSUID`, `XID`, `ObjectID`, `ISBN` and `SemVer`.
-  Coming: encoding, date-time, locale, geo, finance, color, value (including
-  `JSON`, `JSONObject` and `Void`) and string (`Emoji`). The list grows as
-  categories land. See
+- **Extended scalars, category by category** — each category's page in
+  [the scalars guide](guide/scalars.md) lists what it adds. In the next
+  release:
+  - number: the signed Int and Float variants, `SafeInt`, `Port`, `Long`,
+    `BigInt`;
+  - network: `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`,
+    `PhoneNumber`;
+  - identifier: `GUID`, `UUIDv4`, `UUIDv7`, `ULID`, `Cuid2`, `NanoID`,
+    `KSUID`, `XID`, `ObjectID`, `ISBN`, `SemVer`;
+  - encoding: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`,
+    `SHA512`.
+
+  Coming: date-time, locale, geo, finance, color, value (`JSON`,
+  `JSONObject`, `Void`) and string (`Emoji`). See
   [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
 ## Next
 
-- **`JSON` and `JSONObject`** (candidate) — arbitrary JSON values, checked by a
-  Zod schema, for the field you cannot type.
 - **`valueToLiteral` for graphql 17** (candidate) — if it proves useful, so a
   scalar's default value can be printed in a schema.
 
