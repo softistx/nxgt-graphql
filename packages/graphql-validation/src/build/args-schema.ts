@@ -1,5 +1,6 @@
-import type { GraphQLField } from 'graphql';
+import type { GraphQLArgument, GraphQLField, GraphQLObjectType } from 'graphql';
 import { z } from 'zod';
+import { constraintsOn } from './constraints';
 import type { InputSchemas } from './input-schema';
 
 /**
@@ -21,4 +22,42 @@ export function argsSchemaOf(
 			]),
 		),
 	);
+}
+
+/** The constraints of an argument, as one comparable string. */
+function signature(inputs: InputSchemas, arg: GraphQLArgument): string {
+	return JSON.stringify(
+		constraintsOn(inputs.directive, arg.astNode)
+			.map(({ rule, value }) => [rule.argument, value])
+			.sort(),
+	);
+}
+
+/**
+ * Fails when an object type's field does not repeat the `@constraint` its
+ * interface writes on an argument. The object's field is the one that
+ * resolves, and graphql lets it redeclare the argument bare: the interface's
+ * constraint would then check nothing, in silence.
+ */
+export function assertInterfaceConstraintsKept(
+	inputs: InputSchemas,
+	type: GraphQLObjectType,
+): void {
+	for (const contract of type.getInterfaces()) {
+		for (const [name, declared] of Object.entries(contract.getFields())) {
+			const field = type.getFields()[name];
+			for (const arg of declared.args) {
+				const wanted = signature(inputs, arg);
+				if (wanted === '[]') continue;
+				const own = field?.args.find(
+					({ name: argName }) => argName === arg.name,
+				);
+				if (own && signature(inputs, own) !== wanted) {
+					throw new Error(
+						`@constraint on ${contract.name}.${name}(${arg.name}:) is not repeated on ${type.name}.${name}(${arg.name}:), which resolves it. Write the same @constraint there.`,
+					);
+				}
+			}
+		}
+	}
 }

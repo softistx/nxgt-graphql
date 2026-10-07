@@ -1,8 +1,11 @@
 # @nxgt/graphql-validation
 
-Validate GraphQL arguments and input fields with `@constraint` directives,
-each checked by a Zod schema, for `graphql` 16 and 17. Work in progress: the
-API below grows slice by slice and is not published yet.
+Validate GraphQL arguments and input fields with `@constraint` directives
+written in your schema. Each directive becomes a Zod schema that checks the
+arguments before your resolver runs; an invalid input is one `BAD_USER_INPUT`
+error that lists every reason with its path, so a form can show each one beside
+its field. For schema-first servers on `graphql` 16 and 17 (`graphql-js`,
+GraphQL Yoga, Apollo Server).
 
 ## Install
 
@@ -10,25 +13,153 @@ API below grows slice by slice and is not published yet.
 bun add @nxgt/graphql-validation graphql zod typescript
 ```
 
-## `@constraint`
+Peers, all **required**:
 
-Add `constraintTypeDefs` to your schema-first `typeDefs`, then constrain an
-argument or an input field:
+| Peer | Range |
+| --- | --- |
+| `graphql` | `^16.11.0 \|\| ^17.0.0` |
+| `zod` | `>=4.6.5 <5` |
+| `typescript` | `^6.0.3` |
 
-```ts
-import { constraintTypeDefs } from '@nxgt/graphql-validation';
+Your `tsconfig.json` needs:
 
-const typeDefs = [
-	constraintTypeDefs,
-	/* GraphQL */ `
-		input SignUp {
-			email: String! @constraint(format: "email", maxLength: 254)
-			age: Int @constraint(min: 18)
-		}
-	`,
-];
+```jsonc
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler" // `nodenext` is not supported
+  }
+}
 ```
 
-The arguments are graphql-constraint-directive's, minus `uniqueTypeName`.
-Unlike that package, `@constraint` is refused on an output field: `buildSchema`
-fails with `Directive "@constraint" may not be used on FIELD_DEFINITION`.
+## Usage
+
+### Constrain arguments and input fields
+
+Add `constraintTypeDefs` to your type definitions, write `@constraint(...)`,
+build the schema with any schema-first builder (`buildSchema` from `graphql`,
+or `makeExecutableSchema` from `@graphql-tools/schema` as below), then call
+`withValidation(schema)` **last**, once every resolver is attached.
+
+```ts
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { constraintTypeDefs, withValidation } from '@nxgt/graphql-validation';
+
+const typeDefs = [
+  constraintTypeDefs,
+  /* GraphQL */ `
+    input SignUp {
+      email: String! @constraint(format: "email", maxLength: 254)
+      age: Int @constraint(min: 18)
+      tags: [String!] @constraint(maxItems: 5, maxLength: 20)
+    }
+    type Query {
+      user(id: ID! @constraint(format: "uuid")): String
+    }
+    type Mutation {
+      signUp(input: SignUp!): Boolean
+    }
+  `,
+];
+
+const resolvers = {
+  Mutation: {
+    // `input` is already checked: this only runs for a valid one
+    signUp: (_: unknown, { input }: { input: { email: string } }) => {
+      console.log(input.email);
+      return true;
+    },
+  },
+};
+
+export const schema = withValidation(makeExecutableSchema({ typeDefs, resolvers }));
+```
+
+`withValidation` wraps, in place, the resolver of each field that has
+something to check, and returns the same schema. A subscription field is
+checked once, in `subscribe`. Calling
+it twice wraps nothing twice. A constraint that cannot apply throws when you
+call it, not on the first request. The resolver receives the parsed arguments.
+
+Every argument, its rule and its Zod equivalent, and the formats, are in
+[Constraints](docs/guide/constraints.md).
+
+### Read the error
+
+```json
+{
+  "errors": [
+    {
+      "message": "Invalid arguments for Mutation.signUp. input.email: Invalid email address",
+      "path": ["signUp"],
+      "extensions": {
+        "code": "BAD_USER_INPUT",
+        "issues": [
+          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format" },
+          { "path": ["input", "age"], "message": "Too small: expected number to be >=18", "code": "too_small" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+`issues[].path` is relative to the arguments. Mapping issues to form fields is
+in [Errors](docs/guide/errors.md).
+
+### Rules a directive cannot say
+
+`validated(schema, resolver)` checks the arguments with a Zod schema you write,
+for rules across fields, refinements and async checks. It raises the same error.
+
+```ts
+import { validated } from '@nxgt/graphql-validation';
+import { z } from 'zod';
+
+const resolvers = {
+  Query: {
+    range: validated(
+      z
+        .object({ from: z.number(), to: z.number() })
+        .refine(({ from, to }) => from <= to, {
+          message: 'from must not exceed to',
+          path: ['to'],
+        }),
+      (_, { from, to }) => to - from,
+    ),
+  },
+};
+```
+
+## Exports
+
+| Export | Is |
+| --- | --- |
+| `constraintTypeDefs` | the SDL of `@constraint`, to add to `typeDefs` |
+| `withValidation(schema)` | checks every `@constraint` of a schema before its resolvers run |
+| `validated(schema \| shape, resolver)` | a resolver whose arguments a Zod schema checks |
+| `badUserInput(where, zodError)` | builds the error above, for code that validates by hand |
+| `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
+| `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
+
+## Traps
+
+- `@constraint` is read from the SDL, so a code-first schema (built with
+  `new GraphQLObjectType`) has nothing to check, and no error says so. Use
+  type definitions.
+- Call `withValidation` last: a resolver set on a field afterwards replaces
+  the check.
+- A `@constraint` on an interface field's argument must be repeated on each
+  implementing object's field, or `withValidation` throws at startup.
+- `@constraint` is refused on an output field:
+  `Directive "@constraint" may not be used on FIELD_DEFINITION.`
+- `format: "date-time"` takes the canonical RFC 3339 form only (uppercase `T`
+  and `Z`, seconds present).
+
+Every startup error and its fix is in [Troubleshooting](docs/troubleshooting.md).
+
+## Documentation
+
+- [Documentation index](docs/README.md)
+- Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Roadmap](docs/roadmap.md): a Zod codegen plugin, your own formats, schemas that read the context

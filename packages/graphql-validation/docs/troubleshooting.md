@@ -1,0 +1,163 @@
+# Troubleshooting
+
+One entry per error you can hit, headed by the message you will search for.
+`withValidation` and `buildSchema` errors happen at startup; the last section
+is the one a client sees.
+
+- [Install](#install)
+- [Startup](#startup)
+- [Silent traps](#silent-traps)
+- [Runtime](#runtime)
+
+## Install
+
+### `TS2307: Cannot find module '@nxgt/graphql-validation'` (or its types)
+
+**When:** type-checking an import of the package.
+**Why:** the package is ESM with an `exports` map, which `moduleResolution`
+`node`/`node10` ignores, and `nodenext` is not supported.
+**Fix:**
+
+```jsonc
+{ "compilerOptions": { "moduleResolution": "bundler" } }
+```
+
+## Startup
+
+### `@constraint(minLength) on Query.check(age:) needs a String or an ID, not Int.`
+
+**When:** calling `withValidation`.
+**Why:** a rule narrows one kind of type. `format`, `minLength`, `maxLength`,
+`startsWith`, `endsWith`, `contains`, `notContains` and `pattern` need a
+`String` or an `ID`; `min`, `max`, `exclusiveMin`, `exclusiveMax` and
+`multipleOf` need an `Int` or a `Float`. The same message, with `an Int or a
+Float`, appears for a number rule on a `String`.
+**Fix:** use a rule that fits the type.
+
+```graphql
+check(age: Int @constraint(min: 18)): Boolean
+```
+
+### `@constraint(minItems) on Query.check(name:) needs a list, not String.`
+
+**When:** calling `withValidation`.
+**Why:** `minItems` and `maxItems` apply to a list.
+**Fix:** put them on a list argument, or use `minLength`/`maxLength` for a string.
+
+```graphql
+check(tags: [String!] @constraint(minItems: 1)): Boolean
+```
+
+### `@constraint(maxLength) on In.at needs a String or an ID, not DateTime.`
+
+**When:** calling `withValidation`.
+**Why:** a rule on a custom scalar, an enum or an input object (`..., not In.`)
+has nothing to narrow: only `String`, `ID`, `Int`, `Float` and lists take
+rules. The message names the place (`In.at`, `Query.check(input:)`) and the
+type. This is checked in every input type, even one no argument reaches.
+**Fix:** remove the directive; check a custom scalar in its own definition (for
+example with `@nxgt/graphql-scalars`), or on a field with [`validated`](guide/errors.md#validated).
+
+### `Unknown @constraint format "siret". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid.`
+
+**When:** calling `withValidation`.
+**Why:** `format` takes one of the listed names. Custom formats are on the
+[roadmap](roadmap.md).
+**Fix:** use a known format, or `pattern: "..."`.
+
+### `Invalid @constraint pattern "[a-": Invalid regular expression: missing terminating ] for character class`
+
+**When:** calling `withValidation`.
+**Why:** `pattern` is compiled with `new RegExp`; the text after the colon is
+the engine's.
+**Fix:** write a valid pattern. In SDL, escape backslashes: `"\\d+"`.
+
+### `withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.`
+
+**When:** calling `withValidation`.
+**Why:** the schema has no `@constraint` directive, so there is nothing to
+read. Usually `constraintTypeDefs` was not added, or the schema is code-first.
+**Fix:**
+
+```ts
+const typeDefs = [constraintTypeDefs, yourTypeDefs];
+```
+
+### `Directive "@constraint" may not be used on FIELD_DEFINITION.`
+
+**When:** building the schema.
+**Why:** `@constraint` is allowed on arguments and input fields only.
+graphql-constraint-directive also allows output fields; this package refuses
+them, since a resolver's result is the job of output scalars.
+**Fix:** move it to the argument or input field, or use an output scalar.
+
+### `Unknown argument "uniqueTypeName" on directive "@constraint".`
+
+**When:** building the schema, migrating from graphql-constraint-directive.
+**Why:** `uniqueTypeName` is a detail of that package's scalar wrapping and
+does not exist here.
+**Fix:** remove it.
+
+### `@constraint on Named.name(style:) is not repeated on Person.name(style:), which resolves it. Write the same @constraint there.`
+
+**When:** calling `withValidation`, with a `@constraint` on an interface
+field's argument.
+**Why:** the objects resolve the field, not the interface, so a constraint
+the object drops would go unchecked. `Named`, `Person` and `style` are your
+interface, object and argument.
+**Fix:**
+
+```graphql
+interface Named { name(style: String @constraint(maxLength: 5)): String }
+type Person implements Named {
+  name(style: String @constraint(maxLength: 5)): String
+}
+```
+
+## Silent traps
+
+These raise no error.
+
+### A constrained argument is never refused
+
+**When:** an invalid value reaches the resolver.
+**Why:** one of three causes. The schema is code-first (built with
+`new GraphQLObjectType`): `@constraint` is read from the SDL, and there is none.
+Or `withValidation` was called before a resolver was attached: a resolver set on
+a field afterwards replaces the check. Or the schema you serve is not the one
+you passed (`withValidation` returns the same schema, so use either).
+**Fix:** build from type definitions and call `withValidation` last.
+
+```ts
+const schema = makeExecutableSchema({ typeDefs, resolvers });
+export default withValidation(schema); // last
+```
+
+### `Invalid ISO datetime` for a date-time that looks right
+
+**When:** `format: "date-time"` refuses `2024-03-10t12:00:00z`, `2024-03-10 12:00:00Z` or `2024-03-10T12:00Z`.
+**Why:** only the canonical form is accepted: uppercase `T` and `Z`, seconds
+present, an offset.
+**Fix:** send `2024-03-10T12:00:00Z` or `2024-03-10T12:00:00+02:00`.
+
+## Runtime
+
+### `Invalid arguments for Mutation.signUp. input.email: Invalid email address`
+
+**When:** a request carries an argument that breaks a `@constraint` or a
+`validated` schema.
+**Why:** the message is `Invalid arguments for <Type>.<field>. <path>: <first
+issue>`; `extensions.code` is `BAD_USER_INPUT` and `extensions.issues` lists
+every issue. The resolver did not run.
+**Fix:** send a valid value, or show each issue beside its field. See
+[Errors](guide/errors.md). Common issues:
+
+| Message | Cause |
+| --- | --- |
+| `Invalid email address` | `format: "email"` |
+| `Invalid URL` | `format: "uri"`: not absolute, or a scheme other than `http`, `https`, `ftp` |
+| `Invalid ISO datetime` / `Invalid ISO date` | `format: "date-time"` / `"date"` |
+| `Too small: expected string to have >=2 characters` | `minLength: 2` |
+| `Too big: expected array to have <=2 items` | `maxItems: 2` |
+| `Too small: expected number to be >=18` | `min: 18` |
+| `Invalid string: must match pattern /.../` | `pattern` |
