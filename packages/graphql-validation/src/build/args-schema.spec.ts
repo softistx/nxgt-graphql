@@ -9,7 +9,7 @@ import { InputSchemas } from './input-schema';
 function argsOf(sdl: string, field = 'check'): z.ZodType | undefined {
 	const schema = buildSchema(`${constraintTypeDefs}\n${sdl}`);
 	const query = schema.getQueryType() as GraphQLObjectType;
-	const inputs = new InputSchemas(schema.getDirective('constraint'));
+	const inputs = new InputSchemas(schema);
 	return argsSchemaOf(inputs, 'Query', query.getFields()[field] as never);
 }
 
@@ -71,6 +71,16 @@ describe('argsSchemaOf', () => {
 			type Query { check(filter: Filter): Boolean }`);
 		accepts(args, { filter: { and: [{ name: 'a', and: [{ name: 'b' }] }] } });
 		refuses(args, { filter: { and: [{ and: [{ name: '' }] }] } });
+	});
+
+	test('reaches a constraint through a cycle entered from either side', () => {
+		const sdl = `
+			input A { b: B, x: String @constraint(minLength: 2) }
+			input B { a: A }
+			type Query { check(a: A, b: B): Boolean }`;
+		refuses(argsOf(sdl), { a: { b: { a: { x: 'z' } } } });
+		refuses(argsOf(sdl), { b: { a: { x: 'z' } } });
+		accepts(argsOf(sdl), { b: { a: { x: 'zz' } } });
 	});
 
 	test('checks Int and Float with number rules', () => {

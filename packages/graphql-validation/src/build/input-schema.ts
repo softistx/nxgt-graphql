@@ -4,6 +4,8 @@ import {
 	type GraphQLInputField,
 	type GraphQLInputObjectType,
 	type GraphQLInputType,
+	type GraphQLSchema,
+	getNamedType,
 	isInputObjectType,
 	isListType,
 	isNonNullType,
@@ -20,26 +22,39 @@ import { describe, leafSchema } from './leaf';
  * reached through `z.lazy`.
  */
 export class InputSchemas {
+	readonly directive: GraphQLDirective | undefined;
 	readonly #objects = new Map<string, z.ZodType>();
-	readonly #constrained = new Map<string, boolean>();
+	/** The input types a value can break a constraint inside. */
+	readonly #constrained = new Set<string>();
 
-	constructor(readonly directive: GraphQLDirective | undefined) {}
+	constructor(schema: GraphQLSchema) {
+		this.directive = schema.getDirective('constraint') ?? undefined;
+		const objects = Object.values(schema.getTypeMap()).filter(
+			isInputObjectType,
+		);
+		// A fixpoint, not a memoised walk: in a cycle, a type visited while it
+		// is still being decided would be cached as unconstrained for good.
+		for (let changed = true; changed; ) {
+			changed = false;
+			for (const type of objects) {
+				if (this.#constrained.has(type.name)) continue;
+				const constrained = Object.values(type.getFields()).some(
+					(field) =>
+						constraintsOn(this.directive, field.astNode).length > 0 ||
+						this.isConstrained(field.type),
+				);
+				if (constrained) {
+					this.#constrained.add(type.name);
+					changed = true;
+				}
+			}
+		}
+	}
 
 	/** Whether a value of this type can break a constraint anywhere inside. */
 	isConstrained(type: GraphQLInputType): boolean {
-		if (isNonNullType(type) || isListType(type))
-			return this.isConstrained(type.ofType);
-		if (!isInputObjectType(type)) return false;
-		const known = this.#constrained.get(type.name);
-		if (known !== undefined) return known;
-		this.#constrained.set(type.name, false); // a cycle adds nothing on its own
-		const result = Object.values(type.getFields()).some(
-			(field) =>
-				constraintsOn(this.directive, field.astNode).length > 0 ||
-				this.isConstrained(field.type),
-		);
-		this.#constrained.set(type.name, result);
-		return result;
+		const named = getNamedType(type);
+		return isInputObjectType(named) && this.#constrained.has(named.name);
 	}
 
 	/** Whether an argument or input field needs checking at all. */
