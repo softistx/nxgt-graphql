@@ -1,7 +1,7 @@
 # @nxgt/graphql-scalars
 
-Ready-made GraphQL scalars, by category (dates and times, identifiers,
-network, numbers, strings), whose every rule is a Zod schema, and
+Ready-made GraphQL scalars, by category (dates and times, encodings,
+identifiers, network, numbers, strings), whose every rule is a Zod schema, and
 `zodScalar` to turn any Zod schema of your own into one. An input is decoded
 into the value your resolver receives; a resolver's result is encoded and
 checked on the way out as strictly as on the way in. It works with `graphql`
@@ -40,6 +40,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 | Category | Scalars |
 | --- | --- |
 | [date-time](docs/guide/scalars/date-time.md) | 2: `DateTime`, `Date` |
+| [encoding](docs/guide/scalars/encoding.md) | 6: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`, `SHA512` |
 | [identifier](docs/guide/scalars/identifier.md) | 12: `UUID`, `UUIDv7`, `ULID`, `ObjectID`, `ISBN`, `SemVer` and 6 more |
 | [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `MAC` and 5 more |
 | [number](docs/guide/scalars/number.md) | 12: `PositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt` and the signed Int and Float variants |
