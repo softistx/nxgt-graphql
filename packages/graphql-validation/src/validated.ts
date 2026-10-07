@@ -43,8 +43,10 @@ export function validated<
 	z.input<SchemaOf<S>>,
 	Promise<Awaited<TResult>>
 > {
-	const checked: z.ZodType =
-		schema instanceof z.ZodType ? schema : z.object(schema);
+	// `_zod`, not `instanceof`: a schema from another copy of zod is still one.
+	const checked = (
+		'_zod' in schema ? schema : z.object(schema as z.ZodRawShape)
+	) as z.ZodType;
 	return async (source, args, context, info): Promise<Awaited<TResult>> => {
 		const where = `${info.parentType.name}.${info.fieldName}`;
 		const parsed = (await parseArgs(checked, args, where)) as z.output<

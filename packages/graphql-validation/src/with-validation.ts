@@ -8,7 +8,10 @@ import {
 } from 'graphql';
 import type { z } from 'zod';
 import { parseArgs } from './bad-user-input';
-import { argsSchemaOf } from './build/args-schema';
+import {
+	argsSchemaOf,
+	assertInterfaceConstraintsKept,
+} from './build/args-schema';
 import { InputSchemas } from './build/input-schema';
 
 const wrapped = Symbol('graphql-validation');
@@ -27,6 +30,25 @@ function checking(
 }
 
 /**
+ * Wraps a field once. A subscription field is checked in `subscribe`, which
+ * runs once per subscription; its `resolve` runs once per event, with the
+ * same arguments, already checked.
+ */
+function wrap(
+	field: GraphQLField<unknown, unknown>,
+	args: z.ZodType,
+	where: string,
+): void {
+	const subscribe = field.subscribe as Resolver | undefined;
+	if (subscribe) {
+		if (!subscribe[wrapped]) field.subscribe = checking(args, where, subscribe);
+		return;
+	}
+	const resolve = (field.resolve ?? defaultFieldResolver) as Resolver;
+	if (!resolve[wrapped]) field.resolve = checking(args, where, resolve);
+}
+
+/**
  * Checks every `@constraint` of `schema` before the resolvers run. Each
  * field with a constrained argument — directly, or anywhere inside an input
  * type it takes — gets its resolver (and its `subscribe`) wrapped: the
@@ -38,7 +60,12 @@ function checking(
  * `minLength` on an `Int`, an unknown format, a bad pattern) throws now, not
  * on the first request. The resolvers are wrapped in place and the same
  * schema is returned, so it goes wherever it went before; calling it twice
- * wraps nothing twice.
+ * wraps nothing twice. Call it last, once every resolver is attached: a
+ * resolver set on a field afterwards replaces the check.
+ *
+ * A `@constraint` on an interface's argument must be repeated on each
+ * object's field, which is the one that resolves; a field that drops it
+ * fails here.
  *
  * The directives are read from the SDL (`astNode`), so a schema built from
  * type definitions — `buildSchema`, `makeExecutableSchema`, Yoga, Apollo —
@@ -53,21 +80,20 @@ export function withValidation<S extends GraphQLSchema>(schema: S): S {
 	}
 	inputs.buildAll(schema);
 	for (const type of Object.values(schema.getTypeMap())) {
-		if (!isObjectType(type) && !isInterfaceType(type)) continue;
 		if (type.name.startsWith('__')) continue;
+		// An interface's fields resolve on its objects: built for their errors only.
+		if (isInterfaceType(type)) {
+			for (const field of Object.values(type.getFields()))
+				argsSchemaOf(inputs, type.name, field);
+		}
+		if (!isObjectType(type)) continue;
+		assertInterfaceConstraintsKept(inputs, type);
 		for (const field of Object.values(type.getFields()) as GraphQLField<
 			unknown,
 			unknown
 		>[]) {
 			const args = argsSchemaOf(inputs, type.name, field);
-			if (!args) continue;
-			if (!isObjectType(type)) continue; // an interface's fields resolve on its objects
-			const where = `${type.name}.${field.name}`;
-			const resolve = (field.resolve ?? defaultFieldResolver) as Resolver;
-			if (!resolve[wrapped]) field.resolve = checking(args, where, resolve);
-			const subscribe = field.subscribe as Resolver | undefined;
-			if (subscribe && !subscribe[wrapped])
-				field.subscribe = checking(args, where, subscribe);
+			if (args) wrap(field, args, `${type.name}.${field.name}`);
 		}
 	}
 	return schema;

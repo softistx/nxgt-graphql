@@ -142,11 +142,47 @@ describe('withValidation', () => {
 		).toBe('BAD_USER_INPUT');
 	});
 
+	test('checks a subscription once, in subscribe, not on every event', () => {
+		const { schema } = server();
+		const ticks = (
+			schema.getType('Subscription') as GraphQLObjectType
+		).getFields()['ticks'];
+		expect(ticks?.resolve).toBeUndefined();
+	});
+
+	test('checks an interface field where its object repeats the constraint', async () => {
+		const schema = buildSchema(`${constraintTypeDefs}
+			interface Named { name(style: String @constraint(maxLength: 5)): String }
+			type Person implements Named { name(style: String @constraint(maxLength: 5)): String }
+			type Query { me: Person }`);
+		const person = (schema.getType('Person') as GraphQLObjectType).getFields();
+		(person['name'] as { resolve?: unknown }).resolve = () => 'Ada';
+		(
+			schema.getQueryType()?.getFields()['me'] as { resolve?: unknown }
+		).resolve = () => ({});
+		withValidation(schema);
+		const refused = await graphql({
+			schema,
+			source: '{ me { name(style: "shouty") } }',
+		});
+		expect(refused.errors?.[0]?.extensions['code']).toBe('BAD_USER_INPUT');
+	});
+
 	describe('fails at startup', () => {
 		test('without the @constraint directive in the schema', () => {
 			expect(() =>
 				withValidation(buildSchema('type Query { a: Int }')),
 			).toThrow('this schema declares no @constraint directive');
+		});
+
+		test('when an object drops the constraint its interface writes', () => {
+			const sdl = `${constraintTypeDefs}
+				interface Named { name(style: String @constraint(maxLength: 5)): String }
+				type Person implements Named { name(style: String): String }
+				type Query { me: Person }`;
+			expect(() => withValidation(buildSchema(sdl))).toThrow(
+				'@constraint on Named.name(style:) is not repeated on Person.name(style:), which resolves it.',
+			);
 		});
 
 		test('on a misplaced constraint in an input type no argument reaches', () => {
