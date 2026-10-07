@@ -34,4 +34,10 @@ describe('constraintTypeDefs', () => {
 			'may not be used on FIELD_DEFINITION',
 		);
 	});
+
+	test('has no uniqueTypeName, which graphql-constraint-directive declares', () => {
+		const sdl = `${constraintTypeDefs}\ntype Query { check(name: String @constraint(uniqueTypeName: "Name")): Boolean }`;
+
+		expect(() => buildSchema(sdl)).toThrow('Unknown argument "uniqueTypeName"');
+	});
 });

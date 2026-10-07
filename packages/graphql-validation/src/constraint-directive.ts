@@ -1,9 +1,11 @@
 /**
  * The SDL of `@constraint`, to add to a schema-first server's `typeDefs`.
  *
- * Its arguments are graphql-constraint-directive's, so a schema written for
- * that package reads the same here. It is allowed on arguments and input
- * fields only: a resolver's result is the output scalars' job.
+ * Its arguments are graphql-constraint-directive's, minus `uniqueTypeName`
+ * (a detail of that package's scalar wrapping). It is allowed on arguments
+ * and input fields only, where that package also allows output fields: a
+ * resolver's result is the output scalars' job, and a directive that checked
+ * nothing there would be a promise broken in silence.
  */
 export const constraintTypeDefs = /* GraphQL */ `
 directive @constraint(

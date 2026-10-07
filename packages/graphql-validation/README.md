@@ -29,4 +29,6 @@ const typeDefs = [
 ];
 ```
 
-The arguments are graphql-constraint-directive's.
+The arguments are graphql-constraint-directive's, minus `uniqueTypeName`.
+Unlike that package, `@constraint` is refused on an output field: `buildSchema`
+fails with `Directive "@constraint" may not be used on FIELD_DEFINITION`.
