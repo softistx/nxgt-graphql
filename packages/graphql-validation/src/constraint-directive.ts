@@ -1,5 +1,8 @@
+import { rules } from './rules';
+
 /**
- * The SDL of `@constraint`, to add to a schema-first server's `typeDefs`.
+ * The SDL of `@constraint`, to add to a schema-first server's `typeDefs`,
+ * written from the rules: an argument is declared once its rule exists.
  *
  * Its arguments are graphql-constraint-directive's, minus `uniqueTypeName`
  * (a detail of that package's scalar wrapping). It is allowed on arguments
@@ -7,22 +10,9 @@
  * resolver's result is the output scalars' job, and a directive that checked
  * nothing there would be a promise broken in silence.
  */
-export const constraintTypeDefs = /* GraphQL */ `
-directive @constraint(
-  minLength: Int
-  maxLength: Int
-  startsWith: String
-  endsWith: String
-  contains: String
-  notContains: String
-  pattern: String
-  format: String
-  min: Float
-  max: Float
-  exclusiveMin: Float
-  exclusiveMax: Float
-  multipleOf: Float
-  minItems: Int
-  maxItems: Int
+export const constraintTypeDefs: string = `directive @constraint(
+${Object.values(rules)
+	.map((rule) => `  ${rule.argument}: ${rule.type}`)
+	.join('\n')}
 ) on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
 `;

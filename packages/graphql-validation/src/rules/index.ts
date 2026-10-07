@@ -1,0 +1,21 @@
+import * as all from './all';
+
+/**
+ * One of the rules, as its own type: a builder narrows it on `target`, so a
+ * number schema never reaches a string rule.
+ */
+export type RegisteredRule = (typeof all)[keyof typeof all];
+
+/** An argument `@constraint` takes. */
+export type ConstraintArgument = RegisteredRule['argument'];
+
+/**
+ * Every rule, keyed by its `@constraint` argument. Derived from what
+ * `./all` exports, so a new rule is one file and one line there, and the
+ * directive's SDL follows.
+ */
+export const rules = Object.fromEntries(
+	Object.values(all).map((rule) => [rule.argument, rule]),
+) as {
+	readonly [A in ConstraintArgument]: Extract<RegisteredRule, { argument: A }>;
+};
