@@ -39,11 +39,11 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 
 | Category | Scalars |
 | --- | --- |
-| date-time | `DateTime`, `Date` |
-| identifier | `UUID` |
-| network | `URL`, `EmailAddress` |
-| number | `PositiveInt` |
-| string | `NonEmptyString` |
+| [date-time](docs/guide/scalars/date-time.md) | 2: `DateTime`, `Date` |
+| [identifier](docs/guide/scalars/identifier.md) | 1: `UUID` |
+| [network](docs/guide/scalars/network.md) | 2: `URL`, `EmailAddress` |
+| [number](docs/guide/scalars/number.md) | 12: `PositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt` and the signed Int and Float variants |
+| [string](docs/guide/scalars/string.md) | 1: `NonEmptyString` |
 
 The rule, the accepted and refused values and the exports of each scalar are
 in the [Scalars reference](docs/guide/scalars.md).
@@ -206,11 +206,14 @@ Every message is in [Troubleshooting](docs/troubleshooting.md).
   result is encoded; use `z.codec`.
 - `DateTime` serializes a `Date` only: parse a stored string before returning it.
 - `Date` is a string on both sides, never a `Date` object.
+- `Long` and `BigInt` are a `bigint` in resolvers and always a string on the
+  wire: return `BigInt(row.count)`, not a `number`.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
 - Guides: [Scalars](docs/guide/scalars.md),
-  [Custom scalars](docs/guide/custom-scalars.md)
+  [Custom scalars](docs/guide/custom-scalars.md),
+  [Migrating from graphql-scalars](docs/guide/migrating-from-graphql-scalars.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Roadmap](docs/roadmap.md)

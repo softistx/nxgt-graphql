@@ -6,5 +6,6 @@ export const positiveIntSchema = z.int32().positive();
 
 export const PositiveIntScalar = zodScalar(positiveIntSchema, {
 	name: 'PositiveInt',
+	literals: 'integer',
 	description: 'An integer from 1 to 2147483647.',
 });

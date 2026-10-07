@@ -2,7 +2,7 @@
 // both ways. A scalar's own behaviour beyond that (a codec, a normalisation)
 // gets its own tests beside these.
 import { expect, test } from 'bun:test';
-import type { GraphQLScalarType } from 'graphql';
+import { type GraphQLScalarType, Kind } from 'graphql';
 
 export interface ScalarCases {
 	/** Wire values the scalar accepts. */
@@ -44,5 +44,25 @@ export function scalarCases(
 				);
 			}
 		}
+	});
+}
+
+/**
+ * An integer scalar refuses what GraphQL's `Int` refuses beyond the value:
+ * a float literal, even `1.0`, and `-0` from a variable.
+ */
+export function integerCases(scalar: GraphQLScalarType): void {
+	test(`${scalar.name} refuses a float literal and -0, as Int does`, () => {
+		for (const value of ['1.0', '1e3', '-0.0']) {
+			expect(() =>
+				scalar.parseLiteral({ kind: Kind.FLOAT, value }, undefined),
+			).toThrow(`${scalar.name} cannot represent a FloatValue literal`);
+		}
+		expect(() => scalar.parseValue(-0)).toThrow(
+			`${scalar.name} cannot represent this input`,
+		);
+		expect(() =>
+			scalar.parseLiteral({ kind: Kind.INT, value: '-0' }, undefined),
+		).toThrow(`${scalar.name} cannot represent this input`);
 	});
 }

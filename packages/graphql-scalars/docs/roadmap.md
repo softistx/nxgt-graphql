@@ -16,6 +16,13 @@ Next release (a minor):
 - **Scalars in categories** — date-time, identifier, network, number and
   string, so the package can grow to a hundred scalars and stay readable.
   `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order.
+- **Extended scalars, category by category** — the number category is in the
+  next release (`NegativeInt`, `NonNegativeInt`, `NonPositiveInt`,
+  `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`,
+  `SafeInt`, `Port`, `Long`, `BigInt`). Coming: network, identifier, encoding,
+  date-time, locale, geo, finance, color, value (including `JSON`,
+  `JSONObject` and `Void`) and string (`Emoji`). The list grows as categories
+  land. See [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
 ## Next
 
@@ -26,15 +33,12 @@ Next release (a minor):
 
 ## Later
 
-- **`LocalTime` and `Duration`** (candidate) — time of day and ISO 8601
-  duration, as strings.
-- **`PhoneNumber`** (candidate) — E.164 numbers.
-- **`BigInt`** (candidate) — values beyond 32 bits, as a string on the wire.
 - **A money scalar** (candidate) — an amount with its currency.
-- **Load only the scalars you import** (candidate) — today any import builds
-  every scalar, as the maps of all of them are built when the package loads;
-  with many more scalars, per-category entry points or maps built on first use
-  would keep an import of one scalar small.
+- **Load only the scalars you import** (candidate) — importing any scalar
+  loads them all, because Bun emits the scalars namespace as one object. It was
+  measured at about 160 bytes minified (about 65 gzip) per scalar and about 1 ms
+  to load seven. Per-category entry points stay a candidate if a consumer needs
+  them.
 
 ## Not planned
 
@@ -45,6 +49,12 @@ Next release (a minor):
   `href`, so `URL` stays `http` and `https`. Make a `zodScalar` for another
   rule.
 - **A `DateTime` without an offset** — it names no instant.
+- **`CreditCard`** — a server that receives raw card numbers falls under
+  PCI DSS. Use the payment provider's token.
+- **One-country or loose rules** (postal codes, US account and routing numbers,
+  Swedish personnummer, library classifications) — write them with `zodScalar`;
+  see [Custom scalars](guide/custom-scalars.md).
+- **Aliases** (`UnsignedInt`, `LocalDate`, …) — one name per rule.
 - **Support for `moduleResolution: "nodenext"`** — the supported setting is
   `bundler`.
 

@@ -46,6 +46,48 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `PositiveInt cannot represent this input: Too big: expected number to be <=2147483647` | above 32 bits |
 | `PositiveInt cannot represent this input: Invalid input: expected int, received number` | not an integer, such as `1.5` |
 | `PositiveInt cannot represent this input: Invalid input: expected number, received string` | `"1"` is a string; send `1` |
+| `Port cannot represent this input: Too big: expected number to be <=65535` | above 65535 |
+| `Port cannot represent this input: Too small: expected number to be >=0` | negative, such as `-1` |
+| `Port cannot represent this input: Invalid input: expected int, received number` | not an integer, such as `80.5` |
+| `<Name> cannot represent this input: Expected an integer, not -0` | `-0` for an integer scalar (`NonNegativeInt`, `SafeInt`, `Port`, `Long`, …): send `0` |
+| `SafeInt cannot represent this input: Too big: expected int to be <=9007199254740991` | past 2^53; use `Long` or `BigInt` |
+| `Long cannot represent this input: Expected a decimal integer, with no leading zero and no "-0"` | a string such as `"007"`, `"-0"`, `"+1"` or `" 1"` |
+
+### `Long cannot represent this input: Too big: expected int to be <=9007199254740991`
+
+**When:** a query writes a number literal past 2^53 for a `Long` or `BigInt`
+argument (`echo(v: 9223372036854775807)`, with `echo(v: Long): Long`).
+**Why:** a literal that large is read as a float by the parser and would lose
+precision, so it is refused rather than rounded. A `Long` out of range written
+as a string says `Too big: expected bigint to be <=9223372036854775807`
+instead.
+**Fix:** write the value as a string literal, or pass it as a string variable.
+
+```graphql
+query {
+  echo(v: "9223372036854775807")
+}
+```
+
+### `Long cannot represent this input: Expected a decimal integer string or a safe integer`
+
+**When:** a variable or literal for a `Long` or `BigInt` is neither a string
+nor an integer number: a JSON variable `1.5`, `true`, an object. (A float
+*literal* such as `1.5` in the query is refused earlier, with `cannot
+represent a FloatValue literal`.)
+**Why:** the way in takes a canonical decimal string or a safe integer. A string
+such as `"007"` says `Expected a decimal integer, with no leading zero and no "-0"`
+instead.
+**Fix:** send a decimal string, or an integer number within 2^53.
+
+### `<Name> cannot represent a FloatValue literal`
+
+**When:** a query writes a float literal for an integer scalar, even one that
+holds an integer: `items(first: 1.0)`, `views(id: 1e3)`.
+**Why:** the integer scalars read literals as GraphQL's `Int` does (a scalar
+of your own does with `literals: 'integer'`).
+**Fix:** write the integer: `items(first: 1)`. Large `Long` and `BigInt`
+values go as a string: `views(id: "1000")`.
 
 ### `<Name> cannot represent a ListValue literal`
 
@@ -89,6 +131,18 @@ resolve: (row) => new Date(row.createdAt), // not row.createdAt
 **Why:** `new Date(Number.NaN)` is a `Date` with no time, so it names no
 instant to write.
 **Fix:** validate the source before building the `Date`.
+
+### `Long cannot serialize this value: Invalid input: expected bigint, received number`
+
+**When:** a resolver returns a `number` for a `Long` or `BigInt` field, such as
+a count read from a database driver. `BigInt` says the same with its own name.
+**Why:** both are a `bigint` in resolvers; a `number` past 2^53 may already have
+lost digits, so it is not guessed at.
+**Fix:**
+
+```ts
+resolve: (row) => BigInt(row.count), // not row.count
+```
 
 ### `URL cannot serialize this value: Invalid URL`
 

@@ -29,6 +29,8 @@ interface ZodScalarOptions {
   readonly description?: string;
   /** The `@specifiedBy(url:)` of the format the scalar follows. */
   readonly specifiedByURL?: string;
+  /** `'integer'` refuses a float literal (`1.0`), as `Int` does. Default `'leaf'`. */
+  readonly literals?: 'leaf' | 'integer';
 }
 
 function zodScalar<S extends z.ZodType, const N extends string>(
@@ -146,8 +148,10 @@ read to a JavaScript value, then decoded like a variable:
 
 Any other kind (`ListValue`, `ObjectValue`, `EnumValue`) is
 refused with `<Name> cannot represent a <Kind> literal`. A float literal for an
-integer schema reaches it as `1.5` and fails the schema's own check. graphql-js
-handles `null` and a variable itself, before the scalar sees them.
+integer schema reaches it as `1.5` and fails the schema's own check, but `1.0`
+reaches it as `1` and passes: pass `literals: 'integer'` to refuse every
+`FloatValue`, as GraphQL's `Int` does. graphql-js handles `null` and a
+variable itself, before the scalar sees them.
 
 ```ts
 import { parseValue } from 'graphql';
@@ -160,6 +164,14 @@ const Slug = zodScalar(z.string().regex(/^[a-z-]+$/), { name: 'Slug' });
 Slug.parseLiteral(parseValue('"a-b"'), undefined); // 'a-b'
 Slug.parseLiteral(parseValue('[1]'), undefined);
 // throws: Slug cannot represent a ListValue literal
+
+const Quantity = zodScalar(z.int32().positive(), {
+  name: 'Quantity',
+  literals: 'integer',
+});
+Quantity.parseLiteral(parseValue('3'), undefined); // 3
+Quantity.parseLiteral(parseValue('3.0'), undefined);
+// throws: Quantity cannot represent a FloatValue literal
 ```
 
 ## Errors

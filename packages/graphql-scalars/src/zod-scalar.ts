@@ -13,6 +13,13 @@ export interface ZodScalarOptions<N extends string = string> {
 	readonly description?: string;
 	/** The `@specifiedBy(url:)` of the format the scalar follows. */
 	readonly specifiedByURL?: string;
+	/**
+	 * Which query literals the scalar reads. `'leaf'` (the default): a
+	 * string, a number or a boolean. `'integer'`: the same but a float
+	 * literal (`1.0`, `1e3`), refused as GraphQL's `Int` refuses it. A
+	 * variable is JSON, where `1.0` is the number 1: no scalar can tell.
+	 */
+	readonly literals?: 'leaf' | 'integer';
 }
 
 /**
@@ -91,7 +98,7 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 			z.safeEncode(schema, value as z.output<S>),
 		);
 	const literal = (node: ValueNode): z.output<S> =>
-		decode(literalValue(node, name), node);
+		decode(literalValue(node, name, options.literals ?? 'leaf'), node);
 
 	// graphql 16 knows only the first three; graphql 17 also takes the
 	// `coerce*` ones, and marks the first three deprecated, to be removed in
@@ -119,21 +126,25 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
  * The JavaScript value of a literal, before the schema sees it: a string,
  * a number or a boolean. Anything else — an enum, a list, an object, a
  * variable — is refused here, since none of them is what a leaf scalar
- * reads.
+ * reads; so is a float literal for an integer scalar.
  */
-function literalValue(node: ValueNode, name: string): unknown {
+function literalValue(
+	node: ValueNode,
+	name: string,
+	literals: 'leaf' | 'integer',
+): unknown {
 	switch (node.kind) {
 		case Kind.STRING:
 			return node.value;
 		case Kind.INT:
+			return Number(node.value);
 		case Kind.FLOAT:
+			if (literals === 'integer') break;
 			return Number(node.value);
 		case Kind.BOOLEAN:
 			return node.value;
-		default:
-			throw new GraphQLError(
-				`${name} cannot represent a ${node.kind} literal`,
-				{ nodes: node },
-			);
 	}
+	throw new GraphQLError(`${name} cannot represent a ${node.kind} literal`, {
+		nodes: node,
+	});
 }
