@@ -1,7 +1,7 @@
 # @nxgt/graphql-scalars
 
-Ready-made GraphQL scalars (`DateTime`, `Date`, `EmailAddress`, `URL`, `UUID`,
-`NonEmptyString`, `PositiveInt`, and more to come) whose every rule is a Zod schema, and
+Ready-made GraphQL scalars, by category (dates and times, identifiers,
+network, numbers, strings), whose every rule is a Zod schema, and
 `zodScalar` to turn any Zod schema of your own into one. An input is decoded
 into the value your resolver receives; a resolver's result is encoded and
 checked on the way out as strictly as on the way in. It works with `graphql`

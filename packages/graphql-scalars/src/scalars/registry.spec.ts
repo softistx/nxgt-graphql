@@ -12,17 +12,20 @@ import { scalarResolvers, schemas } from './index';
 const HERE = import.meta.dir;
 const GUIDE = join(HERE, '../../docs/guide/scalars.md');
 
-/** `DateTime` → `date-time`, `URL` → `url`, `NonEmptyString` → `non-empty-string`. */
-function kebab(name: string): string {
-	return name
-		.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-		.replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
-		.toLowerCase();
+/** The letters of a name, case and hyphens aside: `IPv4` and `ipv4` match. */
+function letters(name: string): string {
+	return name.replaceAll('-', '').toLowerCase();
 }
 
-/** `date-time` → `dateTime`. */
-function camel(file: string): string {
-	return file.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+/** The one scalar and the one schema a scalar file exports. */
+function exportsOf(module: Record<string, unknown>) {
+	const scalars = Object.entries(module).filter(
+		([, value]) => value instanceof GraphQLScalarType,
+	) as [string, GraphQLScalarType][];
+	const zods = Object.entries(module).filter(
+		([, value]) => value instanceof z.ZodType,
+	);
+	return { scalars, zods };
 }
 
 const files = [...new Glob('*/*.ts').scanSync(HERE)]
@@ -39,29 +42,32 @@ describe('every scalar file', () => {
 
 		test(`${file} exports one scalar and its schema, named after it`, async () => {
 			const module: Record<string, unknown> = await import(join(HERE, file));
-			const scalars = Object.entries(module).filter(
-				([, value]) => value instanceof GraphQLScalarType,
-			);
-			const zods = Object.entries(module).filter(
-				([, value]) => value instanceof z.ZodType,
-			);
+			const { scalars, zods } = exportsOf(module);
 			expect(scalars).toHaveLength(1);
 			expect(zods).toHaveLength(1);
-			const [[exportName, scalar]] = scalars as [[string, GraphQLScalarType]];
-			expect(kebab(scalar.name)).toBe(base);
-			expect(exportName).toBe(`${scalar.name}Scalar`);
-			expect(zods[0]?.[0]).toBe(`${camel(base)}Schema`);
+			const [[scalarExport, scalar]] = scalars as [[string, GraphQLScalarType]];
+			const [[schemaExport]] = zods as [[string, unknown]];
+			// Nothing else: `export *` would lift it to the package root.
+			expect(Object.keys(module).sort()).toEqual(
+				[scalarExport, schemaExport].sort(),
+			);
+			// `ipv4.ts` holds `IPv4`, `date-time.ts` holds `DateTime`.
+			expect(base).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+			expect(letters(base)).toBe(letters(scalar.name));
+			expect(scalarExport).toBe(`${scalar.name}Scalar`);
+			expect(schemaExport).toMatch(/^[a-z][A-Za-z0-9]*Schema$/);
+			expect(letters(schemaExport)).toBe(`${letters(base)}schema`);
 		});
 
 		test(`${file} is registered through its category's index.ts`, async () => {
 			const module: Record<string, unknown> = await import(join(HERE, file));
-			const scalar = Object.values(module).find(
-				(value) => value instanceof GraphQLScalarType,
-			) as GraphQLScalarType;
+			const { scalars, zods } = exportsOf(module);
+			const [[, scalar]] = scalars as [[string, GraphQLScalarType]];
+			const [[schemaExport, schema]] = zods as [[string, unknown]];
 			const registered: Record<string, unknown> = scalarResolvers;
 			expect(registered[scalar.name]).toBe(scalar);
 			const known: Record<string, unknown> = schemas;
-			expect(known[camel(base)]).toBe(module[`${camel(base)}Schema`]);
+			expect(known[schemaExport.replace(/Schema$/, '')]).toBe(schema);
 		});
 
 		test(`${file} has a spec beside it`, async () => {

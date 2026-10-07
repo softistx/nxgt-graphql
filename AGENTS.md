@@ -41,13 +41,18 @@ packages/graphql-scalars/src/
   `index.ts`. A new category is a folder and one line in `all.ts`. Nothing is
   listed by hand anywhere else: `scalarResolvers`, `schemas` and
   `scalarTypeDefs` are derived from what `all.ts` exports, in the
-  alphabetical order of a module namespace.
+  code-unit order of a module namespace (`IPv4` before `Iban`).
 - **`registry.spec.ts` fails when one is forgotten**: a file that is not
-  registered, has no spec beside it, exports other than one scalar and one
-  schema, is not named after its scalar (`DateTime` in `date-time.ts`, as
-  `DateTimeScalar` and `dateTimeSchema`), or whose GraphQL name is not in
-  `docs/guide/scalars.md`. Two categories exporting the same name fail
-  `tsc` (an ambiguous `export *`).
+  registered, has no spec beside it, exports anything but one scalar and one
+  schema (a helper would reach the package root), is not named after its
+  scalar, or whose GraphQL name is not in `docs/guide/scalars.md`. The name
+  rule: the file is the GraphQL name's letters, lowercase, hyphens at word
+  breaks (`DateTime` in `date-time.ts`, `IPv4` in `ipv4.ts`); the exports are
+  `<Name>Scalar` and the same letters camelCased plus `Schema`
+  (`dateTimeSchema`, `ipv4Schema`). Two categories exporting the same name
+  fail `tsc` (TS2308, an ambiguous `export *`); two files with the same
+  GraphQL name fail the count. A type-only export is invisible at runtime, so
+  the guard does not see it.
 - **The schema export ends in `Schema`.** `export *` lifts it to the package
   root, where a bare `url` or `date` would read as something else.
 

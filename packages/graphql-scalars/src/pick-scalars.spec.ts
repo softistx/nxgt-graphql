@@ -34,7 +34,9 @@ describe('pickScalars', () => {
 	});
 
 	test('the compiler refuses an unknown name too', () => {
-		// @ts-expect-error: no scalar is named Datetime
+		// @ts-expect-error: no scalar is named Datetime. This also guards
+		// `ScalarName` from widening to `string`: a scalar registered with a
+		// `string`-typed name would make this compile, and TS2578 fail.
 		expect(() => pickScalars('Datetime')).toThrow(TypeError);
 		// The positive case beside it: a known name compiles.
 		expect(pickScalars('Date').resolvers.Date.name).toBe('Date');

@@ -58,7 +58,9 @@ export const scalarResolvers = Object.fromEntries(
  */
 export const schemas = Object.fromEntries(
 	exported
-		.filter(([, value]) => value instanceof z.ZodType)
+		.filter(
+			([key, value]) => value instanceof z.ZodType && key.endsWith('Schema'),
+		)
 		.map(([key, value]) => [key.replace(/Schema$/, ''), value]),
 ) as Schemas;
 

@@ -31,6 +31,10 @@ Next release (a minor):
 - **`PhoneNumber`** (candidate) — E.164 numbers.
 - **`BigInt`** (candidate) — values beyond 32 bits, as a string on the wire.
 - **A money scalar** (candidate) — an amount with its currency.
+- **Load only the scalars you import** (candidate) — today any import builds
+  every scalar, as the maps of all of them are built when the package loads;
+  with many more scalars, per-category entry points or maps built on first use
+  would keep an import of one scalar small.
 
 ## Not planned
 
