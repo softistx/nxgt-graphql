@@ -50,6 +50,20 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   graphql-scalars serializes a safe value as a JSON number; here the result is
   always a string, so a client that reads numbers must parse it
   (`BigInt(data.views)`).
+- **`IPv4`** refuses a leading zero (`01.2.3.4`) and a `/prefix`;
+  graphql-scalars accepts both (its regex allows `0?0?` before each part and an
+  optional `/0` to `/32`). Use `CIDRv4` for a block.
+- **`IPv6`** refuses a `/prefix`, which graphql-scalars accepts; use `CIDRv6`.
+  Both refuse a zone. Neither normalises the value.
+- **`IP`** follows its two parts, so it refuses an address with a prefix and an
+  IPv4 with a leading zero.
+- **`MAC`** is six hex pairs separated by `:`, all lowercase or all uppercase.
+  graphql-scalars also accepts `-` separators, no separator (`001a2b3c4d5e`),
+  `.` groups (`001a.2b3c.4d5e`) and mixed case.
+- **`PhoneNumber`** is strict E.164: `+`, a country code not starting with 0,
+  at most 15 digits, no separator. The graphql-scalars regex makes the `+`
+  optional, allows spaces, dashes and parentheses, and has no length limit, so
+  `0612 34 56 78` passes there and fails here.
 
 ### Stricter input
 
@@ -64,6 +78,10 @@ import { LongScalar } from '@nxgt/graphql-scalars';
 
 LongScalar.serialize(9223372036854775807n); // '9223372036854775807'
 ```
+
+## Only here
+
+`CIDRv4`, `CIDRv6` and `Hostname` have no graphql-scalars counterpart.
 
 ## Aliases we do not repeat
 

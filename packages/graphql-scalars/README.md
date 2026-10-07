@@ -41,7 +41,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 | --- | --- |
 | [date-time](docs/guide/scalars/date-time.md) | 2: `DateTime`, `Date` |
 | [identifier](docs/guide/scalars/identifier.md) | 1: `UUID` |
-| [network](docs/guide/scalars/network.md) | 2: `URL`, `EmailAddress` |
+| [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`, `PhoneNumber` |
 | [number](docs/guide/scalars/number.md) | 12: `PositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt` and the signed Int and Float variants |
 | [string](docs/guide/scalars/string.md) | 1: `NonEmptyString` |
 

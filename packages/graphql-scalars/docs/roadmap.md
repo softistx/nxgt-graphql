@@ -16,10 +16,12 @@ Next release (a minor):
 - **Scalars in categories** — date-time, identifier, network, number and
   string, so the package can grow to a hundred scalars and stay readable.
   `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order.
-- **Extended scalars, category by category** — the number category is in the
-  next release (`NegativeInt`, `NonNegativeInt`, `NonPositiveInt`,
-  `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`,
-  `SafeInt`, `Port`, `Long`, `BigInt`). Coming: network, identifier, encoding,
+- **Extended scalars, category by category** — the number and network
+  categories are in the next release: number adds `NegativeInt`,
+  `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`,
+  `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long` and
+  `BigInt`; network adds `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`,
+  `Hostname` and `PhoneNumber`. Coming: identifier, encoding,
   date-time, locale, geo, finance, color, value (including `JSON`,
   `JSONObject` and `Void`) and string (`Emoji`). The list grows as categories
   land. See [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).

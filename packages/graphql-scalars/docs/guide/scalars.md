@@ -42,7 +42,7 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 | --- | --- |
 | [date-time](scalars/date-time.md) | `DateTime`, `Date` |
 | [identifier](scalars/identifier.md) | `UUID` |
-| [network](scalars/network.md) | `URL`, `EmailAddress` |
+| [network](scalars/network.md) | `URL`, `EmailAddress`, `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`, `PhoneNumber` |
 | [number](scalars/number.md) | `PositiveInt`, `NegativeInt`, `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long`, `BigInt` |
 | [string](scalars/string.md) | `NonEmptyString` |
 
@@ -50,16 +50,10 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 ## Signatures
 
 ```ts
-const DateTimeScalar: ZodScalar<typeof dateTimeSchema, 'DateTime'>; // GraphQLScalarType<Date, string>
-const DateScalar: ZodScalar<typeof dateSchema, 'Date'>; // GraphQLScalarType<string, string>
-const EmailAddressScalar: ZodScalar<typeof emailAddressSchema, 'EmailAddress'>;
-const URLScalar: ZodScalar<typeof urlSchema, 'URL'>;
-const UUIDScalar: ZodScalar<typeof uuidSchema, 'UUID'>;
-const NonEmptyStringScalar: ZodScalar<typeof nonEmptyStringSchema, 'NonEmptyString'>;
-const PositiveIntScalar: ZodScalar<typeof positiveIntSchema, 'PositiveInt'>; // GraphQLScalarType<number, number>
-// NegativeInt, NonNegativeInt, NonPositiveInt, the four floats, SafeInt and Port: the same shape
-const LongScalar: ZodScalar<typeof longSchema, 'Long'>; // GraphQLScalarType<bigint, string | number>
-const BigIntScalar: ZodScalar<typeof bigIntSchema, 'BigInt'>; // GraphQLScalarType<bigint, string | number>
+// every scalar has this shape, `X` being its GraphQL name
+const XScalar: ZodScalar<typeof xSchema, 'X'>; // GraphQLScalarType<Output, Input>
+// DateTime: GraphQLScalarType<Date, string>; PositiveInt: <number, number>;
+// Long, BigInt: <bigint, string | number>; the others: <string, string>
 
 // every scalar, keyed by its GraphQL name
 type ScalarResolvers = { DateTime: typeof DateTimeScalar /* , Date, ... */ };
@@ -75,8 +69,10 @@ const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scala
 `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order
 of their export.
 
-Only `DateTime`, `Date`, `URL` and `UUID` have a `specifiedBy`, pointing at
-RFC 3339, the WHATWG URL standard and RFC 9562; the others have none.
+A scalar with a standard behind it has a `specifiedBy` pointing at it (RFC 3339
+for `DateTime`, the WHATWG URL standard for `URL`, RFC 4291 for `IPv6`); the
+category pages name the exports and rules of each, and the SDL of
+`scalarTypeDefs` shows which have one.
 
 ## Schema-first with a server
 

@@ -40,6 +40,14 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `Date cannot represent this input: Invalid ISO date` | not `YYYY-MM-DD`, or an impossible day such as `2023-02-29`; a date-time is refused |
 | `EmailAddress cannot represent this input: Invalid email address` | not an email address |
 | `URL cannot represent this input: Invalid URL` | not absolute, or a scheme other than `http` and `https` (`javascript:`, `data:`, `mailto:`) |
+| `IPv4 cannot represent this input: Invalid IPv4 address` | not a dotted quad: a part above 255, a leading zero (`01.2.3.4`), fewer than four parts, a `/prefix` (use `CIDRv4`), or an IPv6 |
+| `IPv6 cannot represent this input: Invalid IPv6 address` | not an RFC 4291 text form: a zone (`fe80::1%eth0`), `:::`, a non-hex digit, or an IPv4 |
+| `IP cannot represent this input: Expected an IPv4 or IPv6 address` | neither an `IPv4` nor an `IPv6` value, such as a host name or `256.0.0.1` |
+| `CIDRv4 cannot represent this input: Invalid IPv4 range` | no `/prefix`, a prefix above 32, or an address that is not an IPv4 |
+| `CIDRv6 cannot represent this input: Invalid IPv6 range` | no `/prefix`, a prefix above 128, or an address that is not an IPv6 |
+| `MAC cannot represent this input: Invalid MAC address` | not six `:`-separated hex pairs, mixed case (`00:1a:2B:3c:4d:5e`), or `-` or `.` separators; use all lowercase or all uppercase with colons |
+| `Hostname cannot represent this input: Invalid hostname` | an empty value, a space, an underscore, a label that starts or ends with `-`, or a label of more than 63 characters |
+| `PhoneNumber cannot represent this input: Invalid E.164 number` | no leading `+`, a country code starting with 0, spaces or dashes, or more than 15 digits; send `+33612345678` |
 | `UUID cannot represent this input: Invalid UUID` | not the 8-4-4-4-12 form |
 | `NonEmptyString cannot represent this input: Must not be empty or blank` | empty or only white space |
 | `PositiveInt cannot represent this input: Too small: expected number to be >0` | `0` or negative |

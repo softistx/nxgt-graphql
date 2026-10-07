@@ -116,7 +116,10 @@ that weakens one is a breaking change, even when every spec stays green.
 - **An input is taken in its canonical form only.** A scalar refuses a
   variant spelling rather than rewriting it (`007`, `-0`), so the value a
   resolver receives is the one the client sent. The exceptions are Zod's own
-  (`URL` trims).
+  (`URL` trims). Where a format has several spellings of one value that Zod
+  accepts as they are (`IPv6`'s compressed and full forms in either case, `MAC` in either
+  case), the scalar accepts them and passes them through unchanged: no
+  rewrite, so nothing is silently normalised.
 
 ## The green bar
 
