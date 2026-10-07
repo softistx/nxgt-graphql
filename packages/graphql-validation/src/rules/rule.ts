@@ -1,7 +1,5 @@
 import type { z } from 'zod';
-
-/** A string schema, plain or a format (`z.email()` is not a `z.ZodString`). */
-export type StringSchema = z.ZodString | z.ZodStringFormat;
+import type { StringSchema } from '../formats/format';
 
 /** The schema each kind of rule narrows. */
 export interface Targets {
