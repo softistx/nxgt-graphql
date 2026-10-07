@@ -49,6 +49,7 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `Port cannot represent this input: Too big: expected number to be <=65535` | above 65535 |
 | `Port cannot represent this input: Too small: expected number to be >=0` | negative, such as `-1` |
 | `Port cannot represent this input: Invalid input: expected int, received number` | not an integer, such as `80.5` |
+| `<Name> cannot represent this input: Expected an integer, not -0` | `-0` for an integer scalar (`NonNegativeInt`, `SafeInt`, `Port`, `Long`, …): send `0` |
 | `SafeInt cannot represent this input: Too big: expected int to be <=9007199254740991` | past 2^53; use `Long` or `BigInt` |
 | `Long cannot represent this input: Expected a decimal integer, with no leading zero and no "-0"` | a string such as `"007"`, `"-0"`, `"+1"` or `" 1"` |
 
@@ -70,8 +71,10 @@ query {
 
 ### `Long cannot represent this input: Expected a decimal integer string or a safe integer`
 
-**When:** a literal or variable for a `Long` or `BigInt` is neither a string nor
-an integer number: `1.5`, `true`, an object.
+**When:** a variable or literal for a `Long` or `BigInt` is neither a string
+nor an integer number: a JSON variable `1.5`, `true`, an object. (A float
+*literal* such as `1.5` in the query is refused earlier, with `cannot
+represent a FloatValue literal`.)
 **Why:** the way in takes a canonical decimal string or a safe integer. A string
 such as `"007"` says `Expected a decimal integer, with no leading zero and no "-0"`
 instead.
