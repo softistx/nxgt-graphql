@@ -1,56 +1,68 @@
-import { DateScalar, date } from './date';
-import { DateTimeScalar, dateTime } from './date-time';
-import { EmailAddressScalar, emailAddress } from './email-address';
-import { NonEmptyStringScalar, nonEmptyString } from './non-empty-string';
-import { PositiveIntScalar, positiveInt } from './positive-int';
-import { URLScalar, url } from './url';
-import { UUIDScalar, uuid } from './uuid';
+import { GraphQLScalarType } from 'graphql';
+import { z } from 'zod';
+import { typeDefsOf } from '../type-defs';
+import * as all from './all';
 
-export {
-	DateScalar,
-	DateTimeScalar,
-	EmailAddressScalar,
-	NonEmptyStringScalar,
-	PositiveIntScalar,
-	URLScalar,
-	UUIDScalar,
-};
+export * from './all';
+
+type All = typeof all;
 
 /**
- * The schemas behind the scalars, exported so an application validates a
- * value the way the API does — in a form, a REST handler or a job — with the
- * same rule and the same `z.input`/`z.output` types.
+ * Every scalar of this package, keyed by its GraphQL name. Derived from what
+ * `./all` exports, so a new scalar is registered by its category's
+ * `index.ts` alone.
  */
-export const schemas = {
-	dateTime,
-	date,
-	emailAddress,
-	url,
-	uuid,
-	nonEmptyString,
-	positiveInt,
+export type ScalarResolvers = {
+	[K in keyof All as All[K] extends GraphQLScalarType & {
+		readonly name: infer N extends string;
+	}
+		? N
+		: never]: All[K];
 };
 
+/** The GraphQL name of one of this package's scalars. */
+export type ScalarName = keyof ScalarResolvers;
+
 /**
- * Every scalar of this package, keyed by its GraphQL name: the `resolvers`
- * entry a schema-first server (`makeExecutableSchema`, Yoga, Apollo) takes
- * beside {@link scalarTypeDefs}.
+ * The schema behind each scalar, keyed by its export name without `Schema`:
+ * `dateTimeSchema` is `schemas.dateTime`.
  */
-export const scalarResolvers = {
-	DateTime: DateTimeScalar,
-	Date: DateScalar,
-	EmailAddress: EmailAddressScalar,
-	URL: URLScalar,
-	UUID: UUIDScalar,
-	NonEmptyString: NonEmptyStringScalar,
-	PositiveInt: PositiveIntScalar,
+export type Schemas = {
+	[K in keyof All as All[K] extends z.ZodType
+		? K extends `${infer Base}Schema`
+			? Base
+			: never
+		: never]: All[K];
 };
+
+// A module namespace lists its exports in alphabetical order, so both maps,
+// and the SDL, come out in a stable order.
+const exported: [string, unknown][] = Object.entries(all);
+
+/**
+ * Every scalar, keyed by its GraphQL name: the `resolvers` entry a
+ * schema-first server (`makeExecutableSchema`, Yoga, Apollo) takes beside
+ * {@link scalarTypeDefs}. {@link pickScalars} takes some of them only.
+ */
+export const scalarResolvers = Object.fromEntries(
+	exported
+		.map(([, value]) => value)
+		.filter((value) => value instanceof GraphQLScalarType)
+		.map((scalar) => [scalar.name, scalar]),
+) as ScalarResolvers;
+
+/**
+ * The schemas behind the scalars, so an application validates a value the
+ * way the API does — in a form, a REST handler or a job — with the same rule
+ * and the same `z.input`/`z.output` types.
+ */
+export const schemas = Object.fromEntries(
+	exported
+		.filter(([, value]) => value instanceof z.ZodType)
+		.map(([key, value]) => [key.replace(/Schema$/, ''), value]),
+) as Schemas;
 
 /** The SDL that declares every scalar of {@link scalarResolvers}. */
-export const scalarTypeDefs: string = Object.values(scalarResolvers)
-	.map((scalar) =>
-		scalar.specifiedByURL === null || scalar.specifiedByURL === undefined
-			? `scalar ${scalar.name}`
-			: `scalar ${scalar.name} @specifiedBy(url: "${scalar.specifiedByURL}")`,
-	)
-	.join('\n');
+export const scalarTypeDefs: string = typeDefsOf(
+	Object.values(scalarResolvers),
+);

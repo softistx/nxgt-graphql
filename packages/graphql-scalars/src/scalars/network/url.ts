@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zodScalar } from '../zod-scalar';
+import { zodScalar } from '../../zod-scalar';
 
 /**
  * An absolute `http:` or `https:` URL. Other schemes are refused —
@@ -9,9 +9,9 @@ import { zodScalar } from '../zod-scalar';
  */
 // Exactly `^https?$`: Zod reads this source to also refuse
 // `https:example.com` and `http:/x`, which a looser pattern lets through.
-export const url = z.url({ protocol: /^https?$/ });
+export const urlSchema = z.url({ protocol: /^https?$/ });
 
-export const URLScalar = zodScalar(url, {
+export const URLScalar = zodScalar(urlSchema, {
 	name: 'URL',
 	description: 'An absolute http or https URL.',
 	specifiedByURL: 'https://url.spec.whatwg.org/',

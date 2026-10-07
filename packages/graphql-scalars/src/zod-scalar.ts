@@ -7,13 +7,22 @@ import {
 } from 'graphql';
 import { z } from 'zod';
 
-export interface ZodScalarOptions {
+export interface ZodScalarOptions<N extends string = string> {
 	/** The GraphQL name, as the schema's `scalar` declaration spells it. */
-	readonly name: string;
+	readonly name: N;
 	readonly description?: string;
 	/** The `@specifiedBy(url:)` of the format the scalar follows. */
 	readonly specifiedByURL?: string;
 }
+
+/**
+ * What {@link zodScalar} returns: a `GraphQLScalarType` whose GraphQL name is
+ * known to the compiler, so a map of scalars can be keyed by it.
+ */
+export type ZodScalar<
+	S extends z.ZodType = z.ZodType,
+	N extends string = string,
+> = GraphQLScalarType<z.output<S>, z.input<S>> & { readonly name: N };
 
 /**
  * A GraphQL scalar whose every crossing is checked by one Zod schema.
@@ -36,10 +45,10 @@ export interface ZodScalarOptions {
  * error with the value the client sent (`Variable "$e" got invalid value …`);
  * graphql 17 does not.
  */
-export function zodScalar<S extends z.ZodType>(
+export function zodScalar<S extends z.ZodType, const N extends string>(
 	schema: S,
-	options: ZodScalarOptions,
-): GraphQLScalarType<z.output<S>, z.input<S>> {
+	options: ZodScalarOptions<N>,
+): ZodScalar<S, N> {
 	const { name } = options;
 	/**
 	 * Runs one direction of the schema. Zod *fails* on a value the schema
@@ -100,7 +109,10 @@ export function zodScalar<S extends z.ZodType>(
 		coerceInputValue: (value: unknown) => decode(value),
 		coerceInputLiteral: (node: ConstValueNode) => literal(node),
 	};
-	return new GraphQLScalarType<z.output<S>, z.input<S>>(config);
+	return new GraphQLScalarType<z.output<S>, z.input<S>>(config) as ZodScalar<
+		S,
+		N
+	>;
 }
 
 /**
