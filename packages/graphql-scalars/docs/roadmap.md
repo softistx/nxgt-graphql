@@ -6,10 +6,16 @@ and Later are candidates, not promises.
 
 ## Now
 
-- **First release (0.1.0)** — the seven scalars (`DateTime`, `Date`,
-  `EmailAddress`, `URL`, `UUID`, `NonEmptyString`, `PositiveInt`), `zodScalar`
-  for your own, `schemas` to reuse the rules outside GraphQL, and
-  `scalarTypeDefs` / `scalarResolvers` for schema-first servers.
+Next release (a minor):
+
+- **`pickScalars`** — `pickScalars('DateTime', 'URL')` gives the SDL and
+  `resolvers` of those scalars only, with the names checked by the compiler.
+- **Each scalar's schema on its own** — `dateTimeSchema`, `urlSchema`, … beside
+  `schemas`, plus the `ZodScalar<S, N>`, `ScalarName`, `ScalarResolvers` and
+  `Schemas` types.
+- **Scalars in categories** — date-time, identifier, network, number and
+  string, so the package can grow to a hundred scalars and stay readable.
+  `scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order.
 
 ## Next
 
@@ -40,4 +46,7 @@ and Later are candidates, not promises.
 
 ## Shipped
 
-Nothing yet: 0.1.0 is the first release.
+- **First release** — the seven scalars (`DateTime`, `Date`, `EmailAddress`,
+  `URL`, `UUID`, `NonEmptyString`, `PositiveInt`), `zodScalar` for your own,
+  `schemas` to reuse the rules outside GraphQL, and `scalarTypeDefs` /
+  `scalarResolvers` for schema-first servers — 0.1.0.
