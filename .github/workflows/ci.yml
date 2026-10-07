@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+    # `feat/**` too: an effort built with large-feature-branch-workflow merges
+    # each slice into its integration branch `feat/<slug>`, and those slices
+    # are merged without waiting for a human. Without this they merged with no
+    # CI at all — no tests, no artifact check.
+    branches: [develop, main, 'feat/**']
+
+# A pull request's new push supersedes its run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI
+    # GitHub-hosted: this repository is public, so the minutes are free and
+    # unlimited. No service container: nothing here talks to a server.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # `changeset status --since=origin/develop` needs the base branch.
+          fetch-depth: 0
+      - name: Setup
+        uses: ./.github/actions/setup
+      # The Biome bun.lock resolved, as `bun run check` runs it locally: one
+      # version, the one biome.json's $schema names, and never `latest`.
+      - name: Lint code
+        run: bunx biome ci
+      # Build FIRST. Every package's `exports` points at `./dist/*`, so on a
+      # clean checkout a package that imports a sibling resolves it to nothing
+      # and typecheck reports phantom TS2307s. `bun run build` goes through
+      # scripts/workspace.ts, which builds each package after the siblings it
+      # depends on, so building from nothing works.
+      - name: Build packages
+        run: bun run build
+      - name: Type checking
+        run: bun run typecheck
+      - name: Run tests
+        run: bun run test
+      # The build exits 0 on packages that throw the instant they are imported.
+      # This packs them, installs them as a consumer does and imports every
+      # declared subpath.
+      - name: Verify the built artifacts load
+        run: bun run verify:artifacts
+      # A change to a package without a changeset is a change that never
+      # reaches a consumer: the release workflow has nothing to version.
+      #
+      # Except on the release branch itself: "Version packages" consumes the
+      # changesets, so requiring one there would mean requiring one for the act
+      # of releasing.
+      - name: Changeset present
+        if: github.head_ref != 'changeset-release/develop'
+        run: bun run changeset:status
+
+  newest-peers:
+    # The job above runs the lockfile's toolchain: the exact versions each
+    # package pins as a devDependency, the oldest end of each peer range. This
+    # one runs the newest end — the latest graphql 17 and zod 4 the ranges
+    # accept, and TypeScript within `^6.0.3` — so a range stays true after the
+    # release that would break it. It resolves without a lockfile, so an
+    # upstream release can turn it red with no change here: read it, do not
+    # make it a required check.
+    name: Newest peers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup
+        uses: ./.github/actions/setup
+      # Rewrites the manifests in this checkout only, then installs what they
+      # now name. The lockfile goes: its versions satisfy the rewritten
+      # ranges, so an install that kept it would test the oldest end again.
+      - name: Use the newest peers
+        run: bun scripts/newest-peers.ts && rm bun.lock && bun install
+      - name: Build packages
+        run: bun run build
+      - name: Type checking
+        run: bun run typecheck
+      - name: Run tests
+        run: bun run test
+      - name: Verify the built artifacts load
+        run: bun run verify:artifacts

@@ -1,0 +1,127 @@
+import {
+	type ConstValueNode,
+	GraphQLError,
+	GraphQLScalarType,
+	Kind,
+	type ValueNode,
+} from 'graphql';
+import { z } from 'zod';
+
+export interface ZodScalarOptions {
+	/** The GraphQL name, as the schema's `scalar` declaration spells it. */
+	readonly name: string;
+	readonly description?: string;
+	/** The `@specifiedBy(url:)` of the format the scalar follows. */
+	readonly specifiedByURL?: string;
+}
+
+/**
+ * A GraphQL scalar whose every crossing is checked by one Zod schema.
+ *
+ * - An input — a variable (`parseValue`) or a literal in the query
+ *   (`parseLiteral`) — is **decoded**: what a resolver receives is
+ *   `z.output<S>`.
+ * - A resolver's return value is **encoded**: what goes on the wire is
+ *   `z.input<S>`, checked on the way out as strictly as on the way in.
+ *
+ * A schema that changes the value on the way in must be a `z.codec`, so the
+ * way out exists: a plain `.transform()` has no inverse, and Zod refuses to
+ * encode through one. A schema that only validates needs nothing more.
+ *
+ * A refusal is a `GraphQLError` naming the scalar and Zod's first issue,
+ * not the value: for the built-in scalars no issue contains it, so a
+ * resolver's bad result does not reach the client in the error. A schema of
+ * your own can still put input in its issue — a custom message, or a strict
+ * object's `Unrecognized key`. graphql 16 also prefixes a bad *variable*'s
+ * error with the value the client sent (`Variable "$e" got invalid value …`);
+ * graphql 17 does not.
+ */
+export function zodScalar<S extends z.ZodType>(
+	schema: S,
+	options: ZodScalarOptions,
+): GraphQLScalarType<z.output<S>, z.input<S>> {
+	const { name } = options;
+	/**
+	 * Runs one direction of the schema. Zod *fails* on a value the schema
+	 * refuses, and *throws* on what it cannot run: a `.transform()` on the way
+	 * out (it has no inverse), an async check, or the caller's own codec
+	 * throwing. Each becomes a `GraphQLError`, the original kept as its cause.
+	 */
+	const run = <T>(
+		way: string,
+		attempt: () => z.ZodSafeParseResult<T>,
+		node?: ValueNode,
+	): T => {
+		const where = node === undefined ? {} : { nodes: node };
+		let result: z.ZodSafeParseResult<T>;
+		try {
+			result = attempt();
+		} catch (error) {
+			const cause = error instanceof Error ? error : undefined;
+			const why =
+				error instanceof z.core.$ZodEncodeError
+					? ': its schema transforms with no way back, use z.codec'
+					: '';
+			throw new GraphQLError(`${name} cannot ${way}${why}`, {
+				...where,
+				...(cause === undefined ? {} : { originalError: cause }),
+			});
+		}
+		if (result.success) return result.data;
+		const issue = result.error.issues[0]?.message ?? 'invalid';
+		throw new GraphQLError(`${name} cannot ${way}: ${issue}`, where);
+	};
+	const decode = (value: unknown, node?: ValueNode): z.output<S> =>
+		run(
+			'represent this input',
+			() => z.safeDecode(schema, value as z.input<S>),
+			node,
+		);
+	const encode = (value: unknown): z.input<S> =>
+		run('serialize this value', () =>
+			z.safeEncode(schema, value as z.output<S>),
+		);
+	const literal = (node: ValueNode): z.output<S> =>
+		decode(literalValue(node, name), node);
+
+	// graphql 16 knows only the first three; graphql 17 also takes the
+	// `coerce*` ones, and marks the first three deprecated, to be removed in
+	// 18. Both sets are the same functions, so whichever a version calls
+	// behaves the same. They are passed from a variable rather than a literal
+	// so that graphql 16's config type does not refuse the names it lacks.
+	const config = {
+		name,
+		description: options.description,
+		specifiedByURL: options.specifiedByURL,
+		serialize: encode,
+		parseValue: (value: unknown) => decode(value),
+		parseLiteral: literal,
+		coerceOutputValue: encode,
+		coerceInputValue: (value: unknown) => decode(value),
+		coerceInputLiteral: (node: ConstValueNode) => literal(node),
+	};
+	return new GraphQLScalarType<z.output<S>, z.input<S>>(config);
+}
+
+/**
+ * The JavaScript value of a literal, before the schema sees it: a string,
+ * a number or a boolean. Anything else — an enum, a list, an object, a
+ * variable — is refused here, since none of them is what a leaf scalar
+ * reads.
+ */
+function literalValue(node: ValueNode, name: string): unknown {
+	switch (node.kind) {
+		case Kind.STRING:
+			return node.value;
+		case Kind.INT:
+		case Kind.FLOAT:
+			return Number(node.value);
+		case Kind.BOOLEAN:
+			return node.value;
+		default:
+			throw new GraphQLError(
+				`${name} cannot represent a ${node.kind} literal`,
+				{ nodes: node },
+			);
+	}
+}
