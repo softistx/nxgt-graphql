@@ -178,6 +178,11 @@ the directive declared is this package's. Both at once throw
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
 
+`@nxgt/graphql-validation/codegen` exports what a code generator needs to write
+the same schemas as source: `inputCode`, `constraintsOn` and
+`assertOwnConstraint`. `@nxgt/graphql-codegen-zod` reads it; a server does not
+need it.
+
 Also shipped, outside `exports`:
 
 | File | Is |
