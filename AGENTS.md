@@ -12,6 +12,7 @@ are public.
 | --- | --- |
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives) and each named operation's variables (`z.input`, what a client sends), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `scalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -81,7 +82,10 @@ packages/graphql-scalars/src/
 ## Layering
 
 `@nxgt/graphql-scalars` and `@nxgt/graphql-validation` depend on nothing at
-runtime, and not on each other; `graphql` and `zod` are peers, each pinned exactly as a devDependency at the oldest end of its range
+runtime, and not on each other. `@nxgt/graphql-codegen-zod` depends on
+`@nxgt/graphql-validation` (its `./codegen` subpath) and `change-case` (the
+typescript plugins' PascalCase), never on scalars: it imports a scalar record
+by the module name its config gives; `graphql` and `zod` are peers, each pinned exactly as a devDependency at the oldest end of its range
 (`graphql` `16.11.0`, `zod` `4.6.5`). `zod`'s range, `>=4.6.5 <5`, is
 nxgt-data's (`@nxgt/mongo`, `@nxgt/redis`): one range is one zod in an
 application's tree. Siblings, when there are some, depend on each other by
@@ -280,6 +284,58 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   as `nxgt-graphql-scalars typedefs`' do (owner): `--out` alone writes
   `generated/graphql/constraint.graphqls`, `--help`/`-h` anywhere wins, and
   `typedefs:write` is the package script that regenerates the shipped file.
+
+## @nxgt/graphql-codegen-zod
+
+The Zod codegen plugin: it writes, as source, the schemas `withValidation`
+builds at runtime, so it shares their rules instead of copying them.
+
+### Layout
+
+```
+packages/graphql-codegen-zod/src/
+  index.ts                 plugin(schema, documents, config, info): checkConstraints, then the blocks
+  config.ts                CodegenZodConfig
+  naming.ts                the typescript plugins' names, behind schemaPrefix for schemas
+  scalars.ts               ScalarSources: `scalars` entries, then the scalarSchemas record
+  imports.ts               the generated file's imports, zod first, aliases on a clash
+  writer.ts                one value's schema: inputCode, defaults (.prefault), getters
+  schema-output.ts         enums, input types (@oneOf as a union), field arguments
+  variables-output.ts      each named operation's variables, constraints from their usages
+  plugin.spec.ts           the guards below
+packages/graphql-codegen-zod/test/
+  fixture.ts               the SDL and operations the specs generate from
+  generated.ts             generated, typechecked: `bun run generated:write`
+  types.ts                 what the generated types say, checked by typecheck
+```
+
+### Invariants
+
+- **The client refuses what the server refuses.** `plugin.spec.ts` serves
+  the fixture behind `withValidation` and runs each case both ways, operation
+  by operation. A change to how a value is written is proved there, not
+  argued.
+- **The plugin refuses what `withValidation` refuses**, with its message:
+  it runs `checkConstraints` before writing anything. It also fails, rather
+  than write a weaker schema, on a custom scalar with no mapping (never
+  `z.unknown()`), a variable passed to two different `format`s, and a schema
+  that declares `@constraint` without SDL (introspected: no directive to read).
+- **Input types are `z.strictObject`**, as graphql refuses an unknown field;
+  variables and args objects stay `z.object`. Defaults are coerced as graphql
+  coerces them, through lists and nested input literals. The client is
+  stricter than graphql on two coercions only, pinned by a spec and
+  documented: a single value for a list variable, an Int for an ID.
+- **`test/generated.ts` is generated and typechecked.** Never edit it: `bun
+  run --cwd packages/graphql-codegen-zod generated:write` regenerates it, and
+  a spec fails, naming that command, when it is stale. Biome skips it.
+- **A default is `.prefault(v)` then `.nullable()`:** optional on the way in
+  (`z.input`), present on the way out (`z.output`); `test/types.ts` pins it.
+  `.default` would not run a nested input's own defaults, and `.nullish()`
+  before `.prefault` would keep `undefined` in the output type.
+- **Names follow the typescript plugins** (`@graphql-codegen/visitor-plugin-common`'s
+  `convertFactory`): `Args` is `convert(parent + convert(field) + 'Args')`,
+  variables `convert(name + suffix + 'Variables')`. Read that code before
+  changing a name.
 
 ## The green bar
 
