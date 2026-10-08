@@ -1,5 +1,7 @@
 {
 	"root": false,
 	"extends": "//",
-	"files": { "includes": ["**", "!test/generated.ts"] }
+	"files": {
+		"includes": ["**", "!test/generated.ts", "!test/generated-scalars.ts"]
+	}
 }
