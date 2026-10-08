@@ -40,7 +40,7 @@ export function leafSchema(
 	for (const { rule, value } of constraints) {
 		if (rule.target !== kind) {
 			throw new Error(
-				`@constraint(${rule.argument}) on ${where} needs ${describe(rule.target)}, not ${type.name}.`,
+				`@constraint(${rule.argument}) on ${where} needs ${describeTarget(rule.target)}, not ${type.name}.`,
 			);
 		}
 		schema = applyRule(rule, schema, value);
@@ -49,7 +49,7 @@ export function leafSchema(
 }
 
 /** What a rule's target reads as in an error. */
-export function describe(target: Target): string {
+export function describeTarget(target: Target): string {
 	if (target === 'string') return 'a String or an ID';
 	if (target === 'number') return 'an Int or a Float';
 	return 'a list';

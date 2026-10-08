@@ -6,4 +6,5 @@ export const multipleOfRule = defineRule({
 	target: 'number',
 	toZod: (schema, value) => schema.multipleOf(value),
 	toCode: (schema, value) => `${schema}.multipleOf(${value})`,
+	owns: (issue) => issue.code === 'not_multiple_of',
 });

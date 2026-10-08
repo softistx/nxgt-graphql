@@ -11,4 +11,5 @@ export const notContainsRule = defineRule({
 		schema.refine((input) => !input.includes(value), message(value)),
 	toCode: (schema, value) =>
 		`${schema}.refine((input) => !input.includes(${literal(value)}), ${literal(message(value))})`,
+	owns: (issue) => issue.code === 'custom',
 });

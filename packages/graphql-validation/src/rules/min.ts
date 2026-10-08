@@ -6,4 +6,8 @@ export const minRule = defineRule({
 	target: 'number',
 	toZod: (schema, value) => schema.gte(value),
 	toCode: (schema, value) => `${schema}.gte(${value})`,
+	owns: (issue) =>
+		issue.code === 'too_small' &&
+		issue.origin === 'number' &&
+		issue.inclusive === true,
 });

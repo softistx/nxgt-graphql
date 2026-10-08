@@ -11,8 +11,10 @@ import { parseArgs } from './bad-user-input';
 import {
 	argsSchemaOf,
 	assertInterfaceConstraintsKept,
-} from './build/args-schema';
-import { InputSchemas } from './build/input-schema';
+} from './builder/args-schema';
+import { InputSchemas } from './builder/input-schema';
+import { assertOwnConstraint } from './constraint-directive';
+import { constraintOf } from './rules';
 
 const wrapped = Symbol('graphql-validation');
 
@@ -24,7 +26,12 @@ function checking(
 	resolve: Resolver,
 ): Resolver {
 	const check: Resolver = async (source, args, context, info) =>
-		await resolve(source, await parseArgs(schema, args, where), context, info);
+		await resolve(
+			source,
+			await parseArgs(schema, args, where, constraintOf),
+			context,
+			info,
+		);
 	check[wrapped] = true;
 	return check;
 }
@@ -78,6 +85,7 @@ export function withValidation<S extends GraphQLSchema>(schema: S): S {
 			'withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.',
 		);
 	}
+	assertOwnConstraint(inputs.directive);
 	inputs.buildAll(schema);
 	for (const type of Object.values(schema.getTypeMap())) {
 		if (type.name.startsWith('__')) continue;
@@ -96,5 +104,6 @@ export function withValidation<S extends GraphQLSchema>(schema: S): S {
 			if (args) wrap(field, args, `${type.name}.${field.name}`);
 		}
 	}
+	inputs.checkDefaults();
 	return schema;
 }

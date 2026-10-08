@@ -36,8 +36,25 @@ export interface Rule<
 	readonly target: K;
 	readonly base?: true;
 	readonly toZod: (schema: Targets[K], value: ValueOf[T]) => Targets[K];
-	/** `schema` is the source of the schema this rule narrows. */
+	/**
+	 * `schema` is the source of the schema this rule narrows. The source names
+	 * zod as a free `z`: the generated file imports it.
+	 */
 	readonly toCode: (schema: string, value: ValueOf[T]) => string;
+	/**
+	 * Whether a Zod issue is this rule's refusal, so the error a client gets
+	 * names the rule (`constraint: 'minLength'`), which does not change with
+	 * Zod's own issue codes.
+	 */
+	readonly owns: (issue: IssueFields) => boolean;
+}
+
+/** The fields of a Zod issue a rule recognises its refusal by. */
+export interface IssueFields {
+	readonly code: string;
+	readonly origin?: string;
+	readonly format?: string;
+	readonly inclusive?: boolean;
 }
 
 /** Declares a rule, with its argument name kept literal. */

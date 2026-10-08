@@ -6,4 +6,5 @@ export const maxLengthRule = defineRule({
 	target: 'string',
 	toZod: (schema, value) => schema.max(value),
 	toCode: (schema, value) => `${schema}.max(${value})`,
+	owns: (issue) => issue.code === 'too_big' && issue.origin === 'string',
 });

@@ -6,4 +6,5 @@ export const startsWithRule = defineRule({
 	target: 'string',
 	toZod: (schema, value) => schema.startsWith(value),
 	toCode: (schema, value) => `${schema}.startsWith(${literal(value)})`,
+	owns: (issue) => issue.format === 'starts_with',
 });
