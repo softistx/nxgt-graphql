@@ -13,7 +13,7 @@ import { rules } from './rules';
  */
 export const constraintTypeDefs: string = `directive @constraint(
 ${Object.values(rules)
-	.map((rule) => `  ${rule.argument}: ${rule.type}`)
+	.map((rule) => `\t${rule.argument}: ${rule.type}`)
 	.join('\n')}
 ) on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
 `;

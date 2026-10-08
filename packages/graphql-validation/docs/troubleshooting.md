@@ -8,6 +8,7 @@ is the one a client sees.
 - [Startup](#startup)
 - [Silent traps](#silent-traps)
 - [Runtime](#runtime)
+- [The bin](#the-bin)
 
 ## Install
 
@@ -72,6 +73,37 @@ example with `@nxgt/graphql-scalars`), or on a field with [`validated`](guide/er
 the runtime's own RegExp message, which differs between engines. V8 (Node)
 says `Invalid regular expression: /[a-/: Unterminated character class`.
 **Fix:** write a valid pattern. In SDL, escape backslashes: `"\\d+"`.
+
+### `Unknown directive "@constraint".`
+
+**When:** in the IDE (JetBrains GraphQL, VS Code GraphQL), on every `@constraint`
+in a `.graphql` file. The server runs fine.
+**Why:** the plugin reads your schema files and `constraintTypeDefs` is not one.
+**Fix:** add the shipped file to `graphql.config.yml`, or write a copy into the
+project and list that instead:
+
+```yaml
+schema:
+  - src/**/*.graphql
+  - node_modules/@nxgt/graphql-validation/graphql/constraint.graphqls
+```
+
+```sh
+bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+```
+
+If the server scans the folder you write it to for its type definitions, the
+copy declares the directive for the server too: drop `constraintTypeDefs`, or
+keep the copy out of the scan. See the next entry.
+
+### `There can be only one directive named "@constraint".`
+
+**When:** building the schema.
+**Why:** `@constraint` is declared twice, usually `constraintTypeDefs` plus a
+`constraint.graphqls` copy that the server's type definitions scan picked up.
+**Fix:** keep one. Either drop `constraintTypeDefs` and let the scanned copy
+declare the directive, or keep `constraintTypeDefs` and exclude the copy from
+the scan (it then serves the IDE only).
 
 ### `withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.`
 
@@ -194,3 +226,22 @@ every issue. The resolver did not run.
 | `Too big: expected array to have <=2 items` | `maxItems: 2` |
 | `Too small: expected number to be >=18` | `min: 18` |
 | `Invalid string: must match pattern /.../` | `pattern` |
+
+## The bin
+
+### `typedefs failed: <message>`
+
+**When:** `nxgt-graphql-validation typedefs --out <file>` exits 1, for example
+with `typedefs failed: EACCES: permission denied, mkdir 'schema'`, or
+`EISDIR` when `<file>` is a folder.
+**Why:** the file or its folder could not be written; the rest of the line is
+the system's own message.
+**Fix:** point `--out` at a file path you can write, or print to stdout and
+redirect: `nxgt-graphql-validation typedefs > schema/constraint.graphqls`.
+
+### `Unknown command "<x>".` or `Unexpected arguments: …`
+
+**When:** the bin exits 2 and prints its usage.
+**Why:** the only command is `typedefs`, and its only flag is `--out <file>`.
+**Fix:** `nxgt-graphql-validation typedefs [--out <file>]`; `--help` prints
+the usage and exits 0.
