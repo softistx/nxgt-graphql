@@ -10,7 +10,7 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
@@ -28,6 +28,9 @@ packages/graphql-scalars/src/
   zod-scalar.ts            the factory
   type-defs.ts             the SDL of a set of scalars
   pick-scalars.ts          pickScalars(...names)
+  cli.ts                   the `nxgt-graphql-scalars` bin (shebang kept by the build)
+  typedefs-command.ts      its `typedefs [<Name>...] [--out [<file>]]` command
+                           (0 done, 1 write failed, 2 usage); .spec.ts beside it
   scalars/
     all.ts                 one `export *` line per category
     index.ts               derives scalarResolvers, schemas, scalarTypeDefs from all.ts
@@ -43,6 +46,12 @@ packages/graphql-scalars/src/
                            integer.ts, json.ts, offset.ts
 ```
 
+- **`packages/graphql-scalars/graphql/scalars.graphqls` is generated**: the
+  SDL of every scalar, shipped by path (`graphql` is in `files`, not in
+  `exports`), exactly what `nxgt-graphql-scalars typedefs` prints with no
+  names. Never edit it: `bun run --cwd packages/graphql-scalars
+  typedefs:write` regenerates it, and `typedefs-command.spec.ts` fails, naming
+  that command, when a scalar was added and the file was not.
 - **A new scalar is a file, its spec, and one line** in its category's
   `index.ts`. A new category is a folder and one line in `all.ts`. Nothing is
   listed by hand anywhere else: `scalarResolvers`, `schemas` and
