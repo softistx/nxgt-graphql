@@ -1,20 +1,23 @@
 # Identifier scalars
 
-The `identifier` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `identifier` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 Every identifier is a string on both sides, returned as sent: a value is
-checked, never normalised, so `ULID`, `GUID` and `ObjectID` keep the case
-the client used (`XID` is lowercase only). Compare them case-insensitively, or lower-case them in the
+checked, never normalised, so `UUID`, `UUIDv4`, `UUIDv7`, `GUID`, `ULID` and
+`ObjectID` keep the case the client used, mixed case included (`XID` is
+lowercase only). Compare them case-insensitively, or lower-case them in the
 resolver.
 
 ## Choosing a UUID scalar
 
 | Scalar | Takes | Pick it when |
 | --- | --- | --- |
-| `UUID` | an RFC 9562 UUID, any version | you accept ids from several sources |
+| `UUID` | an RFC 9562 UUID, any version 1 to 8, or the nil or max UUID | you accept ids from several sources |
 | `UUIDv4` | version 4 (random) only | the id is generated at random, and a time-ordered one is a bug |
 | `UUIDv7` | version 7 (time-ordered) only | rows are sorted or indexed by creation order |
-| `GUID` | any 8-4-4-4-12 hex, no version or variant check | a Microsoft GUID, or a nil / hand-made id that `UUID` refuses |
+| `GUID` | any 8-4-4-4-12 hex, no version or variant check | a Microsoft GUID, or a hand-made id with no version or variant that `UUID` refuses |
 
 Another version (`v1`, `v5`, …) or a hash variant is a one-liner with
 `zodScalar`; see [Custom scalars](../custom-scalars.md):
@@ -29,15 +32,20 @@ export const UUIDv5 = zodScalar(z.uuid({ version: 'v5' }), { name: 'UUIDv5' });
 ## `UUID`
 
 Export `UUIDScalar`, schema `uuidSchema`. A string on both sides. Accepts
-`550e8400-e29b-41d4-a716-446655440000`; refuses a value with no hyphens and
-`not-a-uuid`.
+`550e8400-e29b-41d4-a716-446655440000`, in any case (mixed included, kept as
+sent), the nil UUID `00000000-0000-0000-0000-000000000000` and the max UUID
+`ffffffff-ffff-ffff-ffff-ffffffffffff` in either case; refuses a value with no
+hyphens and `not-a-uuid`.
 
-It is `z.uuid()`, the 8-4-4-4-12 form (RFC 9562).
+It is the 8-4-4-4-12 form of RFC 9562: a version 1 to 8 with the RFC variant,
+or the nil or the max UUID. `uuidSchema` is a `z.ZodCustomStringFormat<'uuid'>`;
+its issue keeps `format: 'uuid'`.
 
 ```ts
 import { UUIDScalar } from '@nxgt/graphql-scalars';
 
 UUIDScalar.parseValue('550e8400-e29b-41d4-a716-446655440000');
+UUIDScalar.parseValue('FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF'); // the max UUID
 UUIDScalar.parseValue('not-a-uuid');
 // throws: UUID cannot represent this input: Invalid UUID
 ```
@@ -47,7 +55,8 @@ UUIDScalar.parseValue('not-a-uuid');
 Export `UUIDv4Scalar`, schema `uuidv4Schema`. A string on both sides. Accepts
 `123e4567-e89b-42d3-a456-426614174000`, in either case; refuses a version 7
 (`017f22e2-79b0-7cc3-98c4-dc0c0c07398f`), a version 1
-(`123e4567-e89b-12d3-a456-426614174000`) and a wrong variant. It is `z.uuidv4()`.
+(`123e4567-e89b-12d3-a456-426614174000`) and a wrong variant. It is
+`z.uuidv4()`.
 
 ```ts
 import { UUIDv4Scalar } from '@nxgt/graphql-scalars';

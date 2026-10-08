@@ -1,6 +1,8 @@
 # Date and time scalars
 
-The `date-time` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `date-time` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 ## Which one?
 
@@ -20,14 +22,17 @@ The `date-time` category of `@nxgt/graphql-scalars`. Every scalar's export is `<
 
 Export `DateTimeScalar`, schema `dateTimeSchema`. Wire value a string,
 resolver value a `Date`. Accepts `2024-03-10T12:00:00+02:00` and
-`2024-03-10T10:00:00Z`; refuses a time with no offset, an impossible day and
-`2024-03-10`.
+`2024-03-10T10:00:00Z`; refuses a time with no offset, an impossible day,
+`2024-03-10`, the offset `-00:00` and an instant outside year 0000 to 9999.
 
 An RFC 3339 date-time **with its offset** (`Z` or `±hh:mm`). A time without an
-offset names no instant, so it is refused. A variable becomes a `Date`; the
+offset names no instant, so it is refused, and so is `-00:00` (RFC 3339's
+"local offset unknown"): send `Z` or `+00:00`. A variable becomes a `Date`; the
 way out calls `toISOString()`, so the wire value is always UTC, to the
-millisecond: `…00.123456789Z` comes back as `…00.123Z`. A `Date` before year
-0 or after 9999 has no RFC 3339 form and is refused on the way out.
+millisecond. A fraction is cut to three digits before it is read, the same in
+every engine: `…00.123456789Z` comes back as `…00.123Z`. An instant outside
+0000-01-01 to 9999-12-31 in UTC (`0000-01-01T00:00:00+01:00`, which is in year
+-1) has no RFC 3339 form and is refused both ways.
 
 ```ts
 import { DateTimeScalar } from '@nxgt/graphql-scalars';
@@ -37,6 +42,10 @@ DateTimeScalar.serialize(date); // '2024-03-10T10:00:00.000Z'
 
 DateTimeScalar.parseValue('2024-03-10T12:00:00');
 // throws: DateTime cannot represent this input: Invalid ISO datetime
+DateTimeScalar.parseValue('2024-03-10T12:00:00-00:00');
+// throws: DateTime cannot represent this input: Invalid offset: write no offset as +00:00
+DateTimeScalar.parseValue('0000-01-01T00:00:00+01:00');
+// throws: DateTime cannot represent this input: Invalid DateTime: outside 0000-01-01 to 9999-12-31 in UTC
 ```
 
 It serializes a `Date` **only**. A resolver that returns the string it read
@@ -79,7 +88,8 @@ seconds), `10:15:30z` (lower-case `z`), `24:00:00Z` and `10:15:60Z` (no leap
 second).
 
 An RFC 3339 `full-time`: seconds, an optional fraction, then `Z` or `±hh:mm`.
-It stays a string and is kept as sent; it is not converted to UTC.
+It stays a string and is kept as sent; it is not converted to UTC. `-00:00` is
+refused, as for `DateTime`: write `+00:00` or `Z`.
 
 ```ts
 import { TimeScalar } from '@nxgt/graphql-scalars';
@@ -87,6 +97,8 @@ import { TimeScalar } from '@nxgt/graphql-scalars';
 TimeScalar.parseValue('10:15:30+02:00'); // '10:15:30+02:00'
 TimeScalar.parseValue('10:15:30');
 // throws: Time cannot represent this input: Invalid time: expected HH:MM:SS with an offset
+TimeScalar.parseValue('10:15:30-00:00');
+// throws: Time cannot represent this input: Invalid offset: write no offset as +00:00
 ```
 
 ## `LocalTime`
@@ -158,7 +170,7 @@ import { UtcOffsetScalar } from '@nxgt/graphql-scalars';
 
 UtcOffsetScalar.parseValue('+05:30'); // '+05:30'
 UtcOffsetScalar.parseValue('-00:00');
-// throws: UtcOffset cannot represent this input: Invalid UTC offset: write no offset as +00:00
+// throws: UtcOffset cannot represent this input: Invalid offset: write no offset as +00:00
 UtcOffsetScalar.parseValue('+14:30');
 // throws: UtcOffset cannot represent this input: Invalid UTC offset: expected ±HH:MM from -12:00 to +14:00
 ```
@@ -210,8 +222,9 @@ integer number of milliseconds since 1970-01-01T00:00:00Z (negative before
 past ±8.64e15 and `true`.
 
 It is past 2^31, so it is not GraphQL's `Int`: a query writes it as an integer
-literal (`at: 1710065730000`), and a float literal (`1.5`, `1e3`) is refused. An invalid `Date` (`new Date(Number.NaN)`) is refused on the
-way out, and so is anything but a `Date`.
+literal (`at: 1710065730000`), and a float literal (`1.5`, `1e3`) is refused.
+An invalid `Date` (`new Date(Number.NaN)`) is refused on the way out, and so is
+anything but a `Date`.
 
 ```ts
 import { TimestampScalar } from '@nxgt/graphql-scalars';

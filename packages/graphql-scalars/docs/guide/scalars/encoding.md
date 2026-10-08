@@ -1,6 +1,8 @@
 # Encoding scalars
 
-The `encoding` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share. Every scalar here is a string on both sides.
+The `encoding` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share. Every scalar here is a string on both sides.
 
 ## Bytes, not strings
 
@@ -70,17 +72,17 @@ Base64URLScalar.parseValue('aGk=');
 
 ## `Hexadecimal`
 
-Export `HexadecimalScalar`, schema `hexadecimalSchema`. One or more
-hexadecimal digits, in any case, kept as sent (`AB` and `ab` are two strings).
-An odd length is fine (`abc`). Refuses `''`, a `0x` prefix, a space and a
-non-hex digit. For a digest of a known length use `SHA256` or `SHA512`.
+Export `HexadecimalScalar`, schema `hexadecimalSchema`. One or more hexadecimal
+digits, in any case (mixed included), kept as sent (`AB` and `ab` are two
+strings). An odd length is fine (`abc`). Refuses `''`, a `0x` prefix, a space
+and a non-hex digit. For a digest of a known length use `SHA256` or `SHA512`.
 
 ```ts
 import { HexadecimalScalar } from '@nxgt/graphql-scalars';
 
 HexadecimalScalar.parseValue('deadBEEF'); // 'deadBEEF'
 HexadecimalScalar.parseValue('');
-// throws: Hexadecimal cannot represent this input: Expected at least one hexadecimal digit
+// throws: Hexadecimal cannot represent this input: Invalid hexadecimal: expected at least one digit
 HexadecimalScalar.parseValue('0x1f');
 // throws: Hexadecimal cannot represent this input: Invalid hex
 ```
@@ -88,9 +90,10 @@ HexadecimalScalar.parseValue('0x1f');
 ## `JWT`
 
 Export `JWTScalar`, schema `jwtSchema`. A JSON Web Token in compact form
-(RFC 7519, RFC 7515): three unpadded base64url parts joined by `.`; a header
-and a payload that are JSON objects; a signature that is not empty; and a
-header `alg` that is a string other than `none` (in any case). **Only the
+(RFC 7519, RFC 7515): three base64url parts joined by `.`, each in its one
+spelling (no padding, no unused bits set, as for `Base64URL`); a header and a
+payload that are JSON objects; a signature that is not empty; and a header
+`alg` that is a string, not empty and not `none` (in any case). **Only the
 shape is checked; the signature is not verified.** An unsecured token is
 refused even when it carries a signature (RFC 7518, 3.6). `typ` is not
 checked, so `at+jwt` access tokens pass. Refuses `a.b.c`, `a.b`, four parts,
@@ -131,8 +134,8 @@ export const resolvers = {
 
 ## `SHA256`
 
-Export `SHA256Scalar`, schema `sha256Schema`. A SHA-256 digest: 64
-hexadecimal digits, in either case, kept as sent. Refuses 63 or 65 digits, a
+Export `SHA256Scalar`, schema `sha256Schema`. A SHA-256 digest: 64 hexadecimal
+digits, in any case (mixed included), kept as sent. Refuses 63 or 65 digits, a
 non-hex digit, a SHA-512 length and `''`.
 
 ```ts
@@ -152,7 +155,7 @@ const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 ## `SHA512`
 
 Export `SHA512Scalar`, schema `sha512Schema`. A SHA-512 digest: 128
-hexadecimal digits, in either case, kept as sent; compare it case-insensitively
+hexadecimal digits, in any case, kept as sent; compare it case-insensitively
 as for `SHA256`. Refuses 127 or 129 digits, a SHA-256 length and `''`.
 
 ```ts

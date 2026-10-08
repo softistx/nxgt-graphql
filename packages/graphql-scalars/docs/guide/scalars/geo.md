@@ -1,6 +1,8 @@
 # Geo scalars
 
-The `geo` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `geo` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 A point on Earth is two numbers in decimal degrees, as WGS 84 gives them.
 Both scalars are numbers on both sides, finite, and refuse `NaN` and

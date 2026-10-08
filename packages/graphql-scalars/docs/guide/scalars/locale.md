@@ -1,6 +1,8 @@
 # Locale scalars
 
-The `locale` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `locale` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 ## `CountryCode`
 
@@ -39,7 +41,14 @@ Accepts `fr`, `fr-FR`, `en-US`, `zh-Hant-TW`, `sr-Latn`, `es-419`,
 
 - **The case is the canonical one**: the language lowercase, a script
   Titlecase, a region uppercase, the rest lowercase.
-- **An alias is taken, as sent**: `tl`, `iw`, `sh`, `en-UK`. JavaScript
+- **Extensions are in canonical order**, all lowercase: singletons ascending
+  (`-t-` before `-u-`); in `-u-`, attributes first, then keywords sorted by key,
+  each key once and never written `-true`; in `-t-`, fields sorted by key. `-x-`
+  ends the order rules: what follows is private use, only required to be
+  lowercase (`en-x-Foo` is refused).
+  `en-u-nu-latn-ca-buddhist` is refused, `en-u-ca-buddhist-nu-latn` is taken.
+- **An alias is taken, as sent**, in the language and in an extension's value
+  too (`tl`, `iw`, `sh`, `en-UK`, `en-u-ca-islamicc`). JavaScript
   engines do not agree on which aliases to rewrite (V8 in Node and Chrome
   turns `tl` into `fil`; JavaScriptCore in Bun and Safari keeps it), so
   refusing them would make the answer depend on the runtime. This rule gives

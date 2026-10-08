@@ -1,6 +1,8 @@
 # Value scalars
 
-The `value` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `value` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 These three are about the value itself, not a format: any JSON value, a JSON
 object, and no value at all. `JSON` and `JSONObject` keep the value as it is,
@@ -8,9 +10,10 @@ a plain JavaScript value in the resolver and the same JSON on the wire.
 
 What JSON cannot write back as it is is refused, **both ways** (an input and a
 resolver's result): a cycle, `undefined` (as an object's field or an array's
-hole), a `Date`, a `Map`, a class instance, `NaN` or `Infinity`, a `bigint`,
-and nesting past 1000 levels. A plain object (`{}` or `Object.create(null)`)
-and an array are walked; a shared, not cyclic, object is fine.
+hole), a `Date`, a `Map`, a class instance, `NaN` or `Infinity`, `-0` (JSON
+writes it `0`), a `bigint`, and nesting past 1000 levels. A plain object (`{}`
+or `Object.create(null)`) and an array are walked; a shared, not cyclic, object
+is fine.
 
 | Refused | Say instead |
 | --- | --- |
@@ -19,6 +22,7 @@ and an array are walked; a shared, not cyclic, object is fine.
 | a `bigint` | `String(n)`, or [`Long`](number.md) |
 | `{ a: undefined }` | leave the key out, or use `null` |
 | `NaN`, `Infinity` | `null`, or leave the key out |
+| `-0` | `0` |
 
 ## Which one?
 
@@ -36,7 +40,7 @@ Export `JSONScalar`, schema `jsonSchema`. Any JSON value on both sides:
 `null`, a boolean, a string, a finite number, an array or a plain object of
 them. Accepts `null`, `true`, `0`, `-1.5`, `'text'`, `[]`, `[1, 'a', null]`,
 `{}` and `{ a: { b: [null, false] } }`; refuses `undefined`, `NaN`,
-`Infinity`, `1n`, a `Date`, a `Map`, a function, `{ a: undefined }`,
+`Infinity`, `-0`, `1n`, a `Date`, a `Map`, a function, `{ a: undefined }`,
 `[1, undefined]`, a cycle and a value nested past 1000 levels.
 
 A query literal of **every kind** is read, objects and lists included: an
@@ -51,9 +55,9 @@ JSONScalar.parseValue({ a: [1, 'x'] }); // { a: [1, 'x'] }
 JSONScalar.parseLiteral(parseValue('{ a: [1, "x"], c: RED }'), undefined);
 // { a: [1, 'x'], c: 'RED' }
 JSONScalar.parseValue(new Date());
-// throws: JSON cannot represent this input: Expected a JSON value
+// throws: JSON cannot represent this input: Invalid JSON value
 JSONScalar.serialize(Number.NaN);
-// throws: JSON cannot serialize this value: Expected a JSON value
+// throws: JSON cannot serialize this value: Invalid JSON value
 ```
 
 As a query literal, as a variable, and as a literal holding a variable:
@@ -91,12 +95,12 @@ Two graphql 16 limits no scalar can fix:
 
 ## `JSONObject`
 
-Export `JSONObjectScalar`, schema `jsonObjectSchema`. A plain object whose
-every field is a JSON value, on both sides. Accepts `{}`, `{ a: 1 }`,
-`{ a: { b: [null] } }` and `Object.create(null)`; refuses `null`, `[]`,
-`[{}]`, `'text'`, `1`, `true`, a `Date`, a `Map`, `{ a: undefined }`,
-`{ a: Number.NaN }`, `undefined`, and everything `JSON` refuses. It reads
-literals as `JSON` does; a list literal is refused.
+Export `JSONObjectScalar`, schema `jsonObjectSchema`. A plain object whose every
+field is a JSON value, on both sides. Accepts `{}`, `{ a: 1 }`, `{ a: { b:
+[null] } }` and `Object.create(null)`; refuses `null`, `[]`, `[{}]`, `'text'`,
+`1`, `true`, a `Date`, a `Map`, `{ a: undefined }`, `{ a: Number.NaN }`, `{ a:
+-0 }`, `undefined`, and everything `JSON` refuses. It reads literals as `JSON`
+does; a list literal is refused.
 
 ```ts
 import { parseValue } from 'graphql';
@@ -104,9 +108,9 @@ import { JSONObjectScalar } from '@nxgt/graphql-scalars';
 
 JSONObjectScalar.parseValue({ a: 1 }); // { a: 1 }
 JSONObjectScalar.parseValue([1]);
-// throws: JSONObject cannot represent this input: Expected a JSON object
+// throws: JSONObject cannot represent this input: Invalid JSON object
 JSONObjectScalar.parseLiteral(parseValue('[1]'), undefined);
-// throws: JSONObject cannot represent this input: Expected a JSON object
+// throws: JSONObject cannot represent this input: Invalid JSON object
 ```
 
 ## `Void`
@@ -125,9 +129,9 @@ import { VoidScalar } from '@nxgt/graphql-scalars';
 
 VoidScalar.parseValue(null); // null
 VoidScalar.parseValue(0);
-// throws: Void cannot represent this input: Expected no value
+// throws: Void cannot represent this input: Invalid void: expected null
 VoidScalar.serialize(1);
-// throws: Void cannot serialize this value: Expected no value
+// throws: Void cannot serialize this value: Invalid void: expected null
 ```
 
 Refused as well: `undefined`, `''`, `false`, `{}` and `'null'`.
@@ -150,7 +154,7 @@ const schema = new GraphQLSchema({
 await graphql({ schema, source: 'mutation { clear }' });
 // { data: { clear: null } }
 await graphql({ schema, source: '{ ping }' });
-// { data: { ping: null }, errors: [Void cannot serialize this value: Expected no value] }
+// { data: { ping: null }, errors: [Void cannot serialize this value: Invalid void: expected null] }
 ```
 
 ## Your own JSON-holding scalar

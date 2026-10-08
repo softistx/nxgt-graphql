@@ -212,6 +212,9 @@ Every message is in [Troubleshooting](docs/troubleshooting.md).
   result is encoded; use `z.codec`.
 - `DateTime` serializes a `Date` only: parse a stored string before returning it.
 - `Date` is a string on both sides, never a `Date` object.
+- `URL` takes `http:` and `https:` only and refuses white space, user info and
+  a Unicode host rather than rewriting them: send `https://xn--bcher-kva.example`,
+  not `https://bücher.example`.
 - `Long` and `BigInt` are a `bigint` in resolvers and always a string on the
   wire: return `BigInt(row.count)`, not a `number`.
 

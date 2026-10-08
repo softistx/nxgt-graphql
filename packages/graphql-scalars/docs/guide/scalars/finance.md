@@ -1,17 +1,20 @@
 # Finance scalars
 
-The `finance` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `finance` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 ## `IBAN`
 
 Export `IBANScalar`, schema `ibanSchema`. A string on both sides: an
-International Bank Account Number in its electronic form, uppercase, no
-spaces. Accepts `FR1420041010050500013M02606`, `DE89370400440532013000`,
-`GB82WEST12345698765432`, `NO9386011117947` and `LC55HEMM000100010012001200023015`;
-refuses a wrong check digit (`FR1420041010050500013M02607`), lower case, the
-printed form in groups of four, a country not in the SWIFT IBAN registry
-(`XX…`), a length that is not the country's (`DE41370400440532013` has valid
-check digits but is 19 characters, where Germany's is 22), `""` and a number.
+International Bank Account Number in its electronic form, uppercase, no spaces.
+Accepts `FR1420041010050500013M02606`, `DE89370400440532013000`,
+`GB82WEST12345698765432`, `NO9386011117947` and
+`LC55HEMM000100010012001200023015`; refuses a wrong check digit
+(`FR1420041010050500013M02607`), lower case, the printed form in groups of four,
+a country not in the SWIFT IBAN registry (`XX…`), a length that is not the
+country's (`DE41370400440532013` has valid check digits but is 19 characters,
+where Germany's is 22), `""` and a number.
 
 The check digits (ISO 13616, mod 97) are verified by `z.iban()`, and the
 country and its length against a table of the SWIFT IBAN registry embedded in
