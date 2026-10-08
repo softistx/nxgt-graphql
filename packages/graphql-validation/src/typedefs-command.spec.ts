@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSchema, type GraphQLObjectType, graphql } from 'graphql';
 import { constraintTypeDefs } from './constraint-directive';
-import { graphqls, main } from './typedefs-command';
+import { DEFAULT_OUT, graphqls, main } from './typedefs-command';
 import { withValidation } from './with-validation';
 
 const SHIPPED = join(import.meta.dir, '../graphql/constraint.graphqls');
@@ -53,20 +53,50 @@ describe('the typedefs command', () => {
 		}
 	});
 
-	test('answers --help with 0, and nothing or a wrong command with 2', async () => {
+	test('writes to generated/graphql/ when --out names no file', async () => {
+		const dir = await mkdtemp(join(tmpdir(), 'graphqls-'));
+		const cwd = process.cwd();
+		try {
+			process.chdir(dir);
+			expect(await main(['typedefs', '--out'])).toBe(0);
+			expect(await readFile(join(dir, DEFAULT_OUT), 'utf8')).toBe(graphqls());
+		} finally {
+			process.chdir(cwd);
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test('answers --help or -h anywhere with 0', async () => {
 		expect(await main(['--help'])).toBe(0);
-		expect(await main([])).toBe(2);
-		expect(await main(['schema'])).toBe(2);
-		expect(await main(['typedefs', '--out'])).toBe(2);
-		expect(String(err.mock.calls[0]?.[0])).toStartWith(
+		expect(await main(['typedefs', '--help'])).toBe(0);
+		expect(await main(['typedefs', '--out', 'x', '-h'])).toBe(0);
+	});
+
+	test('refuses a usage error with 2', async () => {
+		for (const argv of [
+			[],
+			['schema'],
+			['typedefs', '--out', ''],
+			['typedefs', '--out=x'],
+			['typedefs', '--out', '--out'],
+			['typedefs', '--out', 'a', 'b'],
+			['typedefs', '-x'],
+		]) {
+			expect(await main(argv)).toBe(2);
+		}
+		expect(String(err.mock.calls[1]?.[0])).toStartWith(
 			'Unknown command "schema".',
 		);
 	});
 });
 
 describe('graphql/constraint.graphqls, shipped in the package', () => {
-	test('is what the command writes: regenerate it with `bun run graphqls`', async () => {
-		expect(await readFile(SHIPPED, 'utf8')).toBe(graphqls());
+	test('is what the command writes', async () => {
+		if ((await readFile(SHIPPED, 'utf8')) !== graphqls()) {
+			throw new Error(
+				'graphql/constraint.graphqls is stale: run `bun run typedefs:write` in packages/graphql-validation.',
+			);
+		}
 	});
 });
 
