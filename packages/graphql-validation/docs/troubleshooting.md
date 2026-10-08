@@ -89,7 +89,7 @@ schema:
 ```
 
 ```sh
-bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+bunx nxgt-graphql-validation typedefs --out
 ```
 
 If the server scans the folder you write it to for its type definitions, the
@@ -237,11 +237,11 @@ with `typedefs failed: EACCES: permission denied, mkdir 'schema'`, or
 **Why:** the file or its folder could not be written; the rest of the line is
 the system's own message.
 **Fix:** point `--out` at a file path you can write, or print to stdout and
-redirect: `nxgt-graphql-validation typedefs > schema/constraint.graphqls`.
+redirect: `nxgt-graphql-validation typedefs > generated/graphql/constraint.graphqls`.
 
 ### `Unknown command "<x>".` or `Unexpected arguments: …`
 
 **When:** the bin exits 2 and prints its usage.
-**Why:** the only command is `typedefs`, and its only flag is `--out <file>`.
-**Fix:** `nxgt-graphql-validation typedefs [--out <file>]`; `--help` prints
+**Why:** the only command is `typedefs`, and its only flag is `--out [<file>]` (and `--help`).
+**Fix:** `nxgt-graphql-validation typedefs [--out [<file>]]`; `--help` prints
 the usage and exits 0.

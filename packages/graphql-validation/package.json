@@ -47,7 +47,7 @@
 		"build": "bun run ../../build.ts",
 		"test": "bun test src",
 		"typecheck": "tsc --noEmit",
-		"graphqls": "bun run src/cli.ts typedefs --out graphql/constraint.graphqls"
+		"typedefs:write": "bun run src/cli.ts typedefs --out graphql/constraint.graphqls"
 	},
 	"nxgt": {
 		"entrypoints": [

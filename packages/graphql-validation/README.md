@@ -147,11 +147,12 @@ If your IDE does not index `node_modules`, or you want the file committed with
 your schema, write it into the project (Node or Bun), and list that path instead:
 
 ```sh
-bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
-# or: npx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+bunx nxgt-graphql-validation typedefs --out
+# or: npx nxgt-graphql-validation typedefs --out
 ```
 
-Without `--out` the SDL is printed. Regenerate the file after upgrading the package.
+`--out` alone writes `generated/graphql/constraint.graphqls`, `--out <file>` writes
+`<file>`, and without `--out` the SDL is printed. Regenerate the file after upgrading the package.
 
 The schema must declare `@constraint` once. Pick one source for the server:
 
@@ -182,7 +183,7 @@ Also shipped, outside `exports`:
 | File | Is |
 | --- | --- |
 | `graphql/constraint.graphqls` | the SDL of `@constraint` for IDEs; reference it by path, it is not importable |
-| `nxgt-graphql-validation` (bin) | `typedefs [--out <file>]` prints or writes that SDL; `--help` |
+| `nxgt-graphql-validation` (bin) | `typedefs [--out [<file>]]` prints or writes that SDL; `--help` |
 
 ## Traps
 

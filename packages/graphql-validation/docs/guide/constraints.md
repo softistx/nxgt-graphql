@@ -227,14 +227,15 @@ To keep a copy in the project, for an IDE that does not index `node_modules` or
 to commit it with your schema:
 
 ```sh
-bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+bunx nxgt-graphql-validation typedefs --out
 ```
 
-and list `schema/constraint.graphqls` in `graphql.config.yml` in place of the
+and list `generated/graphql/constraint.graphqls` in `graphql.config.yml` in place of the
 `node_modules/...` line.
 
-`npx` works the same; `--out` creates the folder, and without it the SDL goes
-to stdout (`--help` lists the flags). It exits 0 when done, 1 when the file
+`npx` works the same. `--out` alone writes `generated/graphql/constraint.graphqls`,
+`--out <file>` writes `<file>`, creating the folder, and without it the SDL goes
+to stdout (`--help` or `-h`, anywhere on the line, lists the flags). It exits 0 when done, 1 when the file
 cannot be written (`typedefs failed: <message>` on stderr), and 2 on a usage
 error (`Unknown command "<x>".`, `Unexpected arguments: …`, or no command). Regenerate the file after upgrading the
 package.
