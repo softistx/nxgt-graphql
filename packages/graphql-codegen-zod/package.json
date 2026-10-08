@@ -1,18 +1,14 @@
 {
-	"name": "@nxgt/graphql-validation",
-	"version": "0.1.0",
-	"description": "Validate GraphQL arguments and input fields with @constraint directives, checked by Zod schemas, for graphql 16 and 17",
+	"name": "@nxgt/graphql-codegen-zod",
+	"version": "0.0.0",
+	"description": "A graphql-codegen plugin that writes Zod schemas from your SDL — inputs, enums, field arguments and operation variables — with the @constraint rules of @nxgt/graphql-validation",
 	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"bin": {
-		"nxgt-graphql-validation": "./dist/cli.js"
-	},
 	"files": [
 		"dist",
 		"docs",
-		"graphql",
 		"README.md",
 		"package.json",
 		"LICENSE"
@@ -23,26 +19,21 @@
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
-		"./codegen": {
-			"types": "./dist/codegen.d.ts",
-			"import": "./dist/codegen.js",
-			"default": "./dist/codegen.js"
-		},
 		"./package.json": "./package.json"
 	},
 	"keywords": [
 		"graphql",
+		"codegen",
+		"graphql-codegen",
+		"zod",
 		"validation",
 		"constraint",
-		"directive",
-		"zod",
-		"bun",
 		"typescript"
 	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/softistx/nxgt-graphql.git",
-		"directory": "packages/graphql-validation"
+		"directory": "packages/graphql-codegen-zod"
 	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org",
@@ -52,14 +43,11 @@
 		"build": "bun run ../../build.ts",
 		"test": "bun test src",
 		"typecheck": "tsc --noEmit",
-		"typedefs:write": "bun run src/cli.ts typedefs --out graphql/constraint.graphqls"
+		"generated:write": "bun run test/write-generated.ts"
 	},
-	"nxgt": {
-		"entrypoints": [
-			"src/index.ts",
-			"src/codegen.ts",
-			"src/cli.ts"
-		]
+	"dependencies": {
+		"@nxgt/graphql-validation": "workspace:^",
+		"change-case": "^5.4.4"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4.0",

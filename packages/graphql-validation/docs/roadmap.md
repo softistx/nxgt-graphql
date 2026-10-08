@@ -19,12 +19,13 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Next
 
-- **A Zod codegen plugin** that writes the same schemas as source, from the
-  same rules, so the types your resolvers receive come from your SDL.
 - **Your own formats**, named in `@constraint(format: "...")`.
 - **Schemas that read the context**, `(args, context) => schema`, for checks
   that need the request (uniqueness in a database, permissions).
 
 ## Shipped
 
-Nothing yet.
+- **A Zod codegen plugin**, [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod):
+  it writes the same schemas as source, from the same rules, so the types your
+  resolvers receive and the variables a client sends come from your SDL. This
+  package gains `@nxgt/graphql-validation/codegen` for it.
