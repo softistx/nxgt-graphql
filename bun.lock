@@ -28,7 +28,7 @@
     },
     "packages/graphql-validation": {
       "name": "@nxgt/graphql-validation",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "graphql": "16.11.0",
