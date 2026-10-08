@@ -28,6 +28,7 @@ input Prefs {
 	grid: [[Int]]
 	owner: ID = 7
 	ids: [ID!] = 1
+	dates: [DateTime!]
 }
 
 input SignUpInput {

@@ -186,7 +186,7 @@ refuses the schemas `withValidation` refuses. A server does not need it.
 | --- | --- |
 | `checkConstraints(schema, onArgs?)` | runs every startup check of `withValidation` without wrapping anything; returns the `@constraint` directive, or `undefined` when the schema declares none |
 | `constraintsOn(directive, node)` | the `Constraint`s written on an argument or input field (`arg.astNode`), `format` first |
-| `inputCode(type, constraints, where, named)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where` |
+| `inputCode(type, constraints, where, named, options?)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where`. `options` (`InputCodeOptions`): `list({ type, code, single })` returns each list's source, given `code` (the array with every rule) and `single` (one non-null item, without rules), e.g. to take a single value as graphql does: `single`, wrapped, piped into `code` |
 | `Constraint` | `{ rule, value }`, one `@constraint` argument; pass `rule` through, its type is not exported |
 
 ```ts

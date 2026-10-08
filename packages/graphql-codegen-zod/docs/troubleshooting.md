@@ -140,23 +140,25 @@ generates: {
 **When:** `safeParse` of a variables schema with a number where the schema has
 an `ID`.
 **Why:** `graphql` accepts an `Int` for an `ID`; the generated schema is
-`z.string()`. The client is deliberately stricter.
+`z.string()`: an id is a string in what the client sends, as in what the
+resolver receives.
 **Fix:** send the id as a string.
 
 ```ts
 zUserQueryVariables.safeParse({ id: String(id) });
 ```
 
-### A client request is refused for `{ tags: "ok" }`: `Invalid input: expected array, received string`
+### `Invalid input: expected array, received object`
 
-**When:** `safeParse` of a variables schema with a single value where the
-variable is a list.
-**Why:** `graphql` wraps a single value for a list variable; the generated
-schema is `z.array(...)`. The client is deliberately stricter.
-**Fix:** send a list.
+**When:** `safeParse` with one input object where a list of input objects is
+expected: `zFilter.safeParse({ and: {} })`.
+**Why:** a single value is taken for a list of scalars or enums, as `graphql`
+takes it, but not for a list of input objects: behind the recursive getters
+an input object needs, TypeScript could no longer infer the schema's type.
+**Fix:** send a list of one.
 
 ```ts
-zSignUpMutationVariables.safeParse({ input: { email, name, tags: ['ok'] } });
+zFilter.safeParse({ and: [filter] });
 ```
 
 ### A client request is refused: `Unrecognized key: "nickname"`

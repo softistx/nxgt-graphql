@@ -1,4 +1,8 @@
-import { type Constraint, inputCode } from '@nxgt/graphql-validation/codegen';
+import {
+	type Constraint,
+	type InputCodeOptions,
+	inputCode,
+} from '@nxgt/graphql-validation/codegen';
 import * as graphql from 'graphql';
 import {
 	astFromValue,
@@ -11,10 +15,13 @@ import {
 	type GraphQLNamedInputType,
 	GraphQLNonNull,
 	getNamedType,
+	getNullableType,
 	isEnumType,
 	isInputObjectType,
 	isListType,
 	isNonNullType,
+	isScalarType,
+	isSpecifiedScalarType,
 	valueFromASTUntyped,
 } from 'graphql';
 import type { Naming } from './naming';
@@ -76,7 +83,12 @@ export class Writer {
 			return this.#scalars.code(named);
 		};
 		if (!defaultValue)
-			return { code: inputCode(type, constraints, where, named), lazy };
+			return {
+				code: inputCode(type, constraints, where, named, {
+					list: singleOrList,
+				}),
+				lazy,
+			};
 		// The default parsed as the client's value would be, then null allowed
 		// after it: the key is optional on the way in, present on the way out.
 		const nullable = !isNonNullType(type);
@@ -85,6 +97,7 @@ export class Writer {
 			constraints,
 			where,
 			named,
+			{ list: singleOrList },
 		);
 		const value = JSON.stringify(
 			coerced(valueFromASTUntyped(defaultValue), type),
@@ -108,6 +121,34 @@ export class Writer {
 		);
 	}
 }
+
+/**
+ * A list of scalars or enums that also takes a single value, as graphql
+ * coerces it (`"a"` for `[String]` is `["a"]`): the value is wrapped, then
+ * checked as the list, so a rule refuses it with the message, and at the
+ * path, the server gives.
+ */
+const singleOrList: NonNullable<InputCodeOptions['list']> = ({
+	type,
+	code,
+	single,
+}) => {
+	// Not for input objects: a transform behind a recursive getter leaves
+	// TypeScript unable to infer the schema's type.
+	const named = getNamedType(type);
+	if (isInputObjectType(named)) return code;
+	// A custom scalar's schema may decode (a string to a Date): the single
+	// value goes to the pipe as it came, the list's schema decodes it once.
+	// A list of lists of them would decode in the inner list: left as is.
+	let first = single;
+	if (isScalarType(named) && !isSpecifiedScalarType(named)) {
+		if (isListType(getNullableType(type.ofType))) return code;
+		first = `z.custom<z.input<typeof ${single}>>((value) => !Array.isArray(value))`;
+	}
+	// `unknown[]`: the pipe needs what it hands on to fit what the list
+	// takes, nullable items too.
+	return `z.union([${code}, ${first}.transform((value): unknown[] => [value]).pipe(${code})])`;
+};
 
 /**
  * The default of an argument or input field as a literal: its SDL's, or,
