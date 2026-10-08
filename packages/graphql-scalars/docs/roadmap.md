@@ -31,10 +31,12 @@ Next release (a minor):
     `KSUID`, `XID`, `ObjectID`, `ISBN`, `SemVer`;
   - encoding: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`,
     `SHA512`;
+  - value: `JSON`, `JSONObject`, `Void`, and `literals: 'any'` in
+    `zodScalar` for a scalar of your own that holds JSON;
   - date-time: `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`,
     `TimeZone`, `Timestamp`.
 
-  Coming: value (`JSON`, `JSONObject`, `Void`) and string (`Emoji`). See
+  Coming: string (`Emoji`). See
   [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
 ## Next

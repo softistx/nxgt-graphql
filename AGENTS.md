@@ -132,6 +132,21 @@ that weakens one is a breaking change, even when every spec stays green.
   a miscasing whose words still look like IANA words (`ASIA/Kolkata`,
   `ZULU`, `Prc`). Bun lets none through. An offset is
   `UtcOffset`'s, never a `TimeZone`.
+- **`JSON` and `JSONObject` read every literal** (`literals: 'any'`), and
+  refuse both ways what JSON cannot write back as it is: a cycle,
+  `undefined`, a hole, a `Date`, `NaN`, nesting past 1000 levels
+  (`src/rules/json.ts`). A variable inside a literal is read as graphql 17's
+  `replaceVariables` reads it, on 16 too (`untypedValue` in
+  `zod-scalar.ts`, not graphql 16's `valueFromASTUntyped`): left out, it
+  drops an object field and makes a list item `null`; validation sees every
+  variable left out, on both. Two graphql 16 limits a scalar cannot fix: a
+  variable of a custom scalar inside the literal arrives as its resolver
+  value (a `Date`, so `JSON` refuses it; 17 passes its wire value), and an
+  object or list *default* for a `JSON` argument makes introspection and
+  `printSchema` throw (`Cannot convert value to AST`).
+- **`Void` is `null` only.** GraphQL writes `null` without calling the
+  scalar, so a resolver that returns nothing answers `null`; one that
+  returns a value is refused, not silently dropped.
 - **`Locale`'s case rule is written here, not taken from `Intl`.** V8
   refuses-by-rewriting every CLDR alias (`tl` → `fil`, `en-UK` → `en-GB`),
   JavaScriptCore only some, so `Intl.getCanonicalLocales(tag)[0] === tag`

@@ -9,3 +9,4 @@ export * from './locale';
 export * from './network';
 export * from './number';
 export * from './string';
+export * from './value';
