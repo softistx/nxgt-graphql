@@ -51,6 +51,9 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `Timestamp cannot represent this input: Expected an integer, not -0` | `-0`; send `0` |
 | `Timestamp cannot represent this input: Invalid input: expected number, received boolean` | a boolean, or anything that is not a number |
 | `Timestamp cannot represent this input: Too big: expected number to be <=8640000000000000` | past what a `Date` holds; below -8.64e15 it says `Too small: expected number to be >=-8640000000000000` |
+| `Latitude cannot represent this input: Too big: expected number to be <=90` | past 90 degrees; below -90 it says `Too small: expected number to be >=-90`. A swapped pair (a GeoJSON `[longitude, latitude]` read as latitude first) lands here |
+| `Longitude cannot represent this input: Too big: expected number to be <=180` | past 180 degrees; below -180 it says `Too small: expected number to be >=-180` |
+| `Latitude cannot represent this input: Invalid input: expected number, received string` | `"48.8566"` or `48°51'N` is a string; send the number in decimal degrees (same for `Longitude`) |
 | `CountryCode cannot represent this input: Invalid country code: expected an ISO 3166-1 alpha-2 code` | lower case (`fr`), three letters (`FRA`), an unassigned code, or `UK` (use `GB`), `EU`, `SU`, `XK` |
 | `Locale cannot represent this input: Invalid locale: expected a canonical BCP 47 tag` | not canonical: `fr-fr`, `FR`, `en_US`, or `-u-` keys out of order; send what `Intl.getCanonicalLocales` writes (`fr-FR`, `en-US`) |
 | `Locale cannot represent this input: Invalid locale: at most 255 characters` | a tag longer than 255 characters |

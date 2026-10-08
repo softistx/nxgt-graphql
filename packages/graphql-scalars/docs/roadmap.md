@@ -19,6 +19,7 @@ Next release (a minor):
 - **Extended scalars, category by category** — each category's page in
   [the scalars guide](guide/scalars.md) lists what it adds. In the next
   release:
+  - geo: `Latitude`, `Longitude`;
   - locale: `CountryCode`, `Locale`;
   - number: the signed Int and Float variants, `SafeInt`, `Port`, `Long`,
     `BigInt`;
@@ -31,7 +32,7 @@ Next release (a minor):
   - date-time: `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`,
     `TimeZone`, `Timestamp`.
 
-  Coming: geo, finance, color, value (`JSON`,
+  Coming: finance, color, value (`JSON`,
   `JSONObject`, `Void`) and string (`Emoji`). See
   [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
