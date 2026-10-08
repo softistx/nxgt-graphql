@@ -45,7 +45,7 @@ export async function main(argv: readonly string[]): Promise<number> {
 		return 0;
 	}
 	if (command === undefined) {
-		process.stdout.write(usage);
+		process.stderr.write(`No command.\n\n${usage}`);
 		return 2;
 	}
 	if (command !== 'typedefs') {

@@ -101,7 +101,8 @@ describe('the typedefs command', () => {
 		expect(await main(['typedefs', '--out', 'DateTime'])).toBe(2);
 		expect(await main(['typedefs', 'toString'])).toBe(2);
 		expect(await main(['typedefs', 'constructor'])).toBe(2);
-		expect(String(err.mock.calls[0]?.[0])).toStartWith(
+		expect(String(err.mock.calls[0]?.[0])).toStartWith('No command.');
+		expect(String(err.mock.calls[1]?.[0])).toStartWith(
 			'Unknown command "schema".',
 		);
 	});

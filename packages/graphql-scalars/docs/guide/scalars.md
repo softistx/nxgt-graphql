@@ -120,7 +120,7 @@ bunx nxgt-graphql-scalars typedefs DateTime URL --out        # only those two
 
 It exits 0 when done, 1 when the file cannot be written (`typedefs failed:
 <message>` on stderr), and 2 on a usage error (`Unknown command "<x>".`,
-`Unexpected arguments: …`, an unknown scalar, or no command). Regenerate the
+`Unexpected arguments: …`, an unknown scalar, or `No command.`). Regenerate the
 file after upgrading the package. A formatter (Biome, Prettier) run over the
 copy wraps its long `@specifiedBy` lines: still the same SDL, but no longer
 byte for byte what `typedefs` prints, so leave the copy out of it.
