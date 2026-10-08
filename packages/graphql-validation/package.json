@@ -6,9 +6,13 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
+	"bin": {
+		"nxgt-graphql-validation": "./dist/cli.js"
+	},
 	"files": [
 		"dist",
 		"docs",
+		"graphql",
 		"README.md",
 		"package.json",
 		"LICENSE"
@@ -42,11 +46,13 @@
 	"scripts": {
 		"build": "bun run ../../build.ts",
 		"test": "bun test src",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"graphqls": "bun run src/cli.ts typedefs --out graphql/constraint.graphqls"
 	},
 	"nxgt": {
 		"entrypoints": [
-			"src/index.ts"
+			"src/index.ts",
+			"src/cli.ts"
 		]
 	},
 	"devDependencies": {
