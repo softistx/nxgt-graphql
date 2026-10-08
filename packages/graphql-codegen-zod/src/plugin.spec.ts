@@ -26,8 +26,13 @@ const received = new Map<string, unknown>();
 function server() {
 	const schema = buildSchema(sdl);
 	// DateTime decodes as a server with @nxgt/graphql-scalars does.
-	const dateTime = schema.getType('DateTime') as GraphQLScalarType;
-	dateTime.parseValue = (value) => scalarSchemas.DateTime.parse(value);
+	// graphql 17 reads coerceInputValue, graphql 16 parseValue.
+	const dateTime = schema.getType('DateTime') as GraphQLScalarType & {
+		coerceInputValue?: (value: unknown) => unknown;
+	};
+	const decode = (value: unknown) => scalarSchemas.DateTime.parse(value);
+	dateTime.parseValue = decode;
+	dateTime.coerceInputValue = decode;
 	const answers: Record<string, unknown> = {
 		user: { id: 'u_1', name: 'n' },
 		users: [],
