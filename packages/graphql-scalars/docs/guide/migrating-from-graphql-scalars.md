@@ -99,6 +99,14 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   `FR`, `zh-hant-tw`, `x-foo` and `i-klingon`; here they are refused, not
   rewritten. Both refuse `en_US` and `en-`. Canonicalise on the client with
   `Intl.getCanonicalLocales` (see [Locale](scalars/locale.md)).
+- **`Latitude`** and **`Longitude`** are numbers only. graphql-scalars
+  accepts a string as well (`"48.8566"`, `"12"`) and reads
+  degrees-minutes-seconds (`48°51'N` becomes `48.85`, rounded to two
+  decimals); here every string is refused, so convert on the client. There an
+  `Int` literal is refused (`Can only validate floats or strings as latitude
+  but got a: IntValue`); here `45` is accepted. Both refuse `NaN`, `null` and
+  a value out of range; the messages differ (`Value must be between -90 and
+  90: 91` there, `Too big: expected number to be <=90` here).
 - **`Time`** is a string `10:15:30Z` on both sides and keeps the offset as
   sent. graphql-scalars resolves it to a `Date` (today's date at that time,
   moved to UTC: `10:15:30+02:00` is 08:15:30 UTC) and serializes a `Date` back
