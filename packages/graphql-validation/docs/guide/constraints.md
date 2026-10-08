@@ -210,6 +210,32 @@ Where they differ from graphql-constraint-directive's (validator.js):
 - `uri` requires the scheme (`example.com` is refused) and nothing but `http`,
   `https` and `ftp` gets in: no `javascript:`, no `mailto:`.
 
+## In your IDE
+
+An IDE's GraphQL plugin does not run your server, so it does not know
+`@constraint` and reports `Unknown directive "@constraint"`. Point
+`graphql.config.yml` at the file the package ships (by path; it is not an
+`exports` subpath, so do not `import` it):
+
+```yaml
+schema:
+  - src/**/*.graphql
+  - node_modules/@nxgt/graphql-validation/graphql/constraint.graphqls
+```
+
+To keep a copy in the project, for an IDE that does not index `node_modules` or
+to commit it with your schema:
+
+```sh
+bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+```
+
+`npx` works the same; `--out` creates the folder, and without it the SDL goes
+to stdout (`--help` lists the flags). Regenerate the file after upgrading the
+package. Never put it in the server's `typeDefs` next to `constraintTypeDefs`:
+the schema would declare the directive twice and `buildSchema` throws
+`There can be only one directive named "@constraint".`
+
 ## A realistic schema
 
 ```ts

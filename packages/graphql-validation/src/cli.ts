@@ -7,4 +7,9 @@
  */
 import { main } from './typedefs-command';
 
+// A reader that closed the pipe (`| head`) wants no more: not an error.
+process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+	if (error.code !== 'EPIPE') throw error;
+});
+
 process.exitCode = await main(process.argv.slice(2));

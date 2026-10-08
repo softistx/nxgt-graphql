@@ -131,6 +131,32 @@ const resolvers = {
 };
 ```
 
+## IDE support
+
+An IDE's GraphQL plugin (JetBrains GraphQL, VS Code GraphQL) reads your `.graphql`
+files, not `constraintTypeDefs`, so it reports `Unknown directive "@constraint"`.
+The package ships the directive as a file; add it to your `graphql.config.yml`:
+
+```yaml
+schema:
+  - src/**/*.graphql
+  - node_modules/@nxgt/graphql-validation/graphql/constraint.graphqls
+```
+
+If your IDE does not index `node_modules`, or you want the file committed with
+your schema, write it into the project (Node or Bun), and list that path instead:
+
+```sh
+bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+# or: npx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+```
+
+Without `--out` the SDL is printed. Regenerate the file after upgrading the package.
+
+This file is for the IDE only: do not load it into the server's `typeDefs`
+together with `constraintTypeDefs`, or `buildSchema` throws
+`There can be only one directive named "@constraint".`
+
 ## Exports
 
 | Export | Is |
@@ -142,6 +168,13 @@ const resolvers = {
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
+
+Also shipped, outside `exports`:
+
+| File | Is |
+| --- | --- |
+| `graphql/constraint.graphqls` | the SDL of `@constraint` for IDEs; reference it by path, it is not importable |
+| `nxgt-graphql-validation` (bin) | `typedefs [--out <file>]` prints or writes that SDL; `--help` |
 
 ## Traps
 

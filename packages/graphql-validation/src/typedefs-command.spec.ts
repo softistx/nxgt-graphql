@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +14,10 @@ describe('the typedefs command', () => {
 	afterEach(() => {
 		out.mockClear();
 		err.mockClear();
+	});
+	afterAll(() => {
+		out.mockRestore();
+		err.mockRestore();
 	});
 
 	test('prints the SDL, which declares @constraint as constraintTypeDefs does', async () => {
@@ -38,11 +42,21 @@ describe('the typedefs command', () => {
 		}
 	});
 
-	test('answers --help with 0, and nothing or a wrong command with 1', async () => {
+	test('fails with 1 and one line when the file cannot be written', async () => {
+		const dir = await mkdtemp(join(tmpdir(), 'graphqls-'));
+		try {
+			expect(await main(['typedefs', '--out', dir])).toBe(1);
+			expect(String(err.mock.calls[0]?.[0])).toStartWith('typedefs failed: ');
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test('answers --help with 0, and nothing or a wrong command with 2', async () => {
 		expect(await main(['--help'])).toBe(0);
-		expect(await main([])).toBe(1);
-		expect(await main(['schema'])).toBe(1);
-		expect(await main(['typedefs', '--out'])).toBe(1);
+		expect(await main([])).toBe(2);
+		expect(await main(['schema'])).toBe(2);
+		expect(await main(['typedefs', '--out'])).toBe(2);
 		expect(String(err.mock.calls[0]?.[0])).toStartWith(
 			'Unknown command "schema".',
 		);

@@ -73,6 +73,35 @@ the runtime's own RegExp message, which differs between engines. V8 (Node)
 says `Invalid regular expression: /[a-/: Unterminated character class`.
 **Fix:** write a valid pattern. In SDL, escape backslashes: `"\\d+"`.
 
+### `Unknown directive "@constraint".`
+
+**When:** in the IDE (JetBrains GraphQL, VS Code GraphQL), on every `@constraint`
+in a `.graphql` file. The server runs fine.
+**Why:** the plugin reads your schema files and `constraintTypeDefs` is not one.
+**Fix:** add the shipped file to `graphql.config.yml`, or write a copy into the
+project and list that instead:
+
+```yaml
+schema:
+  - src/**/*.graphql
+  - node_modules/@nxgt/graphql-validation/graphql/constraint.graphqls
+```
+
+```sh
+bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
+```
+
+Do not add the file to the server's `typeDefs` next to `constraintTypeDefs`: see
+the next entry.
+
+### `There can be only one directive named "@constraint".`
+
+**When:** building the schema.
+**Why:** `@constraint` is declared twice, usually `constraintTypeDefs` plus
+`constraint.graphqls` (the IDE's file) loaded into `typeDefs`.
+**Fix:** keep `constraintTypeDefs` on the server; the `.graphqls` file is for the
+IDE only.
+
 ### `withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.`
 
 **When:** calling `withValidation`.
