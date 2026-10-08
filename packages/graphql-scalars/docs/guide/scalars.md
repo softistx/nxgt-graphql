@@ -70,17 +70,21 @@ type ScalarResolvers = { DateTime: typeof DateTimeScalar /* , Date, ... */ };
 type ScalarName = keyof ScalarResolvers;
 // every schema, keyed by its export name without `Schema`
 type Schemas = { dateTime: typeof dateTimeSchema /* , date, ... */ };
+// the same schemas, keyed by GraphQL name
+type ScalarSchemas = { DateTime: typeof dateTimeSchema /* , Date, ... */ };
 
 const scalarResolvers: ScalarResolvers;
 const schemas: Schemas;
+const scalarSchemas: ScalarSchemas;
 const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scalar
 ```
 
-`scalarTypeDefs`, `scalarResolvers` and `schemas` list the scalars in the
-code-unit order of their names, not a dictionary's: every upper-case letter
-sorts before every lower-case one. `scalarTypeDefs` and `scalarResolvers`
-follow the `…Scalar` export names (`HSLA` before `HSL`, `HSL` before
-`HexColorCode`); `schemas` follows the `…Schema` names (`hsl` before `hsla`).
+`scalarTypeDefs`, `scalarResolvers`, `scalarSchemas` and `schemas` list the
+scalars in the code-unit order of their names, not a dictionary's: every
+upper-case letter sorts before every lower-case one. `scalarTypeDefs`,
+`scalarResolvers` and `scalarSchemas` follow the `…Scalar` export names
+(`HSLA` before `HSL`, `HSL` before `HexColorCode`); `schemas` follows the
+`…Schema` names (`hsl` before `hsla`).
 
 A scalar with a standard behind it has a `specifiedBy` pointing at it (RFC 3339
 for `DateTime`, the WHATWG URL standard for `URL`, RFC 4291 for `IPv6`); the
@@ -244,6 +248,33 @@ const parsed = body.parse({
   email: 'ada@example.com',
   at: '2024-03-10T12:00:00Z',
 }); // parsed.at is a Date
+```
+
+### Keyed by GraphQL name
+
+`scalarSchemas` holds the same schemas under the GraphQL name, which is what
+code generated from a GraphQL schema knows: `scalarSchemas.DateTime` is
+`dateTimeSchema`. Each entry is the very schema the scalar checks, typed
+exactly (not `z.ZodType`), so `z.decode(scalarSchemas.X, wire)` gives what a
+resolver receives, `z.input` is the wire type and `z.output` the resolver's.
+For a codec (`DateTime`, `Timestamp`, `Long`, `BigInt`) they differ. Every
+scalar has one, `JSON` and `Void` included. A scalar carries its schema too,
+as `.schema`, your own `zodScalar` ones included — the instance `zodScalar`
+returns, not a type rebuilt from its config (`toConfig()`,
+`lexicographicSortSchema`, graphql-tools' `mapSchema`), which has none: read
+`scalarSchemas[name]` there.
+
+```ts
+import { z } from 'zod';
+import { scalarSchemas } from '@nxgt/graphql-scalars';
+
+const Event = z.object({
+  id: scalarSchemas.UUID,
+  at: scalarSchemas.DateTime,
+});
+
+z.decode(Event, { id: crypto.randomUUID(), at: '2024-03-10T12:00:00Z' });
+// { id: '…', at: Date }
 ```
 
 Next: [Custom scalars](custom-scalars.md), or [Migrating from

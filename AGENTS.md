@@ -10,7 +10,7 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives) and each named operation's variables (`z.input`, what a client sends), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
@@ -34,7 +34,7 @@ packages/graphql-scalars/src/
                            (0 done, 1 write failed, 2 usage); .spec.ts beside it
   scalars/
     all.ts                 one `export *` line per category
-    index.ts               derives scalarResolvers, schemas, scalarTypeDefs from all.ts
+    index.ts               derives scalarResolvers, scalarSchemas, schemas, scalarTypeDefs from all.ts
     registry.spec.ts       the guards below
     <category>/            date-time, identifier, network, number, string, ...
       index.ts             one `export *` line per scalar
@@ -55,8 +55,8 @@ packages/graphql-scalars/src/
   that command, when a scalar was added and the file was not.
 - **A new scalar is a file, its spec, and one line** in its category's
   `index.ts`. A new category is a folder and one line in `all.ts`. Nothing is
-  listed by hand anywhere else: `scalarResolvers`, `schemas` and
-  `scalarTypeDefs` are derived from what `all.ts` exports, in the
+  listed by hand anywhere else: `scalarResolvers`, `scalarSchemas`,
+  `schemas` and `scalarTypeDefs` are derived from what `all.ts` exports, in the
   code-unit order of a module namespace (`IBAN` before `IP`, `HSLA` before
   `HSL`; `schemas` by the `…Schema` names, `hsl` before `hsla`).
 - **`registry.spec.ts` fails when one is forgotten**: a file that is not
@@ -74,8 +74,8 @@ packages/graphql-scalars/src/
   the guard does not see it. A file whose options say `literals: 'integer'`
   fails unless its spec calls `integerCases`; `src/index.spec.ts` fails when
   the package root exports anything but a `*Scalar`, a `*Schema`,
-  `zodScalar`, `pickScalars`, `scalarResolvers`, `schemas` or
-  `scalarTypeDefs`.
+  `zodScalar`, `pickScalars`, `scalarResolvers`, `scalarSchemas`, `schemas`
+  or `scalarTypeDefs`.
 - **The schema export ends in `Schema`.** `export *` lifts it to the package
   root, where a bare `url` or `date` would read as something else.
 
@@ -95,6 +95,13 @@ application's tree. Siblings, when there are some, depend on each other by
 
 Each of these is a promise in the public API, and a spec proves it. A change
 that weakens one is a breaking change, even when every spec stays green.
+
+- **`scalarSchemas` is a contract with code generators.** Its name, its keys
+  (the GraphQL names, as `scalarResolvers`'), and each entry being the very
+  schema the scalar checks, typed exactly, are read by
+  `@nxgt/graphql-codegen-zod`'s generated code (`typeof scalarSchemas.X`).
+  It is derived from each scalar's `.schema`, so a new scalar joins it with
+  no step of its own; `scalar-schemas.spec.ts` pins all three.
 
 - **graphql 16 and 17 both work.** `zodScalar` passes the legacy
   `serialize`/`parseValue`/`parseLiteral` (all graphql 16 calls) and the

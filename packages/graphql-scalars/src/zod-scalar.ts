@@ -34,12 +34,20 @@ export interface ZodScalarOptions<N extends string = string> {
 
 /**
  * What {@link zodScalar} returns: a `GraphQLScalarType` whose GraphQL name is
- * known to the compiler, so a map of scalars can be keyed by it.
+ * known to the compiler, so a map of scalars can be keyed by it, and which
+ * carries the schema it checks, with its exact type.
  */
 export type ZodScalar<
 	S extends z.ZodType = z.ZodType,
 	N extends string = string,
-> = GraphQLScalarType<z.output<S>, z.input<S>> & { readonly name: N };
+> = GraphQLScalarType<z.output<S>, z.input<S>> & {
+	readonly name: N;
+	/**
+	 * The schema every crossing is checked by: `z.decode` on a wire value
+	 * gives what a resolver receives.
+	 */
+	readonly schema: S;
+};
 
 /**
  * A GraphQL scalar whose every crossing is checked by one Zod schema.
@@ -129,10 +137,9 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 		coerceInputValue: (value: unknown) => decode(value),
 		coerceInputLiteral: (node: ConstValueNode) => literal(node),
 	};
-	return new GraphQLScalarType<z.output<S>, z.input<S>>(config) as ZodScalar<
-		S,
-		N
-	>;
+	return Object.assign(new GraphQLScalarType<z.output<S>, z.input<S>>(config), {
+		schema,
+	}) as ZodScalar<S, N>;
 }
 
 /** An operation's variables, as graphql 16 passes them to `parseLiteral`. */
