@@ -90,6 +90,15 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   optional, allows spaces, dashes and parentheses, and has no length limit, so
   `0612 34 56 78` passes there and fails here.
 
+- **`CountryCode`** is uppercase only, and only the 249 officially assigned
+  ISO 3166-1 alpha-2 codes. graphql-scalars accepts `fr` and `Fr`, and `XK`
+  (user-assigned); here they are refused. Both refuse `UK`, `EU` and `ZZ`.
+  The messages differ (`Value is not a valid country code: UK` there).
+- **`Locale`** is canonical case only, and the same on every runtime
+  (an alias such as `tl` is taken). graphql-scalars accepts `fr-fr`,
+  `FR`, `zh-hant-tw`, `x-foo` and `i-klingon`; here they are refused, not
+  rewritten. Both refuse `en_US` and `en-`. Canonicalise on the client with
+  `Intl.getCanonicalLocales` (see [Locale](scalars/locale.md)).
 - **`Time`** is a string `10:15:30Z` on both sides and keeps the offset as
   sent. graphql-scalars resolves it to a `Date` (today's date at that time,
   moved to UTC: `10:15:30+02:00` is 08:15:30 UTC) and serializes a `Date` back
