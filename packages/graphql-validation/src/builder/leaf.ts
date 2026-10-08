@@ -84,7 +84,8 @@ export function leafSchema(
 
 /** The source of a built-in scalar's schema, before its constraints. */
 export function baseCode(type: GraphQLLeafType): string | undefined {
-	if (type.name === GraphQLInt.name) return 'z.number().int()';
+	// graphql's Int is 32-bit: the client refuses what it refuses.
+	if (type.name === GraphQLInt.name) return 'z.int32()';
 	if (type.name === GraphQLFloat.name) return 'z.number()';
 	if (type.name === GraphQLBoolean.name) return 'z.boolean()';
 	return kinds[type.name] === 'string' ? 'z.string()' : undefined;

@@ -6,7 +6,7 @@ import { buildSchema } from 'graphql';
 
 export const config = {
 	scalarSchemas: '@nxgt/graphql-scalars',
-	scalars: { Money: './money#moneySchema' },
+	zodScalars: { Money: './money#moneySchema' },
 } satisfies CodegenZodConfig;
 
 export const output = plugin(

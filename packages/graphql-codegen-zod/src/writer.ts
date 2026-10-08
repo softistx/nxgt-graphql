@@ -3,14 +3,9 @@ import {
 	type InputCodeOptions,
 	inputCode,
 } from '@nxgt/graphql-validation/codegen';
-import * as graphql from 'graphql';
 import {
-	astFromValue,
 	type ConstValueNode,
-	type GraphQLArgument,
 	type GraphQLDirective,
-	GraphQLID,
-	type GraphQLInputField,
 	type GraphQLInputType,
 	type GraphQLNamedInputType,
 	GraphQLNonNull,
@@ -22,8 +17,8 @@ import {
 	isNonNullType,
 	isScalarType,
 	isSpecifiedScalarType,
-	valueFromASTUntyped,
 } from 'graphql';
+import { parsedDefault } from './defaults';
 import type { Naming } from './naming';
 import type { ScalarSources } from './scalars';
 
@@ -99,9 +94,7 @@ export class Writer {
 			named,
 			{ list: singleOrList },
 		);
-		const value = JSON.stringify(
-			coerced(valueFromASTUntyped(defaultValue), type),
-		);
+		const value = JSON.stringify(parsedDefault(defaultValue, type, where));
 		return {
 			code: `${required}.prefault(${value})${nullable ? '.nullable()' : ''}`,
 			lazy,
@@ -149,92 +142,3 @@ const singleOrList: NonNullable<InputCodeOptions['list']> = ({
 	// takes, nullable items too.
 	return `z.union([${code}, ${first}.transform((value): unknown[] => [value]).pipe(${code})])`;
 };
-
-/**
- * The default of an argument or input field as a literal: its SDL's, or,
- * for a schema built without SDL (introspected), its value written back.
- * graphql 16 holds that value in `defaultValue`, graphql 17 in `default`.
- */
-export function defaultLiteral(
-	input: GraphQLArgument | GraphQLInputField,
-): ConstValueNode | undefined {
-	if (input.astNode) return input.astNode.defaultValue;
-	const loose = input as {
-		defaultValue?: unknown;
-		default?: { value?: unknown; literal?: ConstValueNode };
-	};
-	if (loose.default?.literal) return loose.default.literal;
-	if (loose.default) {
-		// graphql 17: an external value, written back by valueToLiteral.
-		const toLiteral = (
-			graphql as {
-				valueToLiteral?: (
-					value: unknown,
-					type: GraphQLInputType,
-				) => ConstValueNode | undefined;
-			}
-		).valueToLiteral;
-		if (loose.default.value === undefined || !toLiteral) return undefined;
-		return toLiteral(loose.default.value, input.type);
-	}
-	// graphql 16: an internal value, written back by astFromValue.
-	if (loose.defaultValue === undefined) return undefined;
-	return (astFromValue(loose.defaultValue, input.type) ?? undefined) as
-		| ConstValueNode
-		| undefined;
-}
-
-/**
- * A default as graphql coerces it, through lists and input objects: a
- * single value given for a list is a list of it (`[String!] = "a"` is
- * `["a"]`, `[[Int]] = 1` is `[[1]]`), at any depth.
- */
-function coerced(value: unknown, type: GraphQLInputType): unknown {
-	const nullable = isNonNullType(type) ? type.ofType : type;
-	if (value === null || value === undefined) return value;
-	if (isListType(nullable)) {
-		const items = Array.isArray(value) ? value : [value];
-		return items.map((item) => coerced(item, nullable.ofType));
-	}
-	if (isInputObjectType(nullable) && typeof value === 'object') {
-		const fields = nullable.getFields();
-		return Object.fromEntries(
-			Object.entries(value as Record<string, unknown>).map(([key, field]) => {
-				const definition = fields[key];
-				return [key, definition ? coerced(field, definition.type) : field];
-			}),
-		);
-	}
-	// graphql takes an Int for an ID, and the resolver gets its string.
-	if (getNamedType(nullable) === GraphQLID && typeof value === 'number')
-		return String(value);
-	return value;
-}
-
-/** A GraphQL description as a doc comment, or nothing. */
-export function docComment(
-	description: string | null | undefined,
-	indent = '',
-): string {
-	if (!description) return '';
-	const lines = description
-		.replaceAll('\r\n', '\n')
-		.replaceAll('*/', '*\\/')
-		.split('\n');
-	if (lines.length === 1) return `${indent}/** ${lines[0]} */\n`;
-	return `${indent}/**\n${lines.map((line) => `${indent} * ${line}`.trimEnd()).join('\n')}\n${indent} */\n`;
-}
-
-/** The members of a `z.object({...})`, a getter for each lazy one. */
-export function objectMembers(
-	members: readonly (readonly [string, ValueCode])[],
-): string {
-	return members
-		.map(([name, { code, lazy, description }]) => {
-			const doc = docComment(description, '\t');
-			return lazy
-				? `${doc}\tget ${name}() {\n\t\treturn ${code};\n\t},`
-				: `${doc}\t${name}: ${code},`;
-		})
-		.join('\n');
-}

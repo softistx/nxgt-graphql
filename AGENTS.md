@@ -12,7 +12,7 @@ are public.
 | --- | --- |
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives) and each named operation's variables (`z.input`, what a client sends), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `scalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives) and each named operation's variables (`z.input`, what a client sends), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -243,7 +243,9 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   refusal to be owned (`owns`) by that rule and no other.
 - Rules, formats and the builder are internal. `./codegen` exports only what
   the codegen plugin needs (`checkConstraints`, `constraintsOn`, `inputCode`,
-  the type `InputCodeOptions`);
+  the types `Constraint` and `InputCodeOptions`). Of a `Constraint`'s `rule`,
+  `argument`, `target` and `base` are public (the plugin merges a variable's
+  constraints with them); the rest of the rule is not;
   widening it is a public-API decision. `withValidation` runs its startup
   checks through `checkConstraints`, so the generator refuses the same
   schemas.
@@ -298,9 +300,11 @@ packages/graphql-codegen-zod/src/
   index.ts                 plugin(schema, documents, config, info): checkConstraints, then the blocks
   config.ts                CodegenZodConfig
   naming.ts                the typescript plugins' names, behind schemaPrefix for schemas
-  scalars.ts               ScalarSources: `scalars` entries, then the scalarSchemas record
+  scalars.ts               ScalarSources: `zodScalars` entries (never `scalars`, the typescript plugins' option a root config shares), then the scalarSchemas record
   imports.ts               the generated file's imports, zod first, aliases on a clash
-  writer.ts                one value's schema: inputCode, defaults (.prefault), getters
+  writer.ts                one value's schema: inputCode, .prefault, the single-or-list union
+  defaults.ts              defaultLiteral, parsedDefault (exact integers), coerced
+  source.ts                declare, docComment, objectMembers (getters)
   schema-output.ts         enums, input types (@oneOf as a union), field arguments
   variables-output.ts      each named operation's variables, constraints from their usages
   plugin.spec.ts           the guards below

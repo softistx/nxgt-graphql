@@ -121,6 +121,7 @@ describe('inputCode', () => {
 		expect(generated.safeParse({ ...valid, role: 'ROOT' }).success).toBe(false);
 		expect(generated.safeParse({ ...valid, on: 'yes' }).success).toBe(false);
 		expect(generated.safeParse({ ...valid, age: 1.5 }).success).toBe(false);
+		expect(generated.safeParse({ ...valid, age: 2 ** 31 }).success).toBe(false);
 	});
 
 	test('refuses a constraint that cannot apply with the runtime message', () => {

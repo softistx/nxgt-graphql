@@ -1,8 +1,9 @@
 # Troubleshooting
 
 One entry per error you can hit, headed by the message you will search for.
-Everything here happens while `graphql-codegen` runs, except the last entry,
-which `tsc` reports.
+Configuration, Scalars, Operations and The schema happen while
+`graphql-codegen` runs; The generated file is what `tsc` and the generated
+schemas report.
 
 - [Configuration](#configuration)
 - [Scalars](#scalars)
@@ -26,7 +27,7 @@ config: { namingConvention: (name) => name.toUpperCase() }
 
 ## Scalars
 
-### `@nxgt/graphql-codegen-zod: the scalar Money is not in scalars, and no scalarSchemas is set. Map it: scalars: { Money: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`
+### `@nxgt/graphql-codegen-zod: the scalar Money is not in zodScalars, and no scalarSchemas is set. Map it: zodScalars: { Money: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`
 
 **When:** running codegen on a schema with a custom scalar (here `Money`).
 **Why:** a scalar written as `z.unknown()` would check nothing, in silence, so
@@ -34,32 +35,32 @@ the plugin refuses instead.
 **Fix:** map the scalar, or point `scalarSchemas` at a module that has it.
 
 ```ts
-config: { scalars: { Money: './money#moneySchema' } }
+config: { zodScalars: { Money: './money#moneySchema' } }
 ```
 
-### `@nxgt/graphql-codegen-zod: the scalar Money is neither in scalars nor in @nxgt/graphql-scalars's scalarSchemas. Map it: scalars: { Money: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`
+### `@nxgt/graphql-codegen-zod: the scalar Money is neither in zodScalars nor in @nxgt/graphql-scalars's scalarSchemas. Map it: zodScalars: { Money: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`
 
 **When:** running codegen with `scalarSchemas` set, on a scalar the record has
 no key for. The module path in the message is the one you configured.
 **Why:** the plugin loaded the record and `Money` is not one of its keys.
-**Fix:** map that one scalar next to the record; `scalars` wins over it.
+**Fix:** map that one scalar next to the record; `zodScalars` wins over it.
 
 ```ts
 config: {
 	scalarSchemas: '@nxgt/graphql-scalars',
-	scalars: { Money: './money#moneySchema' },
+	zodScalars: { Money: './money#moneySchema' },
 }
 ```
 
-### `@nxgt/graphql-codegen-zod: scalars.Money is "moneySchema"; write it '<module>#<export>', e.g. './money#moneySchema'.`
+### `@nxgt/graphql-codegen-zod: zodScalars.Money is "moneySchema"; write it '<module>#<export>', e.g. './money#moneySchema'.`
 
-**When:** running codegen with a `scalars` entry that is not `module#export`.
+**When:** running codegen with a `zodScalars` entry that is not `module#export`.
 **Why:** the entry needs a module and an export name on either side of the
 last `#`; the one in the message has none, or an empty side.
 **Fix:**
 
 ```ts
-config: { scalars: { Money: './money#moneySchema' } }
+config: { zodScalars: { Money: './money#moneySchema' } }
 ```
 
 ### `@nxgt/graphql-codegen-zod: @nxgt/graphql-scalars exports no scalarSchemas record.`
@@ -114,12 +115,12 @@ query Both($e: String, $u: String) { e(v: $e) u(v: $u) }
 **Why:** the plugin loads the record's module to check its keys, but cannot
 when it is a `.ts` file under Node. It then trusts the record, and the file
 reads `scalarSchemas.Money` which the record lacks.
-**Fix:** add the key to the record, or map the scalar with `scalars`, or run
+**Fix:** add the key to the record, or map the scalar with `zodScalars`, or run
 codegen under Bun so the module loads and the plugin refuses with the message
 above.
 
 ```ts
-config: { scalars: { Money: './money#moneySchema' } }
+config: { zodScalars: { Money: './money#moneySchema' } }
 ```
 
 ### `TS2300: Duplicate identifier 'SignUpInput'`
@@ -170,6 +171,20 @@ field. The variables object itself ignores an extra variable, as `graphql` does.
 **Fix:** remove the field, or add it to the input type in the schema.
 
 ## The schema
+
+### `@nxgt/graphql-codegen-zod: the default of Query.a(n:) holds 9007199254740993, which a JavaScript number cannot keep exact. Write it as a string, if its scalar takes one.`
+
+**When:** running codegen on an argument, input field or variable whose
+default is an integer past `Number.MAX_SAFE_INTEGER`, given to an `ID` or a
+custom scalar (`Long`, `BigInt`). An `Int` or a `Float` rounds on the server
+too, and is written as it is.
+**Why:** the generated `.prefault(...)` would hold a rounded number, while the
+server hands the scalar every digit.
+**Fix:** write the default as a string, when the scalar parses one.
+
+```graphql
+type Query { a(n: Long = "9007199254740993"): Int }
+```
 
 ### `@nxgt/graphql-codegen-zod: the schema declares @constraint, but Query has no SDL to read it from (an introspected schema?). Point codegen's schema at the SDL files.`
 

@@ -25,7 +25,7 @@ export type Filter = z.output<typeof zFilter>;
 
 export const zPrefs = z.strictObject({
 	tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).nullish(),
-	grid: z.union([z.array(z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).nullish()), z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).nullish()))]).nullish(),
+	grid: z.union([z.array(z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).nullish()), z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).nullish()))]).nullish(),
 	owner: z.string().prefault("7").nullable(),
 	ids: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).prefault(["1"]).nullable(),
 	dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
@@ -35,7 +35,7 @@ export type Prefs = z.output<typeof zPrefs>;
 export const zSignUpInput = z.strictObject({
 	email: z.email(),
 	name: z.string().min(2),
-	age: z.number().int().lte(120).gte(13).nullish(),
+	age: z.int32().lte(120).gte(13).nullish(),
 	role: zRole.prefault("USER").nullable(),
 	tags: z.union([z.array(z.string().max(8)).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().max(8)).min(1))]).prefault(["new"]).nullable(),
 	get address() {
@@ -68,7 +68,7 @@ export const zQueryUsersArgs = z.object({
 	get filter() {
 		return zFilter.nullish();
 	},
-	first: z.number().int().lte(50).gte(1).prefault(10).nullable(),
+	first: z.int32().lte(50).gte(1).prefault(10).nullable(),
 });
 export type QueryUsersArgs = z.output<typeof zQueryUsersArgs>;
 
@@ -106,7 +106,7 @@ export type UserQueryVariables = z.input<typeof zUserQueryVariables>;
 
 export const zUsersQueryVariables = z.object({
 	name: z.string().startsWith("n").nullish(),
-	first: z.number().int().lte(50).gte(1).prefault(5).nullable(),
+	first: z.int32().lte(50).gte(1).prefault(5).nullable(),
 });
 export type UsersQueryVariables = z.input<typeof zUsersQueryVariables>;
 

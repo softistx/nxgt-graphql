@@ -6,7 +6,7 @@ import type { CodegenZodConfig } from './config';
 import type { Imports } from './imports';
 
 /**
- * Where each custom scalar's schema comes from: `scalars` first, then the
+ * Where each custom scalar's schema comes from: `zodScalars` first, then the
  * `scalarSchemas` record. A scalar in neither fails generation, naming it:
  * a scalar written as `z.unknown()` would check nothing, in silence.
  */
@@ -44,12 +44,12 @@ export class ScalarSources {
 
 	/** The source of `type`'s schema, its import added. */
 	code(type: GraphQLScalarType): string {
-		const own = this.#config.scalars?.[type.name];
+		const own = this.#config.zodScalars?.[type.name];
 		if (own !== undefined) {
 			const at = own.lastIndexOf('#');
 			if (at <= 0 || at === own.length - 1) {
 				throw new Error(
-					`@nxgt/graphql-codegen-zod: scalars.${type.name} is "${own}"; write it '<module>#<export>', e.g. './money#moneySchema'.`,
+					`@nxgt/graphql-codegen-zod: zodScalars.${type.name} is "${own}"; write it '<module>#<export>', e.g. './money#moneySchema'.`,
 				);
 			}
 			return this.#imports.add(own.slice(0, at), own.slice(at + 1));
@@ -59,10 +59,10 @@ export class ScalarSources {
 			return `${this.#imports.add(record, 'scalarSchemas')}.${type.name}`;
 		}
 		const where = record
-			? `neither in scalars nor in ${record}'s scalarSchemas`
-			: 'not in scalars, and no scalarSchemas is set';
+			? `neither in zodScalars nor in ${record}'s scalarSchemas`
+			: 'not in zodScalars, and no scalarSchemas is set';
 		throw new Error(
-			`@nxgt/graphql-codegen-zod: the scalar ${type.name} is ${where}. Map it: scalars: { ${type.name}: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`,
+			`@nxgt/graphql-codegen-zod: the scalar ${type.name} is ${where}. Map it: zodScalars: { ${type.name}: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`,
 		);
 	}
 }
@@ -86,7 +86,10 @@ async function recordKeys(
 		}
 		return new Set(Object.keys(record));
 	} catch (error) {
-		if ((error as Error).message.startsWith('@nxgt/graphql-codegen-zod:'))
+		if (
+			error instanceof Error &&
+			error.message.startsWith('@nxgt/graphql-codegen-zod:')
+		)
 			throw error;
 		return undefined;
 	}

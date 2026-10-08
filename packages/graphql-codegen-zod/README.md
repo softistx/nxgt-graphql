@@ -100,7 +100,7 @@ are in [Output](docs/guide/output.md).
 | Option | Type | Default | Effect |
 | --- | --- | --- | --- |
 | `scalarSchemas` | `string` | none | module exporting a `scalarSchemas` record keyed by scalar name |
-| `scalars` | `Record<string, string>` | none | `'<module>#<export>'` per scalar; wins over `scalarSchemas` |
+| `zodScalars` | `Record<string, string>` | none | `'<module>#<export>'` per scalar; wins over `scalarSchemas` |
 | `schemaPrefix` | `string` | `'z'` | before each schema's name |
 | `namingConvention` | `'keep' \| 'change-case-all#<case>' \| (name) => string \| { typeNames, transformUnderscore, enumValues }` | PascalCase per underscore part | how type names are cased, as the typescript plugins read it |
 | `typesPrefix`, `typesSuffix` | `string` | none | around each type's name |
@@ -132,7 +132,7 @@ Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 
 ## Documentation
 
-The package exports `plugin` and the `CodegenZodConfig` type from `.`; graphql-codegen finds `plugin` by the package name. See [Output](docs/guide/output.md#the-plugin-function).
+The package exports `plugin` and the `CodegenZodConfig` and `DocumentFile` types from `.`; graphql-codegen finds `plugin` by the package name. See [Output](docs/guide/output.md#the-plugin-function).
 
 - [Documentation index](docs/README.md)
 - Guides: [Output](docs/guide/output.md)
