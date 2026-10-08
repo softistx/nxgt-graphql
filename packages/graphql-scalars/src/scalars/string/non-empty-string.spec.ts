@@ -4,7 +4,7 @@ import { NonEmptyStringScalar } from './non-empty-string';
 
 describe('NonEmptyString', () => {
 	scalarCases(NonEmptyStringScalar, {
-		accepted: ['a', ' a '],
-		refused: ['', '   ', '\n\t', 1],
+		accepted: ['a', ' a ', '\u200b'],
+		refused: ['', '   ', '\n\t', '\u00a0', '\ufeff', '\u3000', 1],
 	});
 });
