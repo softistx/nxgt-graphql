@@ -49,7 +49,7 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 | [locale](scalars/locale.md) | `CountryCode`, `Locale` |
 | [network](scalars/network.md) | `URL`, `EmailAddress`, `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`, `PhoneNumber` |
 | [number](scalars/number.md) | `PositiveInt`, `NegativeInt`, `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long`, `BigInt` |
-| [string](scalars/string.md) | `NonEmptyString` |
+| [string](scalars/string.md) | `NonEmptyString`, `Emoji` |
 | [value](scalars/value.md) | `JSON`, `JSONObject`, `Void` |
 
 
