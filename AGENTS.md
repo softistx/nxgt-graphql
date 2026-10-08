@@ -132,6 +132,12 @@ that weakens one is a breaking change, even when every spec stays green.
   a miscasing whose words still look like IANA words (`ASIA/Kolkata`,
   `ZULU`, `Prc`). Bun lets none through. An offset is
   `UtcOffset`'s, never a `TimeZone`.
+- **`Locale`'s case rule is written here, not taken from `Intl`.** V8
+  refuses-by-rewriting every CLDR alias (`tl` → `fil`, `en-UK` → `en-GB`),
+  JavaScriptCore only some, so `Intl.getCanonicalLocales(tag)[0] === tag`
+  answered differently on Node and Bun. `Intl` only says the tag is
+  well-formed and orders its extensions; the case before the first
+  extension is checked in `locale.ts`, and an alias is kept as sent.
 
 ## The green bar
 

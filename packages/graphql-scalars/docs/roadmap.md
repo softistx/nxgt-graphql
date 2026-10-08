@@ -19,6 +19,7 @@ Next release (a minor):
 - **Extended scalars, category by category** — each category's page in
   [the scalars guide](guide/scalars.md) lists what it adds. In the next
   release:
+  - locale: `CountryCode`, `Locale`;
   - number: the signed Int and Float variants, `SafeInt`, `Port`, `Long`,
     `BigInt`;
   - network: `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`,
@@ -30,7 +31,7 @@ Next release (a minor):
   - date-time: `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`,
     `TimeZone`, `Timestamp`.
 
-  Coming: locale, geo, finance, color, value (`JSON`,
+  Coming: geo, finance, color, value (`JSON`,
   `JSONObject`, `Void`) and string (`Emoji`). See
   [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
