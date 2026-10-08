@@ -1,5 +1,13 @@
 # @nxgt/graphql-scalars
 
+## 0.3.0
+
+### Minor Changes
+
+- [#25](https://github.com/softistx/nxgt-graphql/pull/25) [`a7c9b15`](https://github.com/softistx/nxgt-graphql/commit/a7c9b15fca045144a7667c022aebe8e651b6f75a) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Ship `graphql/scalars.graphqls`, the SDL of every scalar, and an `nxgt-graphql-scalars` bin whose `typedefs [<Name>...] [--out [<file>]]` command prints or writes it, for IDEs and servers that scan `.graphql(s)` files. `--out` alone writes `generated/graphql/scalars.graphqls`.
+  
+  `pickScalars` refuses a name only `Object.prototype` has (`toString`, `constructor`), as it refuses any unknown name: an untyped caller used to get past its check.
+
 ## 0.2.0
 
 ### Minor Changes
