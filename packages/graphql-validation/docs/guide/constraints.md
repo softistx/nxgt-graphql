@@ -237,7 +237,7 @@ and list `generated/graphql/constraint.graphqls` in `graphql.config.yml` in plac
 `--out <file>` writes `<file>`, creating the folder, and without it the SDL goes
 to stdout (`--help` or `-h`, anywhere on the line, lists the flags). It exits 0 when done, 1 when the file
 cannot be written (`typedefs failed: <message>` on stderr), and 2 on a usage
-error (`Unknown command "<x>".`, `Unexpected arguments: …`, or no command). Regenerate the file after upgrading the
+error (`Unknown command "<x>".`, `Unexpected arguments: …`, or `No command.`). Regenerate the file after upgrading the
 package.
 
 The schema must declare `@constraint` once. Pick one source for the server:
