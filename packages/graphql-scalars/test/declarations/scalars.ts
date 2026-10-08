@@ -5,6 +5,7 @@ import {
 	DateTimeScalar,
 	pickScalars,
 	scalarResolvers,
+	scalarSchemas,
 	schemas,
 	urlSchema,
 	zodScalar,
@@ -33,3 +34,10 @@ export const picked = pickScalars('DateTime', 'URL');
 export const every = scalarResolvers;
 
 export const link = urlSchema;
+
+export const generated = z.object({
+	id: scalarSchemas.UUID,
+	at: scalarSchemas.DateTime,
+});
+
+export const ownSchema = Cents.schema;

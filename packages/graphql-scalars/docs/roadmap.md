@@ -6,12 +6,12 @@ and Later are candidates, not promises.
 
 ## Now
 
-Release 0.3.0, in progress (a minor):
+Release 0.4.0, in progress (a minor):
 
-- **The SDL as a file** — `graphql/scalars.graphqls` in the package, and the
-  `nxgt-graphql-scalars typedefs [<Name>...] [--out [<file>]]` bin, for an IDE
-  or a server that scans `.graphql(s)` files; see
-  [the guide](guide/scalars.md#the-sdl-as-a-file).
+- **`scalarSchemas`** — the schema behind each scalar, keyed by its GraphQL
+  name and typed exactly, for code generated from a GraphQL schema
+  (`@nxgt/graphql-codegen-zod`); each scalar carries its own as `.schema`.
+  See [the guide](guide/scalars.md#keyed-by-graphql-name).
 
 ## Next
 
@@ -49,6 +49,13 @@ Release 0.3.0, in progress (a minor):
   `bundler`.
 
 ## Shipped
+
+Release 0.3.0:
+
+- **The SDL as a file** — `graphql/scalars.graphqls` in the package, and the
+  `nxgt-graphql-scalars typedefs [<Name>...] [--out [<file>]]` bin, for an IDE
+  or a server that scans `.graphql(s)` files; see
+  [the guide](guide/scalars.md#the-sdl-as-a-file).
 
 Release 0.2.0:
 

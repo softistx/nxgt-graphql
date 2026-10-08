@@ -8,6 +8,7 @@ const HELPERS = [
 	'pickScalars',
 	'scalarResolvers',
 	'scalarTypeDefs',
+	'scalarSchemas',
 	'schemas',
 	'zodScalar',
 ];
