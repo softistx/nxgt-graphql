@@ -438,6 +438,7 @@ it, do not make it a required check.
 | `scripts/newest-peers.ts`, its spec, and the "Newest peers" job in `ci.yml` | byte copies of nxgt-data's script and spec; the job is nxgt-data's without its four server caches and `REDISMS_DISABLE_POSTINSTALL`. The script reads `examples/*` too, which matches nothing here |
 | `.github/actions/setup/action.yml`, `.github/workflows/release.yml`, `.github/workflows/deprecate.yml`, the `ci` job of `ci.yml` | nxgt-di's, which are nxgt-data's without its servers (`deprecate.yml` is nxgt-telemetry's) |
 | `CLAUDE.md`, `.claude/settings.json` | nxgt-di's, byte for byte |
+| The 65 scalar names (GraphQL names and `<name>Schema` exports) | copied outside this repository: `@nxgt/typespec` (softistx/nxgt-http) declares each as a TypeSpec scalar and OpenAPI component of the same name, with `x-nxgt-scalar: <Name>`, and pins the list in its `test/scalars/index.ts` (`GRAPHQL_SCALARS`); `@nxgt/zod` (softistx/nxgt-zod) holds the same schemas under the same names, with its own `scalarSchemas`. Adding, renaming or changing the rule of a scalar here means the same change there: tell the session or open the PR in both |
 
 ## Declared divergences from nxgt-data
 
