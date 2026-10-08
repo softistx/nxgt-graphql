@@ -59,7 +59,15 @@ What `withValidation` does:
 - It wraps in place and returns the same schema, typed as you passed it.
   Calling it twice wraps nothing twice.
 - The resolver receives the parsed arguments (`z.output` of the schema the
-  directives describe).
+  directives describe). An argument or input field the client left out stays
+  **absent** from them, not `undefined`: `{ input: { email } }`, with
+  `Object.keys(input)` equal to `['email']`. A `@oneOf` input keeps its one key.
+- Each issue it raises carries `constraint`, the `@constraint` argument that
+  refused (see [Errors](errors.md#the-error)).
+- A default value that breaks its own constraint throws at the call, naming
+  the place: `The default value of Query.a(name:) breaks its @constraint: Too
+  small: expected string to have >=2 characters`. It works for arguments and
+  input fields (`The default value of Page.size breaks ...`).
 - It builds every schema once, at the call, so a constraint that cannot apply
   throws then, with the place named, not on the first request. This includes
   constraints in input types no argument reaches.
@@ -73,8 +81,11 @@ declare function withValidation<S extends GraphQLSchema>(schema: S): S;
 declare const constraintTypeDefs: string;
 ```
 
-The directives are read from the SDL, so a **code-first** schema (types built
-with `new GraphQLObjectType`) has no `@constraint` to read and is not checked.
+The directives are read from the SDL. A **code-first** schema does not declare
+`@constraint`, so `withValidation` throws `this schema declares no @constraint
+directive`. A schema that declares it but whose constrained types and fields
+have no SDL (built with `new GraphQLObjectType`, or from merged pieces) is not
+checked, and nothing says so.
 
 ## The `@constraint` arguments
 
@@ -108,6 +119,14 @@ input Product {
   price: Float! @constraint(exclusiveMin: 0, multipleOf: 0.01)
 }
 ```
+
+The directive must be the one `constraintTypeDefs` declares. A `@constraint`
+declared otherwise, typically graphql-constraint-directive's SDL kept after a
+migration, makes `withValidation` throw at startup: `This schema's @constraint
+is not constraintTypeDefs': it is allowed on FIELD_DEFINITION; declares
+uniqueTypeName, which no rule reads. Declare it with constraintTypeDefs.` An
+argument of another type is named too (`declares minLength: String, not Int`).
+See [Troubleshooting](../troubleshooting.md).
 
 `@constraint` is allowed on `ARGUMENT_DEFINITION` and `INPUT_FIELD_DEFINITION`
 only. On an output field `buildSchema` fails with
@@ -146,8 +165,9 @@ A bad `zip` is reported at `['input', 'address', 'zip']`.
 
 An interface field is resolved by the objects that implement it, so a
 `@constraint` on an interface field's argument must be written again, the same,
-on each implementing object's field. If an object drops it, `withValidation`
-throws at startup rather than let the argument go unchecked.
+on each implementing object's field. If an object drops it or writes a
+different one, `withValidation` throws at startup rather than let the argument
+go unchecked, printing both.
 
 ```graphql
 interface Named { name(style: String @constraint(maxLength: 5)): String }

@@ -65,18 +65,20 @@ example with `@nxgt/graphql-scalars`), or on a field with [`validated`](guide/er
 [roadmap](roadmap.md).
 **Fix:** use a known format, or `pattern: "..."`.
 
-### `Invalid @constraint pattern "[a-": Invalid regular expression: missing terminating ] for character class`
+### `Invalid @constraint pattern "[a-":`
 
 **When:** calling `withValidation`.
 **Why:** `pattern` is compiled with `new RegExp`; the text after the colon is
-the engine's.
+the runtime's own RegExp message, which differs between engines. V8 (Node)
+says `Invalid regular expression: /[a-/: Unterminated character class`.
 **Fix:** write a valid pattern. In SDL, escape backslashes: `"\\d+"`.
 
 ### `withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.`
 
 **When:** calling `withValidation`.
 **Why:** the schema has no `@constraint` directive, so there is nothing to
-read. Usually `constraintTypeDefs` was not added, or the schema is code-first.
+read. Usually `constraintTypeDefs` was not added, or the schema is code-first and
+declares no directive.
 **Fix:**
 
 ```ts
@@ -98,13 +100,16 @@ them, since a resolver's result is the job of output scalars.
 does not exist here.
 **Fix:** remove it.
 
-### `@constraint on Named.name(style:) is not repeated on Person.name(style:), which resolves it. Write the same @constraint there.`
+### `@constraint on Named.name(style:) is not repeated on Person.name(style:), which resolves it (@constraint(maxLength: 5) there, no @constraint here). Write the same @constraint on both.`
 
 **When:** calling `withValidation`, with a `@constraint` on an interface
 field's argument.
 **Why:** the objects resolve the field, not the interface, so a constraint
 the object drops would go unchecked. `Named`, `Person` and `style` are your
-interface, object and argument.
+interface, object and argument. When the object writes a different constraint
+the message reads `... differs on Person.name(style:), which resolves it
+(@constraint(maxLength: 5) there, @constraint(maxLength: 5, minLength: 1)
+here). Write the same @constraint on both.`
 **Fix:**
 
 ```graphql
@@ -114,6 +119,33 @@ type Person implements Named {
 }
 ```
 
+### `This schema's @constraint is not constraintTypeDefs': it is allowed on FIELD_DEFINITION; declares uniqueTypeName, which no rule reads. Declare it with constraintTypeDefs.`
+
+**When:** calling `withValidation`, typically after migrating from
+graphql-constraint-directive and keeping its SDL.
+**Why:** the schema declares its own `@constraint`: extra locations would be
+accepted and checked by nothing, extra arguments mean nothing here, and an
+argument of another type would reach a rule as the wrong kind of value. The
+message lists every difference: `allowed on <LOCATION>`, `declares <name>,
+which no rule reads`, or `declares minLength: String, not Int`.
+**Fix:** drop the old directive declaration and use the package's.
+
+```ts
+const typeDefs = [constraintTypeDefs, yourTypeDefs]; // no other `directive @constraint`
+```
+
+### `The default value of Query.a(name:) breaks its @constraint: Too small: expected string to have >=2 characters`
+
+**When:** calling `withValidation`; for an argument (`Query.a(name:)`) or an
+input field (`Page.size`).
+**Why:** a request that leaves the value out would be refused for something the
+client never sent. The text after the colon is the first Zod message.
+**Fix:** make the default satisfy the constraint, or relax the constraint.
+
+```graphql
+type Query { a(name: String = "xy" @constraint(minLength: 2)): Int }
+```
+
 ## Silent traps
 
 These raise no error.
@@ -121,8 +153,9 @@ These raise no error.
 ### A constrained argument is never refused
 
 **When:** an invalid value reaches the resolver.
-**Why:** one of three causes. The schema is code-first (built with
-`new GraphQLObjectType`): `@constraint` is read from the SDL, and there is none.
+**Why:** one of three causes. The schema declares `@constraint` but the constrained
+types and fields have no SDL (code-first, or merged pieces): `@constraint` is
+read from the SDL, and there is none.
 Or `withValidation` was called before a resolver was attached: a resolver set on
 a field afterwards replaces the check. Or the schema you serve is not the one
 you passed (`withValidation` returns the same schema, so use either).
@@ -137,7 +170,7 @@ export default withValidation(schema); // last
 
 **When:** `format: "date-time"` refuses `2024-03-10t12:00:00z`, `2024-03-10 12:00:00Z` or `2024-03-10T12:00Z`.
 **Why:** only the canonical form is accepted: uppercase `T` and `Z`, seconds
-present, an offset.
+present, then `Z` or a numeric offset.
 **Fix:** send `2024-03-10T12:00:00Z` or `2024-03-10T12:00:00+02:00`.
 
 ## Runtime
