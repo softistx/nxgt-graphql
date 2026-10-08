@@ -97,6 +97,10 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `ISBN cannot represent this input: Invalid ISBN` | a wrong check digit, hyphens or spaces (`978-0-306-40615-7`), a lower-case `x`, an ISBN-13 not starting 978 or 979-1 to 979-9 (`979-0` is the ISMN), or a wrong length; send the bare digits |
 | `SemVer cannot represent this input: Invalid semantic version` | a `v` prefix, fewer than three parts, a leading zero (`01.2.3`) or an empty pre-release or build |
 | `NonEmptyString cannot represent this input: Must not be empty or blank` | empty or only white space |
+| `Emoji cannot represent this input: Invalid emoji` | not an emoji: text, an empty string, a lone joiner (U+200D), variation selector, skin tone or keycap mark |
+| `Emoji cannot represent this input: Invalid emoji: too long` | more than 32 code points; the longest emoji is 10 |
+| `Emoji cannot represent this input` (nothing after it) | the runtime has no `Intl.Segmenter` (Firefox before 125, Safari before 14.1, Node without ICU); the original error is the `GraphQLError`'s `originalError` |
+| `Emoji cannot represent this input: Invalid emoji: expected exactly one` | more than one emoji (`😀😀`, two flags), or a sequence newer than the runtime's Unicode data, which it counts as two |
 | `PositiveInt cannot represent this input: Too small: expected number to be >0` | `0` or negative |
 | `PositiveInt cannot represent this input: Too big: expected number to be <=2147483647` | above 32 bits |
 | `PositiveInt cannot represent this input: Invalid input: expected int, received number` | not an integer, such as `1.5` |

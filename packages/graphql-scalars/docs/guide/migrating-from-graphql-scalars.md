@@ -201,7 +201,8 @@ These have no graphql-scalars counterpart:
 
 - network: `CIDRv4`, `CIDRv6`, `Hostname`;
 - identifier: `UUIDv4`, `UUIDv7`, `NanoID`, `KSUID`, `XID`;
-- encoding: `Base64`, `Base64URL`, `SHA256`, `SHA512`.
+- encoding: `Base64`, `Base64URL`, `SHA256`, `SHA512`;
+- string: `Emoji`.
 
 ## Aliases we do not repeat
 

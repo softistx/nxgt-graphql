@@ -34,10 +34,10 @@ Next release (a minor):
   - value: `JSON`, `JSONObject`, `Void`, and `literals: 'any'` in
     `zodScalar` for a scalar of your own that holds JSON;
   - date-time: `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`,
-    `TimeZone`, `Timestamp`.
+    `TimeZone`, `Timestamp`;
+  - string: `Emoji`.
 
-  Coming: string (`Emoji`). See
-  [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
+  See [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
 ## Next
 

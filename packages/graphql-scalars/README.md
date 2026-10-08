@@ -48,7 +48,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 | [locale](docs/guide/scalars/locale.md) | 2: `CountryCode`, `Locale` |
 | [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `MAC` and 5 more |
 | [number](docs/guide/scalars/number.md) | 12: `PositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt` and the signed Int and Float variants |
-| [string](docs/guide/scalars/string.md) | 1: `NonEmptyString` |
+| [string](docs/guide/scalars/string.md) | 2: `NonEmptyString`, `Emoji` |
 | [value](docs/guide/scalars/value.md) | 3: `JSON`, `JSONObject`, `Void` |
 
 The rule, the accepted and refused values and the exports of each scalar are
