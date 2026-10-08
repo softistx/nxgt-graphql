@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.3.2
+
+### Patch Changes
+
+- [#34](https://github.com/softistx/nxgt-graphql/pull/34) [`cdf4321`](https://github.com/softistx/nxgt-graphql/commit/cdf43213ed927078990d27ed4415171dd2d4ad87) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `nxgt-graphql-scalars typedefs` follows an unknown scalar name's message with the usage, as every other usage error does.
+
 ## 0.3.1
 
 ### Patch Changes
