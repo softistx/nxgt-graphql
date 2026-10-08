@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 import type { Format } from '../src/formats/format';
-import type { Target } from '../src/rules/rule';
+import { rules } from '../src/rules';
+import type { IssueFields, Target } from '../src/rules/rule';
 
 /** Any rule, whatever its value and target. */
 interface AnyRule {
@@ -9,6 +10,7 @@ interface AnyRule {
 	readonly target: Target;
 	readonly toZod: (schema: never, value: never) => z.ZodType;
 	readonly toCode: (schema: string, value: never) => string;
+	readonly owns: (issue: IssueFields) => boolean;
 }
 
 /** The schema a rule narrows in its cases, and the same as source. */
@@ -28,7 +30,12 @@ interface Cases {
 	rejects: readonly unknown[];
 }
 
-function agree(runtime: z.ZodType, generated: z.ZodType, cases: Cases): void {
+function agree(
+	runtime: z.ZodType,
+	generated: z.ZodType,
+	cases: Cases,
+	rule?: AnyRule,
+): void {
 	for (const input of cases.accepts) {
 		test(`accepts ${JSON.stringify(input)}`, () => {
 			expect(runtime.safeParse(input).success).toBe(true);
@@ -37,8 +44,18 @@ function agree(runtime: z.ZodType, generated: z.ZodType, cases: Cases): void {
 	}
 	for (const input of cases.rejects) {
 		test(`refuses ${JSON.stringify(input)}`, () => {
-			expect(runtime.safeParse(input).success).toBe(false);
+			const result = runtime.safeParse(input);
+			expect(result.success).toBe(false);
 			expect(generated.safeParse(input).success).toBe(false);
+			// The refusal names this rule, and no other: a client maps on it. A
+			// value of the wrong type is graphql's to refuse, not a rule's.
+			const issue = result.error?.issues[0] as unknown as IssueFields;
+			if (rule && issue.code !== 'invalid_type') {
+				const owners: string[] = Object.values(rules)
+					.filter((one) => one.owns(issue))
+					.map((one) => one.argument);
+				expect(owners).toEqual([rule.argument]);
+			}
 		});
 	}
 }
@@ -63,7 +80,7 @@ export function ruleCases(
 			schema: string,
 			value: string | number,
 		) => string;
-		agree(apply(base, value), evaluate(write(baseCode, value)), cases);
+		agree(apply(base, value), evaluate(write(baseCode, value)), cases, rule);
 	});
 }
 

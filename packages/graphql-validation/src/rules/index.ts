@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import * as all from './all';
+import type { IssueFields } from './rule';
 
 /**
  * One of the rules, as its own type: a builder narrows it on `target`, so a
@@ -36,4 +37,12 @@ export function applyRule(
 		value: string | number,
 	) => z.ZodType;
 	return toZod(schema, value);
+}
+
+/** The `@constraint` argument whose rule refused with this issue, if any. */
+export function constraintOf(
+	issue: z.core.$ZodIssue,
+): ConstraintArgument | undefined {
+	const fields = issue as unknown as IssueFields;
+	return Object.values(rules).find((rule) => rule.owns(fields))?.argument;
 }

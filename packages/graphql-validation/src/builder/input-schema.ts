@@ -1,4 +1,5 @@
 import {
+	type ConstValueNode,
 	type GraphQLArgument,
 	type GraphQLDirective,
 	type GraphQLInputField,
@@ -9,11 +10,12 @@ import {
 	isInputObjectType,
 	isListType,
 	isNonNullType,
+	valueFromASTUntyped,
 } from 'graphql';
 import { z } from 'zod';
 import { applyRule } from '../rules';
 import { type Constraint, constraintsOn } from './constraints';
-import { describe, leafSchema } from './leaf';
+import { describeTarget, leafSchema } from './leaf';
 
 /**
  * Builds the schemas of the arguments and input fields of one GraphQL
@@ -24,6 +26,11 @@ import { describe, leafSchema } from './leaf';
 export class InputSchemas {
 	readonly directive: GraphQLDirective | undefined;
 	readonly #objects = new Map<string, z.ZodType>();
+	readonly #defaults: {
+		schema: z.ZodType;
+		literal: ConstValueNode;
+		where: string;
+	}[] = [];
 	/** The input types a value can break a constraint inside. */
 	readonly #constrained = new Set<string>();
 
@@ -77,11 +84,30 @@ export class InputSchemas {
 
 	/** The schema of one argument or input field, `where` naming it in errors. */
 	of(input: GraphQLArgument | GraphQLInputField, where: string): z.ZodType {
-		return this.#typed(
+		const schema = this.#typed(
 			input.type,
 			constraintsOn(this.directive, input.astNode),
 			where,
 		);
+		const literal = input.astNode?.defaultValue;
+		if (literal) this.#defaults.push({ schema, literal, where });
+		return schema;
+	}
+
+	/**
+	 * Fails when a default value breaks its own constraint: every request that
+	 * leaves the value out would be refused for something the client never
+	 * sent. Run once every schema is built, so a recursive type is complete.
+	 */
+	checkDefaults(): void {
+		for (const { schema, literal, where } of this.#defaults.splice(0)) {
+			const result = schema.safeParse(valueFromASTUntyped(literal));
+			if (!result.success) {
+				throw new Error(
+					`The default value of ${where} breaks its @constraint: ${result.error.issues[0]?.message}`,
+				);
+			}
+		}
 	}
 
 	#typed(
@@ -114,7 +140,7 @@ export class InputSchemas {
 			const first = list ?? constraints[0];
 			if (first) {
 				throw new Error(
-					`@constraint(${first.rule.argument}) on ${where} needs ${describe(first.rule.target)}, not ${type.name}.`,
+					`@constraint(${first.rule.argument}) on ${where} needs ${describeTarget(first.rule.target)}, not ${type.name}.`,
 				);
 			}
 			return this.#object(type);

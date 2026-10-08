@@ -76,9 +76,9 @@ export const schema = withValidation(makeExecutableSchema({ typeDefs, resolvers 
 
 `withValidation` wraps, in place, the resolver of each field that has
 something to check, and returns the same schema. A subscription field is
-checked once, in `subscribe`. Calling
-it twice wraps nothing twice. A constraint that cannot apply throws when you
-call it, not on the first request. The resolver receives the parsed arguments.
+checked once, in `subscribe`. Calling it twice wraps nothing twice. A
+constraint that cannot apply throws when you call it, not on the first
+request. The resolver receives the parsed arguments.
 
 Every argument, its rule and its Zod equivalent, and the formats, are in
 [Constraints](docs/guide/constraints.md).
@@ -94,8 +94,8 @@ Every argument, its rule and its Zod equivalent, and the formats, are in
       "extensions": {
         "code": "BAD_USER_INPUT",
         "issues": [
-          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format" },
-          { "path": ["input", "age"], "message": "Too small: expected number to be >=18", "code": "too_small" }
+          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format", "constraint": "format" },
+          { "path": ["input", "age"], "message": "Too small: expected number to be >=18", "code": "too_small", "constraint": "min" }
         ]
       }
     }
@@ -103,7 +103,8 @@ Every argument, its rule and its Zod equivalent, and the formats, are in
 }
 ```
 
-`issues[].path` is relative to the arguments. Mapping issues to form fields is
+`issues[].path` is relative to the arguments, and `issues[].constraint` names the
+`@constraint` argument that refused. Mapping issues to form fields is
 in [Errors](docs/guide/errors.md).
 
 ### Rules a directive cannot say
@@ -139,13 +140,15 @@ const resolvers = {
 | `validated(schema \| shape, resolver)` | a resolver whose arguments a Zod schema checks |
 | `badUserInput(where, zodError)` | builds the error above, for code that validates by hand |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
+| `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
 
 ## Traps
 
-- `@constraint` is read from the SDL, so a code-first schema (built with
-  `new GraphQLObjectType`) has nothing to check, and no error says so. Use
-  type definitions.
+- `@constraint` is read from the SDL. A code-first schema does not declare the
+  directive, so `withValidation` throws; one that declares it but whose
+  constrained types and fields have no SDL (code-first, or merged pieces) is
+  checked for nothing, and no error says so. Use type definitions.
 - Call `withValidation` last: a resolver set on a field afterwards replaces
   the check.
 - A `@constraint` on an interface field's argument must be repeated on each

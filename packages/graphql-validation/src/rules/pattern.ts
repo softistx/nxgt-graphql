@@ -18,4 +18,5 @@ export const patternRule = defineRule({
 	toZod: (schema, value) => schema.regex(compile(value)),
 	toCode: (schema, value) =>
 		`${schema}.regex(new RegExp(${literal(compile(value).source)}))`,
+	owns: (issue) => issue.format === 'regex',
 });

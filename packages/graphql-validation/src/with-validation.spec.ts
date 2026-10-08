@@ -96,6 +96,55 @@ describe('withValidation', () => {
 		]);
 	});
 
+	test('leaves an absent argument or input field absent, not undefined', async () => {
+		const { schema, seen } = server();
+		await run(
+			schema,
+			'mutation { signUp(input: { email: "ada@example.com" }) { name } }',
+		);
+		expect(seen).toStrictEqual([{ input: { email: 'ada@example.com' } }]);
+		expect(Object.keys((seen[0] as { input: object }).input)).toEqual([
+			'email',
+		]);
+	});
+
+	test('names the @constraint argument behind each issue', async () => {
+		const { schema } = server();
+		const result = await run(
+			schema,
+			'mutation { signUp(input: { email: "ada", name: "A" }) { name } }',
+		);
+		const issues = result.errors?.[0]?.extensions['issues'] as {
+			constraint?: string;
+		}[];
+		expect(issues.map(({ constraint }) => constraint)).toEqual([
+			'format',
+			'minLength',
+		]);
+	});
+
+	test('keeps the one key of a @oneOf input', async () => {
+		const schema = buildSchema(`${constraintTypeDefs}
+			input By @oneOf { id: ID, email: String @constraint(format: "email") }
+			type Query { find(by: By!): String }`);
+		const seen: unknown[] = [];
+		const find = (schema.getQueryType() as GraphQLObjectType).getFields()[
+			'find'
+		];
+		(find as { resolve?: unknown }).resolve = (_: unknown, args: unknown) => {
+			seen.push(args);
+			return 'ok';
+		};
+		withValidation(schema);
+		await graphql({ schema, source: '{ find(by: { id: "1" }) }' });
+		expect(seen).toStrictEqual([{ by: { id: '1' } }]);
+		const refused = await graphql({
+			schema,
+			source: '{ find(by: { email: "nope" }) }',
+		});
+		expect(refused.errors?.[0]?.extensions['code']).toBe('BAD_USER_INPUT');
+	});
+
 	test('checks a field below the root, with the default resolver untouched elsewhere', async () => {
 		const { schema } = server();
 		const ok = await run(
@@ -181,8 +230,54 @@ describe('withValidation', () => {
 				type Person implements Named { name(style: String): String }
 				type Query { me: Person }`;
 			expect(() => withValidation(buildSchema(sdl))).toThrow(
-				'@constraint on Named.name(style:) is not repeated on Person.name(style:), which resolves it.',
+				'@constraint on Named.name(style:) is not repeated on Person.name(style:), which resolves it (@constraint(maxLength: 5) there, no @constraint here).',
 			);
+		});
+
+		test('when an object changes the constraint its interface writes', () => {
+			const sdl = `${constraintTypeDefs}
+				interface Named { name(style: String @constraint(maxLength: 5)): String }
+				type Person implements Named { name(style: String @constraint(maxLength: 5, minLength: 1)): String }
+				type Query { me: Person }`;
+			expect(() => withValidation(buildSchema(sdl))).toThrow(
+				'differs on Person.name(style:), which resolves it (@constraint(maxLength: 5) there, @constraint(maxLength: 5, minLength: 1) here)',
+			);
+		});
+
+		test('when a default value breaks its own constraint', () => {
+			const argument = `${constraintTypeDefs}
+				type Query { a(name: String = "x" @constraint(minLength: 2)): Int }`;
+			expect(() => withValidation(buildSchema(argument))).toThrow(
+				'The default value of Query.a(name:) breaks its @constraint: ',
+			);
+			const field = `${constraintTypeDefs}
+				input Page { size: Int = 500 @constraint(max: 100) }
+				type Query { b(page: Page): Int }`;
+			expect(() => withValidation(buildSchema(field))).toThrow(
+				'The default value of Page.size breaks its @constraint: Too big: expected number to be <=100',
+			);
+		});
+
+		describe("on a @constraint that is not constraintTypeDefs'", () => {
+			// graphql-constraint-directive's declaration, kept from a migration.
+			const foreign = `directive @constraint(minLength: Int, maxLength: Int, format: String, uniqueTypeName: String)
+				on INPUT_FIELD_DEFINITION | FIELD_DEFINITION | ARGUMENT_DEFINITION`;
+
+			test('naming every difference', () => {
+				expect(() =>
+					withValidation(buildSchema(`${foreign} type Query { a: Int }`)),
+				).toThrow(
+					"This schema's @constraint is not constraintTypeDefs': it is allowed on FIELD_DEFINITION; declares uniqueTypeName, which no rule reads. Declare it with constraintTypeDefs.",
+				);
+			});
+
+			test('with an argument of another type', () => {
+				const sdl =
+					'directive @constraint(minLength: String) on ARGUMENT_DEFINITION type Query { a: Int }';
+				expect(() => withValidation(buildSchema(sdl))).toThrow(
+					'declares minLength: String, not Int',
+				);
+			});
 		});
 
 		test('on a misplaced constraint in an input type no argument reaches', () => {

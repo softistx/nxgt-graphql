@@ -6,4 +6,8 @@ export const exclusiveMaxRule = defineRule({
 	target: 'number',
 	toZod: (schema, value) => schema.lt(value),
 	toCode: (schema, value) => `${schema}.lt(${value})`,
+	owns: (issue) =>
+		issue.code === 'too_big' &&
+		issue.origin === 'number' &&
+		issue.inclusive === false,
 });

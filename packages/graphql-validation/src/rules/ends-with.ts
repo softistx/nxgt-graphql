@@ -6,4 +6,5 @@ export const endsWithRule = defineRule({
 	target: 'string',
 	toZod: (schema, value) => schema.endsWith(value),
 	toCode: (schema, value) => `${schema}.endsWith(${literal(value)})`,
+	owns: (issue) => issue.format === 'ends_with',
 });

@@ -22,9 +22,9 @@ An invalid input is **one** `GraphQLError`, thrown before your resolver runs:
       "extensions": {
         "code": "BAD_USER_INPUT",
         "issues": [
-          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format" },
-          { "path": ["input", "name"], "message": "Too small: expected string to have >=2 characters", "code": "too_small" },
-          { "path": ["input", "tags"], "message": "Too big: expected array to have <=2 items", "code": "too_big" }
+          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format", "constraint": "format" },
+          { "path": ["input", "name"], "message": "Too small: expected string to have >=2 characters", "code": "too_small", "constraint": "minLength" },
+          { "path": ["input", "tags"], "message": "Too big: expected array to have <=2 items", "code": "too_big", "constraint": "maxItems" }
         ]
       }
     }
@@ -36,9 +36,12 @@ An invalid input is **one** `GraphQLError`, thrown before your resolver runs:
 The error's own `path` is the field; each issue's `path` is **relative to the
 arguments**: the argument name, then input fields, with a number for a list
 index. `code` is Zod's issue code (`too_small`, `too_big`, `invalid_format`,
-`custom`, ...). `message` is Zod's, in English, and never fails to name the
-rule but is not meant for display in every language: map on `code` and `path`
-if you translate.
+`custom`, ...). `constraint` is the `@constraint` argument that refused
+(`minLength`, `format`, `maxItems`, ...); it is absent for a refusal of a
+[`validated`](#validated) schema. `message` is Zod's, in English, and is not
+meant for display in every language: map on `constraint` and `path` if you
+translate. Prefer `constraint` to `code`: it is the name in your schema, while
+`code` is Zod's and can change when Zod does across a major version.
 
 ### Types
 
@@ -47,7 +50,14 @@ interface ValidationIssue {
   readonly path: readonly (string | number)[];
   readonly message: string;
   readonly code: string;
+  /** The `@constraint` argument that refused; absent for `validated`'s own schema. */
+  readonly constraint?: ConstraintArgument;
 }
+
+type ConstraintArgument =
+  | 'format' | 'minLength' | 'maxLength' | 'startsWith' | 'endsWith'
+  | 'contains' | 'notContains' | 'pattern' | 'min' | 'max'
+  | 'exclusiveMin' | 'exclusiveMax' | 'multipleOf' | 'minItems' | 'maxItems';
 
 type BadUserInputExtensions = {
   readonly code: 'BAD_USER_INPUT';
@@ -83,6 +93,16 @@ function fieldErrors(errors: readonly GraphQLErrorJson[]): Record<string, string
 }
 
 // { email: ['Invalid email address'], name: ['Too small: ...'] }
+
+/** Translated texts, keyed by the stable `constraint`, not by Zod's `code`. */
+const texts: Record<string, string> = {
+  format: 'Not a valid value',
+  minLength: 'Too short',
+  maxItems: 'Too many items',
+};
+
+const textOf = (issue: ValidationIssue) =>
+  (issue.constraint && texts[issue.constraint]) ?? issue.message;
 ```
 
 An issue whose path is just the argument (`['code']` for `check(code: ...)`)
@@ -163,7 +183,7 @@ import { z } from 'zod';
 
 const result = z.object({ code: z.string().length(4) }).safeParse({ code: 'abc' });
 if (!result.success) throw badUserInput('Query.redeem', result.error);
-// message: "Invalid arguments for Query.redeem. code: Too small: expected string to have >=4 characters"
+// message: "Invalid arguments for Query.redeem. code: Too small: expected string to have exactly 4 characters"
 ```
 
 ```ts

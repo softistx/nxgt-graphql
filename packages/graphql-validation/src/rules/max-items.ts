@@ -6,4 +6,5 @@ export const maxItemsRule = defineRule({
 	target: 'list',
 	toZod: (schema, value) => schema.max(value),
 	toCode: (schema, value) => `${schema}.max(${value})`,
+	owns: (issue) => issue.code === 'too_big' && issue.origin === 'array',
 });

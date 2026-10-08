@@ -24,14 +24,17 @@ export function argsSchemaOf(
 	);
 }
 
-/** The constraints of an argument, as one comparable string. */
+/** The constraints of an argument as written, sorted: `maxLength: 5, min: 1`. */
 function signature(inputs: InputSchemas, arg: GraphQLArgument): string {
-	return JSON.stringify(
-		constraintsOn(inputs.directive, arg.astNode)
-			.map(({ rule, value }) => [rule.argument, value])
-			.sort(),
-	);
+	return constraintsOn(inputs.directive, arg.astNode)
+		.map(({ rule, value }) => `${rule.argument}: ${JSON.stringify(value)}`)
+		.sort()
+		.join(', ');
 }
+
+/** A signature as it reads in an error. */
+const written = (signature: string) =>
+	signature ? `@constraint(${signature})` : 'no @constraint';
 
 /**
  * Fails when an object type's field does not repeat the `@constraint` its
@@ -48,13 +51,15 @@ export function assertInterfaceConstraintsKept(
 			const field = type.getFields()[name];
 			for (const arg of declared.args) {
 				const wanted = signature(inputs, arg);
-				if (wanted === '[]') continue;
+				if (!wanted) continue;
 				const own = field?.args.find(
 					({ name: argName }) => argName === arg.name,
 				);
-				if (own && signature(inputs, own) !== wanted) {
+				const found = own ? signature(inputs, own) : wanted;
+				if (found !== wanted) {
+					const verb = found ? 'differs on' : 'is not repeated on';
 					throw new Error(
-						`@constraint on ${contract.name}.${name}(${arg.name}:) is not repeated on ${type.name}.${name}(${arg.name}:), which resolves it. Write the same @constraint there.`,
+						`@constraint on ${contract.name}.${name}(${arg.name}:) ${verb} ${type.name}.${name}(${arg.name}:), which resolves it (${written(wanted)} there, ${written(found)} here). Write the same @constraint on both.`,
 					);
 				}
 			}

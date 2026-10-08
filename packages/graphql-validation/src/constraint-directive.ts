@@ -1,3 +1,4 @@
+import { DirectiveLocation, type GraphQLDirective } from 'graphql';
 import { rules } from './rules';
 
 /**
@@ -16,3 +17,38 @@ ${Object.values(rules)
 	.join('\n')}
 ) on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
 `;
+
+const allowed = new Set<string>([
+	DirectiveLocation.ARGUMENT_DEFINITION,
+	DirectiveLocation.INPUT_FIELD_DEFINITION,
+]);
+
+/**
+ * Fails when the schema's `@constraint` is not the one
+ * {@link constraintTypeDefs} declares — graphql-constraint-directive's, say,
+ * kept from a migration. Its extra locations would be accepted and checked
+ * by nothing, its extra arguments mean nothing here, and an argument of
+ * another type would reach a rule as the wrong kind of value.
+ */
+export function assertOwnConstraint(directive: GraphQLDirective): void {
+	const problems = [
+		...directive.locations
+			.filter((location) => !allowed.has(location))
+			.map((location) => `allowed on ${location}`),
+		...directive.args.flatMap((arg) => {
+			const rule = (rules as Record<string, { type: string } | undefined>)[
+				arg.name
+			];
+			if (!rule) return [`declares ${arg.name}, which no rule reads`];
+			const type = String(arg.type);
+			return type === rule.type
+				? []
+				: [`declares ${arg.name}: ${type}, not ${rule.type}`];
+		}),
+	];
+	if (problems.length > 0) {
+		throw new Error(
+			`This schema's @constraint is not constraintTypeDefs': it is ${problems.join('; ')}. Declare it with constraintTypeDefs.`,
+		);
+	}
+}

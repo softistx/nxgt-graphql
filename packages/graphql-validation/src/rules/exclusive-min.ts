@@ -6,4 +6,8 @@ export const exclusiveMinRule = defineRule({
 	target: 'number',
 	toZod: (schema, value) => schema.gt(value),
 	toCode: (schema, value) => `${schema}.gt(${value})`,
+	owns: (issue) =>
+		issue.code === 'too_small' &&
+		issue.origin === 'number' &&
+		issue.inclusive === false,
 });

@@ -6,4 +6,5 @@ export const containsRule = defineRule({
 	target: 'string',
 	toZod: (schema, value) => schema.includes(value),
 	toCode: (schema, value) => `${schema}.includes(${literal(value)})`,
+	owns: (issue) => issue.format === 'includes',
 });
