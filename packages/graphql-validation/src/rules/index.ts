@@ -39,6 +39,19 @@ export function applyRule(
 	return toZod(schema, value);
 }
 
+/** `applyRule` for source: the rule's typed `toCode` on a schema's source. */
+export function applyRuleCode(
+	rule: RegisteredRule,
+	source: string,
+	value: string | number,
+): string {
+	const toCode = rule.toCode as (
+		schema: string,
+		value: string | number,
+	) => string;
+	return toCode(source, value);
+}
+
 /** The `@constraint` argument whose rule refused with this issue, if any. */
 export function constraintOf(
 	issue: z.core.$ZodIssue,

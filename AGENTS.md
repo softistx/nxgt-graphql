@@ -213,13 +213,16 @@ packages/graphql-validation/src/
   validated.ts             a resolver checked by a hand-written schema
   bad-user-input.ts        the one error, and parseArgs
   typedefs-command.ts      the bin's `typedefs` command; cli.ts is the bin itself
+  codegen.ts               the `./codegen` subpath, for @nxgt/graphql-codegen-zod
   registry.spec.ts         the guards below
   rules/                   one @constraint argument per file: `<argument>Rule`
     rule.ts                Rule, defineRule, literal
     all.ts                 one `export *` line per rule
     index.ts               `rules` keyed by argument, applyRule, constraintOf
   formats/                 one format per file, `<name>Format`; format.ts, all.ts, index.ts alike
-  builder/                 GraphQL types to Zod: InputSchemas, argsSchemaOf, leaf, constraints
+  builder/                 GraphQL types to Zod: InputSchemas, argsSchemaOf, leaf, constraints;
+                           check-constraints.ts, every startup check;
+                           input-code.ts, the same walk written as source
 packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `bun run typedefs:write`
 ```
 
@@ -234,8 +237,15 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   identifier. Each spec goes through `test/rule-cases.ts`, which evaluates the
   source and requires both to accept and refuse the same inputs, and every
   refusal to be owned (`owns`) by that rule and no other.
-- Rules, formats and the builder are internal. Exporting them, for the Zod
-  codegen plugin, is a public-API decision: a subpath with its `exports` key.
+- Rules, formats and the builder are internal. `./codegen` exports only what
+  the codegen plugin needs (`checkConstraints`, `constraintsOn`, `inputCode`);
+  widening it is a public-API decision. `withValidation` runs its startup
+  checks through `checkConstraints`, so the generator refuses the same
+  schemas.
+- **`inputCode` mirrors `InputSchemas`:** both refuse a constraint that cannot
+  apply through `assertLeafTargets`/`assertObjectTargets` (one message), and
+  `input-code.spec.ts` requires the generated source to accept and refuse what
+  the runtime does. A change to one walk changes the other.
 - `graphql/constraint.graphqls` is in `files` but not in `exports`:
   `verify:artifacts` imports every `exports` key, and a `.graphqls` is no
   module. Consumers reference it by path.

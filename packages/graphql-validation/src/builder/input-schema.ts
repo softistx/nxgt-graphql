@@ -15,7 +15,7 @@ import {
 import { z } from 'zod';
 import { applyRule } from '../rules';
 import { type Constraint, constraintsOn } from './constraints';
-import { describeTarget, leafSchema } from './leaf';
+import { assertObjectTargets, leafSchema } from './leaf';
 
 /**
  * Builds the schemas of the arguments and input fields of one GraphQL
@@ -142,20 +142,8 @@ export class InputSchemas {
 			return list;
 		}
 		if (isInputObjectType(type)) {
-			const list = constraints.find(({ rule }) => rule.target === 'list');
-			const first = list ?? constraints[0];
-			if (first) {
-				throw new Error(
-					`@constraint(${first.rule.argument}) on ${where} needs ${describeTarget(first.rule.target)}, not ${type.name}.`,
-				);
-			}
+			assertObjectTargets(type.name, constraints, where);
 			return this.#object(type);
-		}
-		const misplaced = constraints.find(({ rule }) => rule.target === 'list');
-		if (misplaced) {
-			throw new Error(
-				`@constraint(${misplaced.rule.argument}) on ${where} needs a list, not ${type.name}.`,
-			);
 		}
 		return leafSchema(type, constraints, where);
 	}

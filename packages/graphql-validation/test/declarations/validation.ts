@@ -7,6 +7,11 @@ import {
 	validated,
 	withValidation,
 } from '@nxgt/graphql-validation';
+import {
+	checkConstraints,
+	constraintsOn,
+	inputCode,
+} from '@nxgt/graphql-validation/codegen';
 import { buildSchema } from 'graphql';
 import { z } from 'zod';
 
@@ -29,3 +34,14 @@ export const schema = withValidation(
 );
 
 export const refused = badUserInput('Query.a', new z.ZodError([]));
+
+// The ./codegen subpath, as a code generator holds its results.
+const codegenSchema = buildSchema(
+	`${constraintTypeDefs} type Query { a(n: Int @constraint(min: 1)): Int }`,
+);
+export const directive = checkConstraints(codegenSchema);
+const arg = codegenSchema.getQueryType()?.getFields()['a']?.args[0];
+export const constraints = constraintsOn(directive, arg?.astNode);
+export const source = arg
+	? inputCode(arg.type, constraints, 'Query.a(n:)', (type) => type.name)
+	: '';

@@ -16,11 +16,13 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
   across fields, business refinements, with the same error.
 - **Formats** `byte`, `date-time`, `date`, `email`, `ipv4`, `ipv6`, `uri`,
   `uuid`.
+- **A Zod codegen plugin**, `@nxgt/graphql-codegen-zod`, in progress: it
+  writes the same schemas as source, from the same rules, so the types your
+  resolvers receive and the variables a client sends come from your SDL. This
+  package gains `@nxgt/graphql-validation/codegen` for it.
 
 ## Next
 
-- **A Zod codegen plugin** that writes the same schemas as source, from the
-  same rules, so the types your resolvers receive come from your SDL.
 - **Your own formats**, named in `@constraint(format: "...")`.
 - **Schemas that read the context**, `(args, context) => schema`, for checks
   that need the request (uniqueness in a database, permissions).

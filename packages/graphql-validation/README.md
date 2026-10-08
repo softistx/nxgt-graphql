@@ -178,6 +178,32 @@ the directive declared is this package's. Both at once throw
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
 
+`@nxgt/graphql-validation/codegen` is for a code generator, such as the coming
+Zod codegen plugin: it writes the schemas `withValidation` builds as source, and
+refuses the schemas `withValidation` refuses. A server does not need it.
+
+| Export | Is |
+| --- | --- |
+| `checkConstraints(schema, onArgs?)` | runs every startup check of `withValidation` without wrapping anything; returns the `@constraint` directive, or `undefined` when the schema declares none |
+| `constraintsOn(directive, node)` | the `Constraint`s written on an argument or input field (`arg.astNode`), `format` first |
+| `inputCode(type, constraints, where, named)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where` |
+| `Constraint` | `{ rule, value }`, one `@constraint` argument; pass `rule` through, its type is not exported |
+
+```ts
+import { checkConstraints, constraintsOn, inputCode } from '@nxgt/graphql-validation/codegen';
+
+const directive = checkConstraints(schema); // throws what withValidation would
+const arg = schema.getMutationType()!.getFields().signUp!.args[0]!;
+const source = inputCode(
+	arg.type,
+	constraintsOn(directive, arg.astNode),
+	'Mutation.signUp(input:)', // named in errors, as at startup
+	(type) => `z${type.name}`, // enums, input objects, custom scalars
+);
+// e.g. 'zSignUpInput' — or, for `name: String @constraint(minLength: 2)`,
+// 'z.string().min(2).nullish()'
+```
+
 Also shipped, outside `exports`:
 
 | File | Is |
