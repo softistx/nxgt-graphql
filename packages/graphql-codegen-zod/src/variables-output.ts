@@ -20,10 +20,10 @@ import {
 	visit,
 	visitWithTypeInfo,
 } from 'graphql';
-import type { DocumentFile } from './index';
+import type { DocumentFile } from './config';
 import type { Naming } from './naming';
-import { declare } from './schema-output';
-import { objectMembers, type Writer } from './writer';
+import { declare, objectMembers } from './source';
+import type { Writer } from './writer';
 
 /**
  * One schema per named operation in `documents`, for its variables as a

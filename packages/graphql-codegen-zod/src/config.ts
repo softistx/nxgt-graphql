@@ -1,3 +1,4 @@
+import type { DocumentNode } from 'graphql';
 /**
  * The plugin's options, under `config` in `codegen.ts`. The naming options
  * mean what they mean to `@graphql-codegen/typescript`, so the types this
@@ -14,7 +15,7 @@ export interface CodegenZodConfig {
 	 * One scalar's schema, `'<module>#<export>'`, winning over
 	 * `scalarSchemas`: `{ Money: './money#moneySchema' }`.
 	 */
-	readonly scalars?: Readonly<Record<string, string>>;
+	readonly zodScalars?: Readonly<Record<string, string>>;
 	/** Before each schema's name: `zSignUpInput`. Default `'z'`. */
 	readonly schemaPrefix?: string;
 	/**
@@ -36,4 +37,10 @@ export interface CodegenZodConfig {
 	readonly addUnderscoreToArgsType?: boolean;
 	readonly dedupeOperationSuffix?: boolean;
 	readonly omitOperationSuffix?: boolean;
+}
+
+/** A file of `documents`, as graphql-codegen hands it to a plugin. */
+export interface DocumentFile {
+	readonly document?: DocumentNode | undefined;
+	readonly location?: string | undefined;
 }

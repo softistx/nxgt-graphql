@@ -1,12 +1,11 @@
 import { checkConstraints } from '@nxgt/graphql-validation/codegen';
 import {
-	type DocumentNode,
 	type GraphQLSchema,
 	isInputObjectType,
 	isInterfaceType,
 	isObjectType,
 } from 'graphql';
-import type { CodegenZodConfig } from './config';
+import type { CodegenZodConfig, DocumentFile } from './config';
 import { Imports } from './imports';
 import { Naming } from './naming';
 import { ScalarSources } from './scalars';
@@ -14,13 +13,7 @@ import { schemaBlocks } from './schema-output';
 import { variablesBlocks } from './variables-output';
 import { Writer } from './writer';
 
-export type { CodegenZodConfig } from './config';
-
-/** A file of `documents`, as graphql-codegen hands it to a plugin. */
-export interface DocumentFile {
-	readonly document?: DocumentNode | undefined;
-	readonly location?: string | undefined;
-}
+export type { CodegenZodConfig, DocumentFile } from './config';
 
 /**
  * The graphql-codegen plugin: Zod schemas, and their types, for the

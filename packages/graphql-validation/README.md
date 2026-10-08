@@ -178,8 +178,8 @@ the directive declared is this package's. Both at once throw
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
 
-`@nxgt/graphql-validation/codegen` is for a code generator, such as the coming
-Zod codegen plugin: it writes the schemas `withValidation` builds as source, and
+`@nxgt/graphql-validation/codegen` is for a code generator, such as
+[`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod): it writes the schemas `withValidation` builds as source, and
 refuses the schemas `withValidation` refuses. A server does not need it.
 
 | Export | Is |
@@ -187,7 +187,7 @@ refuses the schemas `withValidation` refuses. A server does not need it.
 | `checkConstraints(schema, onArgs?)` | runs every startup check of `withValidation` without wrapping anything; returns the `@constraint` directive, or `undefined` when the schema declares none |
 | `constraintsOn(directive, node)` | the `Constraint`s written on an argument or input field (`arg.astNode`), `format` first |
 | `inputCode(type, constraints, where, named, options?)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where`. `options` (`InputCodeOptions`): `list({ type, code, single })` returns each list's source, given `code` (the array with every rule) and `single` (one non-null item, without rules), e.g. to take a single value as graphql does: `single`, wrapped, piped into `code` |
-| `Constraint` | `{ rule, value }`, one `@constraint` argument; pass `rule` through, its type is not exported |
+| `Constraint` | `{ rule, value }`, one `@constraint` argument. Of `rule`, read `argument` (`'minItems'`, `'format'`, …), `target` (`'list'` for `minItems`/`maxItems`, else what the rule narrows) and `base` (`true` for `format`, which picks the schema the others narrow); the rest is internal |
 
 ```ts
 import { checkConstraints, constraintsOn, inputCode } from '@nxgt/graphql-validation/codegen';

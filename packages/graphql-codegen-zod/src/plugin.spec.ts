@@ -142,6 +142,12 @@ describe('the generated file', () => {
 			['User', 'zUserQueryVariables', { id: 'abc' }],
 			['User', 'zUserQueryVariables', { id: 'ab' }],
 			['Users', 'zUsersQueryVariables', {}],
+			// graphql's Int is 32-bit.
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', prefs: { grid: 2 ** 31 } } },
+			],
 			['Users', 'zUsersQueryVariables', { name: 'nick', first: 50 }],
 			['Users', 'zUsersQueryVariables', { name: 'bob' }],
 			['Users', 'zUsersQueryVariables', { first: 0 }],
@@ -317,10 +323,10 @@ describe('plugin', () => {
 	test('fails on a custom scalar it cannot map, naming it', async () => {
 		const schema = tiny('scalar Money\ntype Query { a(m: Money): Int }');
 		await expect(plugin(schema, [])).rejects.toThrow(
-			'@nxgt/graphql-codegen-zod: the scalar Money is not in scalars, and no scalarSchemas is set.',
+			'@nxgt/graphql-codegen-zod: the scalar Money is not in zodScalars, and no scalarSchemas is set.',
 		);
 		await expect(
-			plugin(schema, [], { scalars: { Money: 'moneySchema' } }),
+			plugin(schema, [], { zodScalars: { Money: 'moneySchema' } }),
 		).rejects.toThrow("write it '<module>#<export>'");
 	});
 
@@ -329,7 +335,7 @@ describe('plugin', () => {
 			'scalar Money\nscalar Cost\ninput I { m: Money!, c: Cost! }\ntype Query { a: Int }',
 		);
 		const out = await plugin(schema, [], {
-			scalars: { Money: './money#schema', Cost: './cost#schema' },
+			zodScalars: { Money: './money#schema', Cost: './cost#schema' },
 		});
 		expect(out).toContain('import { schema } from "./money";');
 		expect(out).toContain('import { schema as schema2 } from "./cost";');
@@ -348,7 +354,7 @@ describe('plugin', () => {
 				{ outputFile: 'test/out.ts' },
 			),
 		).rejects.toThrow(
-			"the scalar Money is neither in scalars nor in ./scalars.ts's scalarSchemas",
+			"the scalar Money is neither in zodScalars nor in ./scalars.ts's scalarSchemas",
 		);
 	});
 
@@ -387,7 +393,9 @@ test('imports from zod on its one line', async () => {
 	const schema = tiny(
 		'scalar UUID\ninput I { id: UUID }\ntype Query { a: Int }',
 	);
-	const out = await plugin(schema, [], { scalars: { UUID: 'zod#uuidSchema' } });
+	const out = await plugin(schema, [], {
+		zodScalars: { UUID: 'zod#uuidSchema' },
+	});
 	expect(out.startsWith('import { z, uuidSchema } from "zod";\n\n')).toBe(true);
 });
 
@@ -422,7 +430,7 @@ describe('plugin, refusing what it cannot write faithfully', () => {
 			),
 		);
 		expect(await plugin(schema, [])).toContain(
-			'n: z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).prefault([1]).nullable(),',
+			'n: z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).prefault([1]).nullable(),',
 		);
 	});
 });
@@ -459,6 +467,38 @@ describe('plugin, naming', () => {
 		);
 	});
 
+	test("ignores the typescript plugins' scalars, which a root config shares", async () => {
+		const out = await plugin(
+			tiny('scalar DateTime\ntype Query { a(d: DateTime): Int }'),
+			[],
+			{
+				scalarSchemas: '../test/scalars.ts',
+				scalars: { DateTime: 'Date' },
+			} as CodegenZodConfig,
+		);
+		expect(out).toContain('d: scalarSchemas.DateTime.nullish(),');
+	});
+
+	test('refuses an integer default a JavaScript number cannot keep exact', async () => {
+		await expect(
+			plugin(
+				tiny('scalar Long\ntype Query { a(n: Long = 9007199254740993): Int }'),
+				[],
+				{
+					zodScalars: { Long: './long#longSchema' },
+				},
+			),
+		).rejects.toThrow(
+			'@nxgt/graphql-codegen-zod: the default of Query.a(n:) holds 9007199254740993, which a JavaScript number cannot keep exact. Write it as a string, if its scalar takes one.',
+		);
+		// An Int or a Float rounds on the server too: written as it is.
+		const float = await plugin(
+			tiny('type Query { a(x: Float = 9007199254740993): Int }'),
+			[],
+		);
+		expect(float).toContain('.prefault(9007199254740992)');
+	});
+
 	test('gives no import a name the file declares', async () => {
 		const out = await plugin(
 			tiny('scalar Money\ninput money { m: Money }\ntype Query { a: Int }'),
@@ -466,7 +506,7 @@ describe('plugin, naming', () => {
 			{
 				schemaPrefix: '',
 				namingConvention: 'keep',
-				scalars: { Money: './money#money' },
+				zodScalars: { Money: './money#money' },
 			},
 		);
 		expect(out).toContain('import { money as money2 } from "./money";');

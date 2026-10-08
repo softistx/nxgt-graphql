@@ -8,13 +8,10 @@ import {
 	isInterfaceType,
 	isObjectType,
 } from 'graphql';
+import { defaultLiteral } from './defaults';
 import type { Naming } from './naming';
-import {
-	defaultLiteral,
-	docComment,
-	objectMembers,
-	type Writer,
-} from './writer';
+import { declare, objectMembers } from './source';
+import type { Writer } from './writer';
 
 /**
  * The SDL's part of the file: every enum, then every input type, then the
@@ -135,17 +132,4 @@ function indent(code: string): string {
 		.split('\n')
 		.map((line) => `\t${line}`)
 		.join('\n');
-}
-
-/** `export const zX = …; export type X = z.output<typeof zX>;` */
-export function declare(
-	typeName: string,
-	naming: Naming,
-	code: string,
-	side: 'input' | 'output',
-	description?: string | null,
-): string {
-	const schemaName = naming.schema(typeName);
-	const doc = docComment(description);
-	return `${doc}export const ${schemaName} = ${code};\n${doc}export type ${typeName} = z.${side}<typeof ${schemaName}>;`;
 }

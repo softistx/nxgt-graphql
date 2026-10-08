@@ -53,7 +53,7 @@ export type Role = z.output<typeof zRole>;
 export const zSignUpInput = z.strictObject({
 	email: z.email(),
 	name: z.string().min(2),
-	age: z.number().int().lte(120).gte(13).nullish(),
+	age: z.int32().lte(120).gte(13).nullish(),
 	role: zRole.prefault("USER").nullable(),
 });
 export type SignUpInput = z.output<typeof zSignUpInput>;
@@ -203,7 +203,7 @@ export const zSignUpInput = z.strictObject({
 	tags: z.union([z.array(z.string()).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()).min(1))]).prefault(["new"]).nullable(),
 });
 export const zQueryUsersArgs = z.object({
-	first: z.number().int().lte(50).gte(1).prefault(10).nullable(),
+	first: z.int32().lte(50).gte(1).prefault(10).nullable(),
 });
 ```
 
@@ -231,6 +231,10 @@ get prefs() {
 	return zPrefs.prefault({"tags":["x"],"grid":[[1]]}).nullable();
 },
 ```
+
+An integer default past `Number.MAX_SAFE_INTEGER` given to an `ID` or a
+custom scalar fails generation, since the server keeps every digit: write
+it as a string, `n: Long = "9007199254740993"`.
 
 An `Int` given for an `ID` is its string, as `graphql` makes it: `owner: ID = 7`
 is `.prefault("7")`, `ids: [ID!] = 1` is `.prefault(["1"])`.
@@ -310,7 +314,7 @@ query Users($name: String, $first: Int = 5) {
 ```ts
 export const zUsersQueryVariables = z.object({
 	name: z.string().startsWith("n").nullish(),
-	first: z.number().int().lte(50).gte(1).prefault(5).nullable(),
+	first: z.int32().lte(50).gte(1).prefault(5).nullable(),
 });
 export type UsersQueryVariables = z.input<typeof zUsersQueryVariables>;
 ```
@@ -362,7 +366,7 @@ Three exceptions, all refused:
 ## Scalars
 
 Built-in scalars are written in full: `String` and `ID` as `z.string()`,
-`Int` as `z.number().int()`, `Float` as `z.number()`, `Boolean` as
+`Int` as `z.int32()` (32-bit, as graphql reads it), `Float` as `z.number()`, `Boolean` as
 `z.boolean()`, each with its constraints.
 
 A custom scalar needs a Zod schema from you, mapped in one of two ways:
@@ -370,12 +374,12 @@ A custom scalar needs a Zod schema from you, mapped in one of two ways:
 | Option | Type | Effect |
 | --- | --- | --- |
 | `scalarSchemas` | `string` | a module exporting a `scalarSchemas` record keyed by GraphQL name; `@nxgt/graphql-scalars` exports one from 0.4.0 |
-| `scalars` | `Record<string, string>` | `'<module>#<export>'` for one scalar; wins over the record |
+| `zodScalars` | `Record<string, string>` | `'<module>#<export>'` for one scalar; wins over the record |
 
 ```ts
 config: {
 	scalarSchemas: '@nxgt/graphql-scalars',
-	scalars: { Money: './money#moneySchema' },
+	zodScalars: { Money: './money#moneySchema' },
 }
 ```
 
@@ -397,6 +401,9 @@ price: moneySchema,
   one (`./money`) is relative to **it**, not to `codegen.ts`.
 - A custom scalar that is in neither fails generation, naming it. See
   [Troubleshooting](../troubleshooting.md).
+- The option is `zodScalars`, not `scalars`: a root `config: { scalars: {
+  DateTime: 'Date' } }` written for the typescript plugins reaches this
+  plugin too, and is ignored.
 - The plugin loads the `scalarSchemas` module to check its keys when it can.
   When it cannot (a `.ts` file under Node), it trusts the record, and the
   generated file then fails to typecheck on a missing key.
@@ -418,11 +425,11 @@ The messages of this plugin are in [Troubleshooting](../troubleshooting.md).
 ## The plugin function
 
 ```ts
-import { plugin, type CodegenZodConfig } from '@nxgt/graphql-codegen-zod';
+import { plugin, type CodegenZodConfig, type DocumentFile } from '@nxgt/graphql-codegen-zod';
 
 declare function plugin(
 	schema: GraphQLSchema,
-	documents: readonly { document?: DocumentNode; location?: string }[],
+	documents: readonly DocumentFile[], // { document?: DocumentNode; location?: string }
 	config?: CodegenZodConfig,
 	info?: { outputFile?: string },
 ): Promise<string>;

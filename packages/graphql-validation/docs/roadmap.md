@@ -16,10 +16,6 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
   across fields, business refinements, with the same error.
 - **Formats** `byte`, `date-time`, `date`, `email`, `ipv4`, `ipv6`, `uri`,
   `uuid`.
-- **A Zod codegen plugin**, `@nxgt/graphql-codegen-zod`, in progress: it
-  writes the same schemas as source, from the same rules, so the types your
-  resolvers receive and the variables a client sends come from your SDL. This
-  package gains `@nxgt/graphql-validation/codegen` for it.
 
 ## Next
 
@@ -29,4 +25,7 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Shipped
 
-Nothing yet.
+- **A Zod codegen plugin**, [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod):
+  it writes the same schemas as source, from the same rules, so the types your
+  resolvers receive and the variables a client sends come from your SDL. This
+  package gains `@nxgt/graphql-validation/codegen` for it.
