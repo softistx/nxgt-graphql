@@ -26,9 +26,11 @@ Next release (a minor):
   - identifier: `GUID`, `UUIDv4`, `UUIDv7`, `ULID`, `Cuid2`, `NanoID`,
     `KSUID`, `XID`, `ObjectID`, `ISBN`, `SemVer`;
   - encoding: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`,
-    `SHA512`.
+    `SHA512`;
+  - date-time: `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`,
+    `TimeZone`, `Timestamp`.
 
-  Coming: date-time, locale, geo, finance, color, value (`JSON`,
+  Coming: locale, geo, finance, color, value (`JSON`,
   `JSONObject`, `Void`) and string (`Emoji`). See
   [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 

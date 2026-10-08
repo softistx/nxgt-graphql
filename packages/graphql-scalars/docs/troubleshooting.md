@@ -38,6 +38,19 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `DateTime cannot represent this input: Invalid ISO datetime` | no offset (`2024-03-10T12:00:00`), an impossible day, or a date alone; add `Z` or `±hh:mm` |
 | `DateTime cannot represent this input: Invalid input: expected string, received number` | an epoch number; send an RFC 3339 string |
 | `Date cannot represent this input: Invalid ISO date` | not `YYYY-MM-DD`, or an impossible day such as `2023-02-29`; a date-time is refused |
+| `Time cannot represent this input: Invalid time: expected HH:MM:SS with an offset` | no offset (`10:15:30`), no seconds (`10:15Z`), a lower-case `z`, hour 24 or second 60; send `10:15:30Z` or `10:15:30+02:00` |
+| `LocalTime cannot represent this input: Invalid ISO time` | `24:00`, a `Z` or an offset (use `Time`), or not `HH:MM` / `HH:MM:SS` |
+| `LocalDateTime cannot represent this input: Invalid local date-time: it has no offset, not even Z` | a trailing `Z`; drop it, or use `DateTime` for an instant |
+| `LocalDateTime cannot represent this input: Invalid ISO datetime` | an offset (`+02:00`), a date alone, a space instead of `T`, or an impossible day |
+| `Duration cannot represent this input: Invalid ISO duration` | weeks mixed with other units (`P1W2D`), a sign (`-P1D`), lower case, or nothing after `P` or `T` |
+| `UtcOffset cannot represent this input: Invalid UTC offset: expected ±HH:MM from -12:00 to +14:00` | `Z`, a one-digit hour (`+5:30`), no sign, or outside -12:00 to +14:00 |
+| `UtcOffset cannot represent this input: Invalid UTC offset: write no offset as +00:00` | `-00:00`; send `+00:00` |
+| `TimeZone cannot represent this input: Invalid time zone: expected an IANA name` | a name the runtime's tz data does not know (a zone newer than it, or a typo), the wrong case (`europe/paris`), or an offset (`+05:30`; use `UtcOffset`) |
+| `Timestamp cannot represent this input: Invalid input: expected int, received number` | a fraction such as `1.5` |
+| `Timestamp cannot represent this input: Invalid input: expected number, received string` | `"1710065730000"` is a string; send the number |
+| `Timestamp cannot represent this input: Expected an integer, not -0` | `-0`; send `0` |
+| `Timestamp cannot represent this input: Invalid input: expected number, received boolean` | a boolean, or anything that is not a number |
+| `Timestamp cannot represent this input: Too big: expected number to be <=8640000000000000` | past what a `Date` holds; below -8.64e15 it says `Too small: expected number to be >=-8640000000000000` |
 | `EmailAddress cannot represent this input: Invalid email address` | not an email address |
 | `URL cannot represent this input: Invalid URL` | not absolute, or a scheme other than `http` and `https` (`javascript:`, `data:`, `mailto:`) |
 | `IPv4 cannot represent this input: Invalid IPv4 address` | not a dotted quad: a part above 255, a leading zero (`01.2.3.4`), fewer than four parts, a `/prefix` (use `CIDRv4`), or an IPv6 |
@@ -159,6 +172,15 @@ resolve: (row) => new Date(row.createdAt), // not row.createdAt
 **Why:** `new Date(Number.NaN)` is a `Date` with no time, so it names no
 instant to write.
 **Fix:** validate the source before building the `Date`.
+
+### `Timestamp cannot serialize this value: Invalid Date`
+
+**When:** a resolver returns an invalid `Date` for a `Timestamp` field, such as
+`new Date('nonsense')`.
+**Why:** an invalid `Date` has no milliseconds to write (`getTime()` is `NaN`).
+Returning a number or a string instead says `Invalid input: expected date,
+received number` (or `string`): `Timestamp` serializes a `Date` only.
+**Fix:** validate the source, and wrap a number: `new Date(row.createdAtMs)`.
 
 ### `Long cannot serialize this value: Invalid input: expected bigint, received number`
 

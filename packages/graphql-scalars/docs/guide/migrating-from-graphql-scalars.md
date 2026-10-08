@@ -90,6 +90,35 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   optional, allows spaces, dashes and parentheses, and has no length limit, so
   `0612 34 56 78` passes there and fails here.
 
+- **`Time`** is a string `10:15:30Z` on both sides and keeps the offset as
+  sent. graphql-scalars resolves it to a `Date` (today's date at that time,
+  moved to UTC: `10:15:30+02:00` is 08:15:30 UTC) and serializes a `Date` back
+  to `HH:MM:SS.sssZ`. Both refuse a time with no offset and `24:00:00Z`.
+- **`LocalTime`** takes `HH:MM`, `HH:MM:SS` and a fraction (`10:15:30.5`),
+  which graphql-scalars refuses. Both refuse `24:00`; there, `LocalEndTime`
+  takes it, and here nothing does (`23:59:59` or `00:00` the next day).
+- **`LocalDateTime`** requires `T`, accepts `HH:MM` as well as `HH:MM:SS`, and
+  refuses a `Z` or an offset. graphql-scalars requires seconds and accepts
+  `2024-03-10T10:15:30Z` and `…+02:00`, which are not local.
+- **`Duration`** is stricter than graphql-scalars `Duration` (and its alias
+  `ISO8601Duration`): no sign (`-P1D`), no fractional day or hour (`P1.5D`),
+  and weeks are not mixed with other units (`P1W2D`). Both refuse `P`, `PT`
+  and lower case.
+- **`Timestamp`** is an integer on the wire and a `Date` in resolvers, as
+  there, but refuses what graphql-scalars lets through: a string
+  (`"2024-03-10T10:15:30Z"` is read as a date there), a fraction (`1.5`
+  becomes a `Date` there), `-0`, a boolean, and a value past ±8.64e15 (an
+  invalid `Date` there, which fails only later, when something formats it). An invalid `Date` is an error here;
+  there it comes out as `NaN`, which JSON writes as `null`.
+- **`UtcOffset`** is `±hh:mm` from `-12:00` to `+14:00`, written `+00:00` for
+  none. graphql-scalars takes `-00:00`, `+14:30`, `-12:30`, `+15:00` and
+  `05:30` (no sign); `Z` is refused in both.
+- **`TimeZone`** is an IANA name the runtime's `Intl` knows, in the right case,
+  and refuses an offset. graphql-scalars checks a bundled list, accepts
+  `europe/paris` and `+05:30`, and returns it as sent. Both keep an alias
+  (`Asia/Calcutta`, `US/Pacific`); here a zone newer than the runtime's tz data
+  is refused, there it is whatever the list holds.
+
 ### Stricter input
 
 graphql-scalars coerces a string with `parseInt` or `parseFloat`, so `"5"` is
@@ -120,8 +149,10 @@ One name per rule, so use the name on the right.
 | --- | --- |
 | `UnsignedInt` | `NonNegativeInt` |
 | `UnsignedFloat` | `NonNegativeFloat` |
-| `ISO8601Duration` | `Duration` (coming) |
+| `ISO8601Duration` | `Duration` |
 | `LocalDate` | `Date` (the `YYYY-MM-DD` string) |
+| `DateTimeISO` | `DateTime` (an offset is required; it is a `Date` in resolvers) |
+| `LocalEndTime` | none: `24:00` is refused, use `LocalTime` with `23:59:59` or `00:00` |
 
 ## Not here
 
