@@ -15,9 +15,8 @@ Candidates, not commitments.
 
 - **Emit only some parts**, an option to write just the arguments, or just
   the variables, of a file.
-- **Variables as lenient as `graphql`** (an `Int` for an `ID`, a single
-  value for a list), if a client needs to send them. Today the client is
-  stricter on these two coercions only.
+- **A single input object for a list of them**, taken as `graphql` takes
+  it, if TypeScript can infer it behind a recursive getter.
 - **Your own formats**, once `@nxgt/graphql-validation` supports custom
   `@constraint(format: "...")` values; the plugin will carry them.
 
@@ -26,6 +25,9 @@ Candidates, not commitments.
 Nothing yet.
 
 ## Not planned
+
+- **An `Int` for an `ID` on the client.** An id is a string in what the
+  client sends, as in what the resolver receives.
 
 - **Zod 3.** The schemas use Zod 4's getters, `prefault`, `z.strictObject` and
   `z.email()`; they have no Zod 3 form.

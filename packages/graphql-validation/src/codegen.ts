@@ -3,4 +3,4 @@
 // Not for a server: use the main entry.
 export { checkConstraints } from './builder/check-constraints';
 export { type Constraint, constraintsOn } from './builder/constraints';
-export { inputCode } from './builder/input-code';
+export { type InputCodeOptions, inputCode } from './builder/input-code';

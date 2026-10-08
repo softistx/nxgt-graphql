@@ -200,7 +200,7 @@ type Query { users(first: Int = 10 @constraint(min: 1, max: 50)): [String!]! }
 ```ts
 export const zSignUpInput = z.strictObject({
 	role: zRole.prefault("USER").nullable(),
-	tags: z.array(z.string()).min(1).prefault(["new"]).nullable(),
+	tags: z.union([z.array(z.string()).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()).min(1))]).prefault(["new"]).nullable(),
 });
 export const zQueryUsersArgs = z.object({
 	first: z.number().int().lte(50).gte(1).prefault(10).nullable(),
@@ -327,13 +327,37 @@ export type UsersQueryVariables = z.input<typeof zUsersQueryVariables>;
 - The variable of a directive's argument (`@include(if: $x)`) carries no
   constraint.
 
-**Trap:** the client is deliberately stricter than `graphql` on two
-coercions, and the generated schemas refuse both:
+**Coercions.** A list of scalars or enums also takes a single value, as
+`graphql` does: the value is wrapped, then checked as the list. From
+`Prefs.tags`:
 
-- an `ID` variable must be sent as a string. `graphql` also accepts an `Int`
-  for an `ID`, but the schema is `z.string()`, so `{ id: 5 }` is refused;
-- a list variable must be sent as a list. `graphql` wraps a single value,
-  but the schema is `z.array(...)`, so `{ tags: "ok" }` is refused.
+```ts
+tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).nullish(),
+```
+
+`zPrefs.parse({ tags: "ok" })` gives `{ tags: ["ok"] }`, what the resolver
+receives. A rule refuses a single value as the server does, at the same path:
+`SignUpInput.tags` is `[String!] @constraint(minItems: 1, maxLength: 8)`, and
+`tags: "toolongtag"` fails at `["input", "tags", 0]` with the server's
+message.
+
+A custom scalar's schema may decode (`DateTime`, a string to a `Date`). The
+single value then reaches the list's schema as it was sent, and is decoded
+once:
+
+```ts
+dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
+```
+
+Three exceptions, all refused:
+
+- an `Int` for an `ID`: `graphql` takes it, the schema is `z.string()`. Send
+  ids as strings;
+- a single input object for a list of input objects: behind the recursive
+  getters an input object needs, TypeScript could not infer the type. Send a
+  list of one;
+- a single value for a list of lists of custom scalars (`[[DateTime]]`): the
+  inner list would decode it before the outer one. Send the nested list.
 
 ## Scalars
 

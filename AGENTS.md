@@ -242,7 +242,8 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   source and requires both to accept and refuse the same inputs, and every
   refusal to be owned (`owns`) by that rule and no other.
 - Rules, formats and the builder are internal. `./codegen` exports only what
-  the codegen plugin needs (`checkConstraints`, `constraintsOn`, `inputCode`);
+  the codegen plugin needs (`checkConstraints`, `constraintsOn`, `inputCode`,
+  the type `InputCodeOptions`);
   widening it is a public-API decision. `withValidation` runs its startup
   checks through `checkConstraints`, so the generator refuses the same
   schemas.
@@ -322,9 +323,15 @@ packages/graphql-codegen-zod/test/
   that declares `@constraint` without SDL (introspected: no directive to read).
 - **Input types are `z.strictObject`**, as graphql refuses an unknown field;
   variables and args objects stay `z.object`. Defaults are coerced as graphql
-  coerces them, through lists and nested input literals. The client is
-  stricter than graphql on two coercions only, pinned by a spec and
-  documented: a single value for a list variable, an Int for an ID.
+  coerces them, through lists and nested input literals.
+- **A list of scalars or enums takes a single value, as graphql does**
+  (owner), through `inputCode`'s `list` option: the value is wrapped, then
+  piped into the list's schema, so the client's issue is the server's (path,
+  message). A custom scalar's first stage is `z.custom`, so a codec decodes
+  once. Not for a list of input objects (a transform behind a recursive
+  getter defeats inference), nor a list of lists of custom scalars. An Int
+  for an ID stays refused (owner: « on garde seulement id comme string »).
+  The parity spec pins both, with a codec `DateTime` on both sides.
 - **`test/generated.ts` is generated and typechecked.** Never edit it: `bun
   run --cwd packages/graphql-codegen-zod generated:write` regenerates it, and
   a spec fails, naming that command, when it is stale. Biome skips it.

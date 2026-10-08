@@ -157,3 +157,31 @@ describe('inputCode', () => {
 		expect(codeOf(field('Probe', 'name'))).toBe('z.string().max(4).min(2)');
 	});
 });
+
+describe('inputCode, its list option', () => {
+	test('hands each list its array, with every rule, and one bare item', () => {
+		const seen: string[] = [];
+		const code = inputCode(
+			field('Probe', 'grid').type,
+			constraintsOn(inputs.directive, field('Probe', 'grid').astNode),
+			'Probe.grid',
+			named,
+			{
+				list: ({ code, single }) => {
+					seen.push(`${code} | ${single}`);
+					return `L(${code})`;
+				},
+			},
+		);
+		// The inner list twice: in the outer array with its rules, and bare
+		// as the outer list's single item.
+		expect(seen).toEqual([
+			'z.array(z.string().min(2)) | z.string()',
+			'z.array(z.string()) | z.string()',
+			'z.array(L(z.array(z.string().min(2))).nullish()).min(1) | L(z.array(z.string()))',
+		]);
+		expect(code).toBe(
+			'L(z.array(L(z.array(z.string().min(2))).nullish()).min(1)).nullish()',
+		);
+	});
+});

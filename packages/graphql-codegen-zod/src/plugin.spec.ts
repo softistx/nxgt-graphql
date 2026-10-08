@@ -4,6 +4,7 @@ import { constraintTypeDefs, withValidation } from '@nxgt/graphql-validation';
 import {
 	buildClientSchema,
 	buildSchema,
+	type GraphQLScalarType,
 	graphql,
 	introspectionFromSchema,
 	parse,
@@ -11,6 +12,7 @@ import {
 import type { z } from 'zod';
 import { documents, sdl } from '../test/fixture';
 import * as generatedModule from '../test/generated';
+import { scalarSchemas } from '../test/scalars';
 import { generated } from '../test/write-generated';
 import { type CodegenZodConfig, plugin } from './index';
 
@@ -23,6 +25,14 @@ const received = new Map<string, unknown>();
 /** The fixture's schema served behind withValidation, resolvers answering. */
 function server() {
 	const schema = buildSchema(sdl);
+	// DateTime decodes as a server with @nxgt/graphql-scalars does.
+	// graphql 17 reads coerceInputValue, graphql 16 parseValue.
+	const dateTime = schema.getType('DateTime') as GraphQLScalarType & {
+		coerceInputValue?: (value: unknown) => unknown;
+	};
+	const decode = (value: unknown) => scalarSchemas.DateTime.parse(value);
+	dateTime.parseValue = decode;
+	dateTime.coerceInputValue = decode;
 	const answers: Record<string, unknown> = {
 		user: { id: 'u_1', name: 'n' },
 		users: [],
@@ -84,6 +94,22 @@ describe('the generated file', () => {
 				'SignUp',
 				'zSignUpMutationVariables',
 				{ input: { email: 'a@b.co', name: 'Al', tags: 'toolongtag' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{
+					input: {
+						email: 'a@b.co',
+						name: 'Al',
+						prefs: { dates: '2020-01-01T00:00:00Z' },
+					},
+				},
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', prefs: { dates: 'nope' } } },
 			],
 			[
 				'SignUp',
@@ -194,27 +220,57 @@ describe('the generated file', () => {
 		);
 	});
 
-	test('is stricter than graphql on two coercions, on purpose', async () => {
+	test('is stricter than graphql on one coercion, on purpose: an Int for an ID', async () => {
+		const result = await graphql({
+			schema: server(),
+			source,
+			operationName: 'User',
+			variableValues: { id: 12345 },
+		});
+		expect(result.errors).toBeUndefined();
+		expect(
+			schemas['zUserQueryVariables']?.safeParse({ id: 12345 }).success,
+		).toBe(false);
+	});
+
+	test('takes a single value for a list of scalars, as graphql does', async () => {
 		const served = server();
-		// A single value for a list, and an Int for an ID: graphql coerces both;
-		// the generated schemas take the list and the string only.
-		for (const [operationName, schema, variableValues] of [
-			[
-				'SignUp',
-				'zSignUpMutationVariables',
-				{ input: { email: 'a@b.co', name: 'Al', tags: 'ok' } },
-			],
-			['User', 'zUserQueryVariables', { id: 12345 }],
-		] as const) {
-			const result = await graphql({
-				schema: served,
-				source,
-				operationName,
-				variableValues,
-			});
-			expect(result.errors).toBeUndefined();
-			expect(schemas[schema]?.safeParse(variableValues).success).toBe(false);
-		}
+		const input = {
+			email: 'a@b.co',
+			name: 'Al',
+			tags: 'ok',
+			prefs: { grid: 1 },
+		};
+		const result = await graphql({
+			schema: served,
+			source,
+			operationName: 'SignUp',
+			variableValues: { input },
+		});
+		expect(result.errors).toBeUndefined();
+		const parsed = schemas['zMutationSignUpArgs']?.parse({ input });
+		expect(received.get('signUp')).toEqual(parsed);
+		// A single value a rule refuses: the client's issue is the server's,
+		// same path, same message.
+		const refused = { ...input, tags: 'toolongtag' };
+		const answer = await graphql({
+			schema: served,
+			source,
+			operationName: 'SignUp',
+			variableValues: { input: refused },
+		});
+		const client = schemas['zSignUpMutationVariables']?.safeParse({
+			input: refused,
+		});
+		const issue = client?.error?.issues[0];
+		const issues = answer.errors?.[0]?.extensions['issues'] as
+			| readonly { readonly message: string }[]
+			| undefined;
+		expect([issue?.path, issue?.message]).toEqual([
+			['input', 'tags', 0],
+			issues?.[0]?.message,
+		]);
+		expect(issue?.message).toBeDefined();
 	});
 
 	test('types the arguments a resolver receives: the server parses them through the same rules', () => {
@@ -366,7 +422,7 @@ describe('plugin, refusing what it cannot write faithfully', () => {
 			),
 		);
 		expect(await plugin(schema, [])).toContain(
-			'n: z.array(z.number().int().nullish()).prefault([1]).nullable(),',
+			'n: z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).prefault([1]).nullable(),',
 		);
 	});
 });

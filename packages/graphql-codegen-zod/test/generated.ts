@@ -24,10 +24,11 @@ export const zFilter = z.strictObject({
 export type Filter = z.output<typeof zFilter>;
 
 export const zPrefs = z.strictObject({
-	tags: z.array(z.string()).nullish(),
-	grid: z.array(z.array(z.number().int().nullish()).nullish()).nullish(),
+	tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).nullish(),
+	grid: z.union([z.array(z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).nullish()), z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(z.number().int().nullish()), z.number().int().transform((value): unknown[] => [value]).pipe(z.array(z.number().int().nullish()))]).nullish()))]).nullish(),
 	owner: z.string().prefault("7").nullable(),
-	ids: z.array(z.string()).prefault(["1"]).nullable(),
+	ids: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).prefault(["1"]).nullable(),
+	dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
 });
 export type Prefs = z.output<typeof zPrefs>;
 
@@ -36,7 +37,7 @@ export const zSignUpInput = z.strictObject({
 	name: z.string().min(2),
 	age: z.number().int().lte(120).gte(13).nullish(),
 	role: zRole.prefault("USER").nullable(),
-	tags: z.array(z.string().max(8)).min(1).prefault(["new"]).nullable(),
+	tags: z.union([z.array(z.string().max(8)).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().max(8)).min(1))]).prefault(["new"]).nullable(),
 	get address() {
 		return zAddress.nullish();
 	},
@@ -87,7 +88,7 @@ export type MutationSignUpArgs = z.output<typeof zMutationSignUpArgs>;
 
 export const zMutationRateArgs = z.object({
 	score: z.number().multipleOf(0.5),
-	ids: z.array(z.string().min(3)).min(1),
+	ids: z.union([z.array(z.string().min(3)).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().min(3)).min(1))]),
 });
 export type MutationRateArgs = z.output<typeof zMutationRateArgs>;
 

@@ -24,4 +24,13 @@ const sent: SignUpMutationVariables = {
 };
 const none: UsersQueryVariables = {};
 
+// A list of scalars takes a single value on the way in, and is a list out.
+holds<
+	Equal<
+		NonNullable<SignUpMutationVariables['input']['tags']>,
+		string | string[]
+	>
+>();
+holds<Equal<SignUpInput['tags'], string[] | null>>();
+
 export { none, sent };

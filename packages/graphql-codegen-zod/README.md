@@ -111,9 +111,11 @@ Each is detailed in [Output](docs/guide/output.md).
 
 ## Traps
 
-- The client is stricter than `graphql` on two coercions: an `ID` variable
-  must be sent as a string (not an `Int`), and a list variable as a list (not
-  a single value). Send `{ id: "5", tags: ["a"] }`.
+- An `ID` is a string on the client: `graphql` also takes an `Int` for an
+  `ID`, the generated schema does not. Send `{ id: "5" }`.
+- A single value for a list of scalars or enums is taken, as `graphql` takes
+  it (`tags: "a"` parses to `["a"]`). For a list of input objects, send a
+  list.
 - Input types are `z.strictObject`: a field the schema does not declare is
   refused.
 - A schema that declares `@constraint` must come from SDL files; an
