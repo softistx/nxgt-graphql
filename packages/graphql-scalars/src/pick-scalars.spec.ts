@@ -31,6 +31,11 @@ describe('pickScalars', () => {
 		expect(() => pickScalars(unknown)).toThrow(
 			'pickScalars: no scalar is named "Datetime". The names are ',
 		);
+		for (const inherited of ['toString', 'constructor', '__proto__']) {
+			expect(() => pickScalars(inherited as 'DateTime')).toThrow(
+				`pickScalars: no scalar is named "${inherited}".`,
+			);
+		}
 	});
 
 	test('the compiler refuses an unknown name too', () => {

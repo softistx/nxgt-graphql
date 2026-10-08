@@ -291,6 +291,31 @@ is a `Date`, which is not a JSON value. graphql 17 hands over the wire string.
 **Fix:** send the whole value as one `JSON` variable (`echo(v: $v)`), or
 type `$d` as `String` or `JSON`.
 
+### `There can be only one type named "DateTime".`
+
+**When:** building the schema (`buildSchema`, `makeExecutableSchema`, Yoga's
+`createSchema`), once for each scalar.
+**Why:** the scalars are declared twice, usually `scalarTypeDefs` (or
+`pickScalars(...).typeDefs`) plus a `scalars.graphqls` copy that the server's
+type definitions scan picked up. A scalar with a `@specifiedBy` also fails
+with `The directive "@specifiedBy" can only be used once at this location.`
+**Fix:** keep one. Either drop `scalarTypeDefs` and let the scanned copy
+declare the scalars, or keep `scalarTypeDefs` and exclude the copy from the
+scan (it then serves the IDE only). See
+[The SDL as a file](guide/scalars.md#the-sdl-as-a-file).
+
+### `Unknown type "DateTime".` in the IDE
+
+**When:** the IDE's GraphQL plugin opens a `.graphql` file.
+**Why:** the plugin reads files, not `scalarTypeDefs`.
+**Fix:** list the shipped file in `graphql.config.yml`, or write a copy:
+
+```sh
+bunx nxgt-graphql-scalars typedefs --out schema/scalars.graphqls
+```
+
+If the server scans that folder, see the previous entry.
+
 ## Custom scalars
 
 ### `<Name> cannot serialize this value: its schema transforms with no way back, use z.codec`

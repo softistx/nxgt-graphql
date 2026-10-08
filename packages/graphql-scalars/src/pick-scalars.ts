@@ -20,7 +20,9 @@ export function pickScalars<const N extends readonly ScalarName[]>(
 	const known: Record<string, GraphQLScalarType | undefined> = scalarResolvers;
 	const resolvers: Record<string, GraphQLScalarType> = {};
 	for (const name of names) {
-		const scalar = known[name];
+		// Own keys only: `toString` or `constructor` from an untyped caller (the
+		// bin's argv) would otherwise read `Object.prototype`.
+		const scalar = Object.hasOwn(known, name) ? known[name] : undefined;
 		if (scalar === undefined) {
 			throw new TypeError(
 				`pickScalars: no scalar is named ${JSON.stringify(name)}. The names are ${Object.keys(known).join(', ')}.`,
