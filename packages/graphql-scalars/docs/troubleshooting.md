@@ -51,6 +51,9 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `Timestamp cannot represent this input: Expected an integer, not -0` | `-0`; send `0` |
 | `Timestamp cannot represent this input: Invalid input: expected number, received boolean` | a boolean, or anything that is not a number |
 | `Timestamp cannot represent this input: Too big: expected number to be <=8640000000000000` | past what a `Date` holds; below -8.64e15 it says `Too small: expected number to be >=-8640000000000000` |
+| `IBAN cannot represent this input: Invalid IBAN` | a wrong check digit, lower case, or the printed form in groups of four (`FR14 2004 …`); strip the spaces and upper-case on the client |
+| `IBAN cannot represent this input: Invalid IBAN: unknown country, or not its length` | the check digits hold, but the country is not in the SWIFT IBAN registry or the IBAN is not its length (a German IBAN is 22 characters) |
+| `Currency cannot represent this input: Invalid currency: expected an ISO 4217 code in force` | lower case (`eur`), not three letters, an unknown code, or a withdrawn one (`FRF`, `HRK`, `SLL`); send `EUR` |
 | `Latitude cannot represent this input: Too big: expected number to be <=90` | past 90 degrees; below -90 it says `Too small: expected number to be >=-90`. A swapped pair (a GeoJSON `[longitude, latitude]` read as latitude first) lands here |
 | `Longitude cannot represent this input: Too big: expected number to be <=180` | past 180 degrees; below -180 it says `Too small: expected number to be >=-180` |
 | `Latitude cannot represent this input: Invalid input: expected number, received string` | `"48.8566"` or `48°51'N` is a string; send the number in decimal degrees (same for `Longitude`) |

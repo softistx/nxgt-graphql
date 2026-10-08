@@ -1,6 +1,7 @@
 // One line per category. A category's own index.ts has one line per scalar.
 export * from './date-time';
 export * from './encoding';
+export * from './finance';
 export * from './geo';
 export * from './identifier';
 export * from './locale';

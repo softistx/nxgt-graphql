@@ -43,6 +43,7 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 | [date-time](scalars/date-time.md) | `DateTime`, `Timestamp`, `Date`, `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`, `TimeZone` |
 | [encoding](scalars/encoding.md) | `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`, `SHA512` |
 | [identifier](scalars/identifier.md) | `UUID`, `UUIDv4`, `UUIDv7`, `GUID`, `ULID`, `Cuid2`, `NanoID`, `KSUID`, `XID`, `ObjectID`, `ISBN`, `SemVer` |
+| [finance](scalars/finance.md) | `IBAN`, `Currency` |
 | [geo](scalars/geo.md) | `Latitude`, `Longitude` |
 | [locale](scalars/locale.md) | `CountryCode`, `Locale` |
 | [network](scalars/network.md) | `URL`, `EmailAddress`, `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`, `PhoneNumber` |

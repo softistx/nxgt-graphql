@@ -1,11 +1,11 @@
 # @nxgt/graphql-scalars
 
 Ready-made GraphQL scalars, by category (dates and times, encodings,
-identifiers, geo, locale, network, numbers, strings), whose every rule is a
-Zod schema, and `zodScalar` to turn any Zod schema of your own into one. An
-input is decoded into the value your resolver receives; a resolver's result is
-encoded and checked on the way out as strictly as on the way in. It works with
-`graphql` 16 and 17, code-first or schema-first.
+identifiers, finance, geo, locale, network, numbers, strings), whose every
+rule is a Zod schema, and `zodScalar` to turn any Zod schema of your own into
+one. An input is decoded into the value your resolver receives; a resolver's
+result is encoded and checked on the way out as strictly as on the way in. It
+works with `graphql` 16 and 17, code-first or schema-first.
 
 ## Install
 
@@ -42,6 +42,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 | [date-time](docs/guide/scalars/date-time.md) | 9: `DateTime`, `Timestamp`, `Date`, `Duration`, `TimeZone` and 4 more |
 | [encoding](docs/guide/scalars/encoding.md) | 6: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`, `SHA512` |
 | [identifier](docs/guide/scalars/identifier.md) | 12: `UUID`, `UUIDv7`, `ULID`, `ObjectID`, `ISBN`, `SemVer` and 6 more |
+| [finance](docs/guide/scalars/finance.md) | 2: `IBAN`, `Currency` |
 | [geo](docs/guide/scalars/geo.md) | 2: `Latitude`, `Longitude` |
 | [locale](docs/guide/scalars/locale.md) | 2: `CountryCode`, `Locale` |
 | [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `MAC` and 5 more |
