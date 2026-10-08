@@ -29,6 +29,11 @@ interface ZodScalarOptions {
   readonly description?: string;
   /** The `@specifiedBy(url:)` of the format the scalar follows. */
   readonly specifiedByURL?: string;
+  /**
+   * `'integer'` refuses a float literal (`1.0`), as `Int` does; `'any'` reads
+   * every literal, objects and lists included. Default `'leaf'`.
+   */
+  readonly literals?: 'leaf' | 'integer' | 'any';
 }
 
 function zodScalar<S extends z.ZodType, const N extends string>(
@@ -46,6 +51,7 @@ type ZodScalar<S extends z.ZodType = z.ZodType, N extends string = string> =
 | `name` | `string` (kept as a literal type) | required | the scalar's GraphQL name, and the prefix of every error |
 | `description` | `string` | none | shown in introspection |
 | `specifiedByURL` | `string` | none | the `@specifiedBy(url:)` of the scalar |
+| `literals` | `'leaf' \| 'integer' \| 'any'` | `'leaf'` | which query literals the scalar reads; see [Literals](#literals) |
 
 The type parameters are `z.output<S>` (what a resolver receives) and
 `z.input<S>` (what goes on the wire). `ZodScalar<S, N>` also keeps the name as
@@ -71,7 +77,9 @@ const scalars: { Slug: ZodScalar<z.ZodString, 'Slug'> } = { Slug };
 
 A schema that only validates (a regex, `z.email()`) passes the value through
 both ways unchanged. Some Zod formats also normalise: `z.url()` trims and
-drops tabs and line breaks, and that applies both ways.
+drops tabs and line breaks, and that applies both ways. The `URL` scalar
+refuses that white space first instead, so what a resolver receives is what
+the client sent.
 
 ## Codecs: when the value changes
 
@@ -144,10 +152,13 @@ read to a JavaScript value, then decoded like a variable:
 | `FloatValue` | `number` |
 | `BooleanValue` | `boolean` |
 
-Any other kind (`ListValue`, `ObjectValue`, `EnumValue`) is
-refused with `<Name> cannot represent a <Kind> literal`. A float literal for an
-integer schema reaches it as `1.5` and fails the schema's own check. graphql-js
-handles `null` and a variable itself, before the scalar sees them.
+Any other kind (`ListValue`, `ObjectValue`, `EnumValue`) is refused with `<Name>
+cannot represent a <Kind> literal`, unless the scalar holds JSON and is made
+with `literals: 'any'` (see below). A float literal for an integer schema
+reaches it as `1.5` and fails the schema's own check, but `1.0` reaches it as
+`1` and passes: pass `literals: 'integer'` to refuse every `FloatValue`, as
+GraphQL's `Int` does. graphql-js handles `null` and a variable itself, before
+the scalar sees them.
 
 ```ts
 import { parseValue } from 'graphql';
@@ -160,6 +171,34 @@ const Slug = zodScalar(z.string().regex(/^[a-z-]+$/), { name: 'Slug' });
 Slug.parseLiteral(parseValue('"a-b"'), undefined); // 'a-b'
 Slug.parseLiteral(parseValue('[1]'), undefined);
 // throws: Slug cannot represent a ListValue literal
+
+const Quantity = zodScalar(z.int32().positive(), {
+  name: 'Quantity',
+  literals: 'integer',
+});
+Quantity.parseLiteral(parseValue('3'), undefined); // 3
+Quantity.parseLiteral(parseValue('3.0'), undefined);
+// throws: Quantity cannot represent a FloatValue literal
+```
+
+For a scalar whose input is an object or a list, pass `literals: 'any'`: every
+literal is read, objects and lists included. An enum value arrives as its
+name, and a variable inside the literal as its value; a variable left out
+drops an object field and makes a list item `null`, the same on graphql 16
+and 17. The schema sees the literal twice: once to validate the query, with
+every variable left out, then with their values. The schema then checks the
+shape, as the package's `JSON` does ([Value scalars](scalars/value.md)).
+
+```ts
+import { parseValue } from 'graphql';
+import { z } from 'zod';
+import { zodScalar } from '@nxgt/graphql-scalars';
+
+const Settings = zodScalar(z.object({ theme: z.enum(['light', 'dark']) }), {
+  name: 'Settings',
+  literals: 'any',
+});
+Settings.parseLiteral(parseValue('{ theme: dark }'), undefined); // { theme: 'dark' }
 ```
 
 ## Errors
@@ -190,7 +229,20 @@ sent (`Variable "$n" got invalid value …`); graphql 17 does not
 - graphql 17 calls `coerceOutputValue`, `coerceInputValue` and
   `coerceInputLiteral`, and deprecates the first three.
 
-Nothing to configure. `valueToLiteral` (graphql 17) is not provided; see the [roadmap](../roadmap.md).
+Nothing to configure. `valueToLiteral` (graphql 17) is not provided; see the
+[roadmap](../roadmap.md).
+
+A scalar made with `literals: 'any'` meets two graphql 16 limits no scalar
+can fix:
+
+- A variable of another custom scalar inside its literal arrives as that
+  scalar's resolver value (a `Date` for a `DateTime`); graphql 17 passes the
+  wire value.
+- An object or list default for one of its arguments makes `printSchema`
+  throw `Cannot convert value to AST`, and an introspection query fail.
+
+See [Value scalars](scalars/value.md) and
+[troubleshooting](../troubleshooting.md#cannot-convert-value-to-ast--a-1-).
 
 ## A realistic case
 
