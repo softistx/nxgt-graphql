@@ -41,10 +41,21 @@ export async function plugin(
 	};
 	// Written twice: the first pass names what the file declares, so the
 	// second gives no import one of those names.
-	const declared = (await write(new Imports())).flatMap((block) =>
-		[...block.matchAll(/^export (?:const|type) (\w+)/gm)].map(
-			(m) => m[1] ?? '',
+	const declarations = (await write(new Imports())).flatMap((block) =>
+		[...block.matchAll(/^export (const|type) (\w+)/gm)].map(
+			(m) => `${m[1]} ${m[2]}`,
 		),
+	);
+	// A value and a type may share a name; two of one kind may not.
+	const twice = declarations.find(
+		(declaration, index) => declarations.indexOf(declaration) !== index,
+	);
+	if (twice)
+		throw new Error(
+			`@nxgt/graphql-codegen-zod: the file would declare ${twice.split(' ')[1]} twice: two GraphQL names, or an input type in a cycle and its Input type, give the same name. Rename one of the GraphQL types, or set typesSuffix.`,
+		);
+	const declared = declarations.map(
+		(declaration) => declaration.split(' ')[1] ?? '',
 	);
 	const imports = new Imports(declared);
 	const blocks = await write(imports);

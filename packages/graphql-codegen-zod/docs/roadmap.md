@@ -15,8 +15,6 @@ Candidates, not commitments.
 
 - **Emit only some parts**, an option to write just the arguments, or just
   the variables, of a file.
-- **A single input object for a list of them**, taken as `graphql` takes
-  it, if TypeScript can infer it behind a recursive getter.
 - **Your own formats**, once `@nxgt/graphql-validation` supports custom
   `@constraint(format: "...")` values; the plugin will carry them.
 

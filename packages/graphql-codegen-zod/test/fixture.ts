@@ -40,11 +40,25 @@ input SignUpInput {
 	address: Address
 	birth: DateTime
 	prefs: Prefs = { tags: "x", grid: 1 }
+	contacts: [Contact!] @constraint(maxItems: 2)
 }
 
 input Contact @oneOf {
 	email: String @constraint(format: "email")
 	phone: String @constraint(minLength: 6)
+}
+
+"""A group, whose members are people or groups: a cycle through a @oneOf."""
+input Group {
+	name: String! @constraint(minLength: 2)
+	members: [Member!] @constraint(maxItems: 5)
+	role: Role = USER
+	since: DateTime
+}
+
+input Member @oneOf {
+	person: String @constraint(minLength: 2)
+	group: Group
 }
 
 type User { id: ID!, name: String! }
@@ -55,6 +69,8 @@ type Query {
 	user("At least three characters." id: ID! @constraint(minLength: 3)): User
 	users(filter: Filter, first: Int = 10 @constraint(min: 1, max: 50)): [User!]!
 	reach(contact: Contact!): Boolean
+	groups(where: Group): Boolean
+	log(at: [DateTime]!, groups: [Group]!, nested: [[Group]!]): Boolean
 }
 
 type Mutation {
@@ -78,6 +94,10 @@ export const documents = [
 			mutation Rate($score: Float!, $id: ID!) { rate(score: $score, ids: [$id]) }
 			query Reach($c: Contact!) { reach(contact: $c) }
 			query ReachEmail($e: String!) { reach(contact: { email: $e }) }
+			query Groups($where: Group) { groups(where: $where) }
+			query Log($at: [DateTime]!, $groups: [Group]!, $nested: [[Group]!]) {
+				log(at: $at, groups: $groups, nested: $nested)
+			}
 		`),
 	},
 	// No name, so no schema: it is skipped, not an error.

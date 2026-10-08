@@ -245,10 +245,20 @@ introspected ones as their literal, a graphql 17 code-first one through
 
 ## Recursion
 
-An input type that refers to itself, or to a type declared later, is written
-with a Zod 4 getter, so the order of declaration does not matter.
+An input type that refers to a type declared later is written with a Zod 4
+getter, so the order of declaration does not matter. Only a member that
+names an input type is a getter; the rest are plain properties.
+
+An input type in a cycle, one that reaches itself through its fields
+(`Filter.and: [Filter]`, or `Group` → `Member` → `Group`), cannot have its
+type inferred once a field takes a single value for a list. Its types are
+written out instead: `Filter`, what the resolver receives, and `FilterInput`,
+what a client sends, and the schema is typed by both. The file's typecheck
+proves the schema's types fit inside them; the package's type specs pin
+them field by field.
 
 ```graphql
+"""A filter that nests."""
 input Filter {
   and: [Filter!] @constraint(maxItems: 3)
   name: String @constraint(startsWith: "n")
@@ -256,17 +266,28 @@ input Filter {
 ```
 
 ```ts
-export const zFilter = z.strictObject({
+/** A filter that nests. */
+export type Filter = {
+	and?: Array<Filter> | null | undefined;
+	name?: string | null | undefined;
+};
+/** A filter that nests. */
+export type FilterInput = {
+	and?: FilterInput | Array<FilterInput> | null | undefined;
+	name?: string | null | undefined;
+};
+/** A filter that nests. */
+export const zFilter: z.ZodType<Filter, FilterInput> = z.strictObject({
 	get and() {
-		return z.array(zFilter).max(3).nullish();
+		return z.union([z.array(zFilter).max(3), z.custom<z.input<typeof zFilter>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zFilter).max(3))]).nullish();
 	},
 	name: z.string().startsWith("n").nullish(),
 });
-export type Filter = z.output<typeof zFilter>;
 ```
 
-Only a member that names an input type is a getter; the rest are plain
-properties.
+**Trap:** typed `z.ZodType`, a schema in a cycle has no `.shape`,
+`.extend` or `.pick`. Use the types, or rebuild the object you need. A type
+outside a cycle keeps its `ZodObject`.
 
 ## @oneOf
 
@@ -331,9 +352,9 @@ export type UsersQueryVariables = z.input<typeof zUsersQueryVariables>;
 - The variable of a directive's argument (`@include(if: $x)`) carries no
   constraint.
 
-**Coercions.** A list of scalars or enums also takes a single value, as
-`graphql` does: the value is wrapped, then checked as the list. From
-`Prefs.tags`:
+**Coercions.** A list also takes a single value, as `graphql` does, whatever
+its items and at any depth (`"a"` for `[[String]]` is `[["a"]]`): the value
+is wrapped, then checked as the list. From `Prefs.tags`:
 
 ```ts
 tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).nullish(),
@@ -345,23 +366,22 @@ receives. A rule refuses a single value as the server does, at the same path:
 `tags: "toolongtag"` fails at `["input", "tags", 0]` with the server's
 message.
 
-A custom scalar's schema may decode (`DateTime`, a string to a `Date`). The
-single value then reaches the list's schema as it was sent, and is decoded
-once:
+A custom scalar's schema may decode (`DateTime`, a string to a `Date`), and
+an input object's holds such scalars. For both, the single value reaches the
+list's schema as it was sent, and is parsed once:
 
 ```ts
 dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
 ```
 
-Three exceptions, all refused:
+```ts
+get contacts() {
+	return z.union([z.array(zContact).max(2), z.custom<z.input<typeof zContact>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zContact).max(2))]).nullish();
+},
+```
 
-- an `Int` for an `ID`: `graphql` takes it, the schema is `z.string()`. Send
-  ids as strings;
-- a single input object for a list of input objects: behind the recursive
-  getters an input object needs, TypeScript could not infer the type. Send a
-  list of one;
-- a single value for a list of lists of custom scalars (`[[DateTime]]`): the
-  inner list would decode it before the outer one. Send the nested list.
+One exception, refused: an `Int` for an `ID`. `graphql` takes it, the schema
+is `z.string()`. Send ids as strings.
 
 ## Scalars
 

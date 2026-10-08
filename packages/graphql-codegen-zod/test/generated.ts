@@ -14,21 +14,29 @@ export const zAddress = z.strictObject({
 export type Address = z.output<typeof zAddress>;
 
 /** A filter that nests. */
-export const zFilter = z.strictObject({
+export type Filter = {
+	and?: Array<Filter> | null | undefined;
+	name?: string | null | undefined;
+};
+/** A filter that nests. */
+export type FilterInput = {
+	and?: FilterInput | Array<FilterInput> | null | undefined;
+	name?: string | null | undefined;
+};
+/** A filter that nests. */
+export const zFilter: z.ZodType<Filter, FilterInput> = z.strictObject({
 	get and() {
-		return z.array(zFilter).max(3).nullish();
+		return z.union([z.array(zFilter).max(3), z.custom<z.input<typeof zFilter>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zFilter).max(3))]).nullish();
 	},
 	name: z.string().startsWith("n").nullish(),
 });
-/** A filter that nests. */
-export type Filter = z.output<typeof zFilter>;
 
 export const zPrefs = z.strictObject({
 	tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).nullish(),
-	grid: z.union([z.array(z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).nullish()), z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).nullish()))]).nullish(),
+	grid: z.union([z.array(z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).nullish()))]).nullish(),
 	owner: z.string().prefault("7").nullable(),
 	ids: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).prefault(["1"]).nullable(),
-	dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
+	dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
 });
 export type Prefs = z.output<typeof zPrefs>;
 
@@ -45,6 +53,9 @@ export const zSignUpInput = z.strictObject({
 	get prefs() {
 		return zPrefs.prefault({"tags":["x"],"grid":[[1]]}).nullable();
 	},
+	get contacts() {
+		return z.union([z.array(zContact).max(2), z.custom<z.input<typeof zContact>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zContact).max(2))]).nullish();
+	},
 });
 export type SignUpInput = z.output<typeof zSignUpInput>;
 
@@ -57,6 +68,43 @@ export const zContact = z.union([
 	}),
 ]);
 export type Contact = z.output<typeof zContact>;
+
+/** A group, whose members are people or groups: a cycle through a @oneOf. */
+export type Group = {
+	name: string;
+	members?: Array<Member> | null | undefined;
+	role: z.output<typeof zRole> | null;
+	since?: z.output<typeof scalarSchemas.DateTime> | null | undefined;
+};
+/** A group, whose members are people or groups: a cycle through a @oneOf. */
+export type GroupInput = {
+	name: string;
+	members?: MemberInput | Array<MemberInput> | null | undefined;
+	role?: z.output<typeof zRole> | null | undefined;
+	since?: z.input<typeof scalarSchemas.DateTime> | null | undefined;
+};
+/** A group, whose members are people or groups: a cycle through a @oneOf. */
+export const zGroup: z.ZodType<Group, GroupInput> = z.strictObject({
+	name: z.string().min(2),
+	get members() {
+		return z.union([z.array(zMember).max(5), z.custom<z.input<typeof zMember>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zMember).max(5))]).nullish();
+	},
+	role: zRole.prefault("USER").nullable(),
+	since: scalarSchemas.DateTime.nullish(),
+});
+
+export type Member = { person: string } | { group: Group };
+export type MemberInput = { person: string } | { group: GroupInput };
+export const zMember: z.ZodType<Member, MemberInput> = z.union([
+	z.strictObject({
+		person: z.string().min(2),
+	}),
+	z.strictObject({
+		get group() {
+			return zGroup;
+		},
+	}),
+]);
 
 export const zQueryUserArgs = z.object({
 	/** At least three characters. */
@@ -78,6 +126,24 @@ export const zQueryReachArgs = z.object({
 	},
 });
 export type QueryReachArgs = z.output<typeof zQueryReachArgs>;
+
+export const zQueryGroupsArgs = z.object({
+	get where() {
+		return zGroup.nullish();
+	},
+});
+export type QueryGroupsArgs = z.output<typeof zQueryGroupsArgs>;
+
+export const zQueryLogArgs = z.object({
+	at: z.union([z.array(scalarSchemas.DateTime.nullish()), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime.nullish()))]),
+	get groups() {
+		return z.union([z.array(zGroup.nullish()), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zGroup.nullish()))]);
+	},
+	get nested() {
+		return z.union([z.array(z.union([z.array(zGroup.nullish()), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zGroup.nullish()))])), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(zGroup.nullish()), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zGroup.nullish()))])))]).nullish();
+	},
+});
+export type QueryLogArgs = z.output<typeof zQueryLogArgs>;
 
 export const zMutationSignUpArgs = z.object({
 	get input() {
@@ -127,3 +193,21 @@ export const zReachEmailQueryVariables = z.object({
 	e: z.email(),
 });
 export type ReachEmailQueryVariables = z.input<typeof zReachEmailQueryVariables>;
+
+export const zGroupsQueryVariables = z.object({
+	get where() {
+		return zGroup.nullish();
+	},
+});
+export type GroupsQueryVariables = z.input<typeof zGroupsQueryVariables>;
+
+export const zLogQueryVariables = z.object({
+	at: z.union([z.array(scalarSchemas.DateTime.nullish()), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime.nullish()))]),
+	get groups() {
+		return z.union([z.array(zGroup.nullish()), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zGroup.nullish()))]);
+	},
+	get nested() {
+		return z.union([z.array(z.union([z.array(zGroup.nullish()), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zGroup.nullish()))])), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(z.union([z.array(zGroup.nullish()), z.custom<z.input<typeof zGroup>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zGroup.nullish()))])))]).nullish();
+	},
+});
+export type LogQueryVariables = z.input<typeof zLogQueryVariables>;

@@ -113,9 +113,12 @@ Each is detailed in [Output](docs/guide/output.md).
 
 - An `ID` is a string on the client: `graphql` also takes an `Int` for an
   `ID`, the generated schema does not. Send `{ id: "5" }`.
-- A single value for a list of scalars or enums is taken, as `graphql` takes
-  it (`tags: "a"` parses to `["a"]`). For a list of input objects, send a
-  list.
+- A single value for a list is taken, as `graphql` takes it, for every item
+  type and at any depth: `tags: "a"` parses to `["a"]`, `contacts: { phone }`
+  to `[{ phone }]`.
+- An input type in a cycle (`Filter.and: [Filter]`) has its types written
+  out, `Filter` and `FilterInput`, and its schema is typed
+  `z.ZodType<Filter, FilterInput>`: it has no `.shape` or `.extend`.
 - Input types are `z.strictObject`: a field the schema does not declare is
   refused.
 - A schema that declares `@constraint` must come from SDL files; an
@@ -127,6 +130,8 @@ Each is detailed in [Output](docs/guide/output.md).
   becoming an unchecked `z.unknown()`.
 - Generate into a file of its own: the type names collide with the typescript
   plugins'.
+- An input type in a cycle also declares `<Type>Input`: a GraphQL type of
+  that name fails generation. Rename it, or set `typesSuffix`.
 
 Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 

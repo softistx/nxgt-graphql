@@ -1,5 +1,11 @@
 // What the generated types say, checked by the package's typecheck.
 import type {
+	Group,
+	GroupInput,
+	GroupsQueryVariables,
+	LogQueryVariables,
+	Member,
+	MemberInput,
 	MutationSignUpArgs,
 	QueryUsersArgs,
 	Role,
@@ -33,4 +39,50 @@ holds<
 >();
 holds<Equal<SignUpInput['tags'], string[] | null>>();
 
-export { none, sent };
+// A type in a cycle is written out: one member or a list of them in, a list
+// out, at any depth.
+const group: GroupsQueryVariables = {
+	where: {
+		name: 'Ops',
+		members: { group: { name: 'Sub', members: { person: 'Al' } } },
+	},
+};
+holds<Equal<NonNullable<GroupsQueryVariables['where']>, GroupInput>>();
+// Written out, so pinned field by field: the schema only has to fit inside.
+holds<
+	Equal<
+		Group,
+		{
+			name: string;
+			members?: Member[] | null | undefined;
+			role: Role | null;
+			since?: Date | null | undefined;
+		}
+	>
+>();
+holds<
+	Equal<
+		GroupInput,
+		{
+			name: string;
+			members?: MemberInput | MemberInput[] | null | undefined;
+			role?: Role | null | undefined;
+			since?: string | null | undefined;
+		}
+	>
+>();
+holds<Equal<MemberInput, { person: string } | { group: GroupInput }>>();
+holds<
+	Equal<
+		NonNullable<LogQueryVariables['nested']>,
+		GroupInput | (GroupInput | (GroupInput | null | undefined)[])[]
+	>
+>();
+holds<
+	Equal<
+		NonNullable<Group['members']>[number],
+		{ person: string } | { group: Group }
+	>
+>();
+
+export { group, none, sent };

@@ -160,7 +160,7 @@ describe('inputCode', () => {
 });
 
 describe('inputCode, its list option', () => {
-	test('hands each list its array, with every rule, and one bare item', () => {
+	test('hands each list its array, with every rule, and its named type, bare', () => {
 		const seen: string[] = [];
 		const code = inputCode(
 			field('Probe', 'grid').type,
@@ -174,12 +174,11 @@ describe('inputCode, its list option', () => {
 				},
 			},
 		);
-		// The inner list twice: in the outer array with its rules, and bare
-		// as the outer list's single item.
+		// Each list's single value is its named type, bare: `"a"` for
+		// `[[String]]` is `[["a"]]`.
 		expect(seen).toEqual([
 			'z.array(z.string().min(2)) | z.string()',
-			'z.array(z.string()) | z.string()',
-			'z.array(L(z.array(z.string().min(2))).nullish()).min(1) | L(z.array(z.string()))',
+			'z.array(L(z.array(z.string().min(2))).nullish()).min(1) | z.string()',
 		]);
 		expect(code).toBe(
 			'L(z.array(L(z.array(z.string().min(2))).nullish()).min(1)).nullish()',
