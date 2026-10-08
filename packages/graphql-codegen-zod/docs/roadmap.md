@@ -4,10 +4,7 @@ What `@nxgt/graphql-codegen-zod` is heading for, phrased as what you get.
 
 ## Now
 
-- **The first release, 0.1.0.** Zod 4 schemas and types for enums, input
-  types, field arguments and operation variables, carrying every
-  `@constraint` of `@nxgt/graphql-validation`, so the client refuses what the
-  server refuses.
+Nothing in progress.
 
 ## Next
 
@@ -32,4 +29,7 @@ Nothing yet.
 
 ## Shipped
 
-Nothing yet.
+- **The first release, 0.1.0.** Zod 4 schemas and types for enums, input
+  types, field arguments and operation variables, carrying every
+  `@constraint` of `@nxgt/graphql-validation`, so the client refuses what the
+  server refuses.
