@@ -12,6 +12,24 @@
         "typescript": "~6.0.3",
       },
     },
+    "packages/graphql-codegen-zod": {
+      "name": "@nxgt/graphql-codegen-zod",
+      "version": "0.0.0",
+      "dependencies": {
+        "@nxgt/graphql-validation": "workspace:^",
+        "change-case": "^5.4.4",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "graphql": "16.11.0",
+        "zod": "4.6.5",
+      },
+      "peerDependencies": {
+        "graphql": "^16.11.0 || ^17.0.0",
+        "typescript": "^6.0.3",
+        "zod": ">=4.6.5 <5",
+      },
+    },
     "packages/graphql-scalars": {
       "name": "@nxgt/graphql-scalars",
       "version": "0.3.2",
@@ -29,6 +47,9 @@
     "packages/graphql-validation": {
       "name": "@nxgt/graphql-validation",
       "version": "0.1.0",
+      "bin": {
+        "nxgt-graphql-validation": "./dist/cli.js",
+      },
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "graphql": "16.11.0",
@@ -107,6 +128,8 @@
 
     "@manypkg/tools": ["@manypkg/tools@2.1.2", "", { "dependencies": { "jju": "^1.4.0", "tinyglobby": "^0.2.13", "yaml": "^2.9.0" } }, "sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ=="],
 
+    "@nxgt/graphql-codegen-zod": ["@nxgt/graphql-codegen-zod@workspace:packages/graphql-codegen-zod"],
+
     "@nxgt/graphql-scalars": ["@nxgt/graphql-scalars@workspace:packages/graphql-scalars"],
 
     "@nxgt/graphql-validation": ["@nxgt/graphql-validation@workspace:packages/graphql-validation"],
@@ -120,6 +143,8 @@
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
     "cac": ["cac@7.0.0", "", {}, "sha512-tixWYgm5ZoOD+3g6UTea91eow5z6AAHaho3g0V9CNSNb45gM8SmflpAc+GRd1InC4AqN/07Unrgp56Y94N9hJQ=="],
+
+    "change-case": ["change-case@5.4.4", "", {}, "sha512-HRQyTk2/YPEkt9TnUPbOpr64Uw3KOicFWPVBb+xiHvd6eBx/qPr9xqfBFDT8P2vWsvvz4jbEkfDe71W3VyNu2w=="],
 
     "dataloader": ["dataloader@2.2.3", "", {}, "sha512-y2krtASINtPFS1rSDjacrFgn1dcUuoREVabwlOGOe4SdxenREqwjwjElAdwvbGM7kgZz9a3KVicWR7vcz8rnzA=="],
 

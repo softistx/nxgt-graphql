@@ -1,0 +1,62 @@
+{
+	"name": "@nxgt/graphql-codegen-zod",
+	"version": "0.0.0",
+	"description": "A graphql-codegen plugin that writes Zod schemas from your SDL — inputs, enums, field arguments and operation variables — with the @constraint rules of @nxgt/graphql-validation",
+	"license": "MIT",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"docs",
+		"README.md",
+		"package.json",
+		"LICENSE"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"keywords": [
+		"graphql",
+		"codegen",
+		"graphql-codegen",
+		"zod",
+		"validation",
+		"constraint",
+		"typescript"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/softistx/nxgt-graphql.git",
+		"directory": "packages/graphql-codegen-zod"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "bun run ../../build.ts",
+		"test": "bun test src",
+		"typecheck": "tsc --noEmit",
+		"generated:write": "bun run test/write-generated.ts"
+	},
+	"dependencies": {
+		"@nxgt/graphql-validation": "workspace:^",
+		"change-case": "^5.4.4"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.0",
+		"graphql": "16.11.0",
+		"zod": "4.6.5"
+	},
+	"peerDependencies": {
+		"graphql": "^16.11.0 || ^17.0.0",
+		"typescript": "^6.0.3",
+		"zod": ">=4.6.5 <5"
+	}
+}
