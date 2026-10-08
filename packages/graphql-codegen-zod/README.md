@@ -29,18 +29,37 @@ run `withValidation` on a server.
 
 ## Setup
 
-Declare `@constraint` in the schema codegen reads, with `constraintTypeDefs`
-or the `.graphqls` file that package ships. Without the directive nothing is
-constrained; plain types are still generated.
+Write the SDL files codegen reads: `@constraint` from
+`@nxgt/graphql-validation` and the custom scalars from `@nxgt/graphql-scalars`.
+Install both, so their bins are yours, whatever the package manager links:
+`bun add @nxgt/graphql-validation @nxgt/graphql-scalars` (the generated file
+imports `@nxgt/graphql-scalars` at run time anyway). Without the directive
+nothing is constrained; plain types are still generated.
 
-Then add the plugin, writing to **its own file**:
+```sh
+bunx nxgt-graphql-validation typedefs --out   # generated/graphql/constraint.graphqls
+bunx nxgt-graphql-scalars typedefs --out      # generated/graphql/scalars.graphqls
+```
+
+Both bins are described in the
+[validation](https://www.npmjs.com/package/@nxgt/graphql-validation#ide-support)
+and [scalars](https://www.npmjs.com/package/@nxgt/graphql-scalars#the-sdl-as-a-file)
+READMEs. `typedefs DateTime Long --out` keeps only the scalars you use. Or skip the CLI and list
+`node_modules/@nxgt/graphql-validation/graphql/constraint.graphqls` and
+`node_modules/@nxgt/graphql-scalars/graphql/scalars.graphqls` in `schema`.
+
+Then add the plugin, writing to **its own file**, with those files in `schema`:
 
 ```ts
 // codegen.ts
 import type { CodegenConfig } from '@graphql-codegen/cli';
 
 const config: CodegenConfig = {
-	schema: 'src/schema/**/*.graphql',
+	schema: [
+		'generated/graphql/constraint.graphqls',
+		'generated/graphql/scalars.graphqls',
+		'src/schema/**/*.graphql',
+	],
 	documents: 'src/operations/**/*.graphql',
 	generates: {
 		'src/generated/zod.ts': {
@@ -59,6 +78,16 @@ plugin's.
 
 `scalarSchemas` supplies a Zod schema for each custom scalar of the schema;
 see [Scalars](docs/guide/output.md#scalars).
+
+Run codegen, once or on every change:
+
+```sh
+bunx graphql-codegen --config codegen.ts
+bunx graphql-codegen --config codegen.ts --watch
+```
+
+or add `"codegen": "graphql-codegen"` to the `scripts` of `package.json` and
+run `bun run codegen`.
 
 ## Usage
 
