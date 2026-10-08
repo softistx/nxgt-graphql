@@ -111,6 +111,47 @@ export const schema = makeExecutableSchema({
 
 GraphQL Yoga's `createSchema` takes the same `typeDefs` and `resolvers`.
 
+### The SDL as a file
+
+An IDE's GraphQL plugin (JetBrains GraphQL, VS Code GraphQL) and a server that
+scans `*.graphql(s)` files read files, not `scalarTypeDefs`. The package ships
+the SDL of every scalar as one, and a bin that writes it:
+
+```yaml
+# graphql.config.yml
+schema:
+  - src/**/*.graphql
+  - node_modules/@nxgt/graphql-scalars/graphql/scalars.graphqls
+```
+
+```sh
+bunx nxgt-graphql-scalars typedefs                        # print every scalar
+bunx nxgt-graphql-scalars typedefs DateTime URL           # only these
+bunx nxgt-graphql-scalars typedefs --out                  # generated/graphql/scalars.graphqls
+bunx nxgt-graphql-scalars typedefs DateTime --out schema/scalars.graphqls
+# or: npx nxgt-graphql-scalars typedefs ... (installed locally; else
+#     npx -p @nxgt/graphql-scalars nxgt-graphql-scalars typedefs)
+```
+
+`--out` with no file writes `generated/graphql/scalars.graphqls`, relative to
+the current directory; the folder is created. With names, the SDL is
+`pickScalars(...names).typeDefs`, and an unknown name exits 2 with its error,
+which lists the names. The exit code is 0 when done, 1 when the file cannot be
+written (`typedefs failed: <message>` on stderr) and 2 on a usage error.
+Regenerate the copy after upgrading the package.
+
+The schema must declare each scalar once. Pick one source for the server:
+
+- **The generated file is part of your schema.** If the server scans
+  `*.graphql(s)` files and the copy sits among them, it already declares the
+  scalars: drop the `scalarTypeDefs` import (keep `scalarResolvers`).
+- **`scalarTypeDefs` declares them.** Then the copy is for the IDE only: keep
+  it out of the folders the server scans, or exclude it from the glob.
+
+Both at once declare every scalar twice: `buildSchema` throws
+`There can be only one type named "DateTime".` (see
+[Troubleshooting](docs/troubleshooting.md)).
+
 ### Some of the scalars
 
 `pickScalars(...names)` returns the `typeDefs` and `resolvers` of the named

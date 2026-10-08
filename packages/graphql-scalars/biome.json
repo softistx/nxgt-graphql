@@ -1,1 +1,5 @@
-{ "root": false, "extends": "//" }
+{
+	"root": false,
+	"extends": "//",
+	"files": { "includes": ["**", "!graphql/scalars.graphqls"] }
+}

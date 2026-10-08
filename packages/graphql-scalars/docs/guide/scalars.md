@@ -87,6 +87,57 @@ for `DateTime`, the WHATWG URL standard for `URL`, RFC 4291 for `IPv6`); the
 category pages name the exports and rules of each, and the SDL of
 `scalarTypeDefs` shows which have one.
 
+## The SDL as a file
+
+`scalarTypeDefs` is a string, so an IDE's GraphQL plugin, which reads `.graphql`
+files, reports `Unknown type "DateTime"`, and so does a server that scans
+files. The package ships the SDL of every scalar as
+`node_modules/@nxgt/graphql-scalars/graphql/scalars.graphqls`, exactly what
+`nxgt-graphql-scalars typedefs` prints, and a spec fails when it drifts from
+`scalarTypeDefs`. List it in `graphql.config.yml`:
+
+```yaml
+schema:
+  - src/**/*.graphql
+  - node_modules/@nxgt/graphql-scalars/graphql/scalars.graphqls
+```
+
+If your IDE does not index `node_modules`, or you want the file committed with
+your schema, write it into the project (Node or Bun):
+
+```sh
+bunx nxgt-graphql-scalars typedefs --out schema/scalars.graphqls
+bunx nxgt-graphql-scalars typedefs --out                     # generated/graphql/scalars.graphqls
+bunx nxgt-graphql-scalars typedefs DateTime URL --out        # only those two
+```
+
+| Command line | Does |
+| --- | --- |
+| `typedefs` | prints every scalar |
+| `typedefs <Name>...` | prints those only, as `pickScalars(...names).typeDefs` does; an unknown name exits 2 with `pickScalars: no scalar is named "<name>". The names are …` |
+| `--out [<file>]` | writes instead of printing, creating the folder; with no file, `generated/graphql/scalars.graphqls` relative to the current directory. The names come before it: `--out DateTime` is refused |
+| `--help`, `-h` | shows the usage, anywhere on the line |
+
+It exits 0 when done, 1 when the file cannot be written (`typedefs failed:
+<message>` on stderr), and 2 on a usage error (`Unknown command "<x>".`,
+`Unexpected arguments: …`, an unknown scalar, or no command). Regenerate the
+file after upgrading the package. A formatter (Biome, Prettier) run over the
+copy wraps its long `@specifiedBy` lines: still the same SDL, but no longer
+byte for byte what `typedefs` prints, so leave the copy out of it.
+
+Each scalar must be declared once. Pick one source for the server:
+
+- **The generated copy replaces the import.** A server that loads its type
+  definitions by scanning `*.graphql(s)` files, with the copy among them,
+  already declares the scalars: do not add `scalarTypeDefs` (keep
+  `scalarResolvers`; the resolvers bind by name).
+- **The import stays.** `scalarTypeDefs` declares them, and the copy serves the
+  IDE only: keep it out of the folders the server scans, or exclude it from
+  the glob.
+
+Using both declares every scalar twice, and the schema fails to build with
+`There can be only one type named "DateTime".`
+
 ## Schema-first with a server
 
 Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both
