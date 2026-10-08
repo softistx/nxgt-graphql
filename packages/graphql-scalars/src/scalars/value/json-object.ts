@@ -9,7 +9,7 @@ import { zodScalar } from '../../zod-scalar';
  */
 export const jsonObjectSchema = z
 	.unknown()
-	.refine(isJsonObject, { error: 'Expected a JSON object' });
+	.refine(isJsonObject, { error: 'Invalid JSON object' });
 
 export const JSONObjectScalar = zodScalar(jsonObjectSchema, {
 	name: 'JSONObject',

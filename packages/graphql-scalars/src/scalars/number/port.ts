@@ -7,6 +7,6 @@ export const portSchema = noNegativeZero(z.int().min(0).max(65535));
 
 export const PortScalar = zodScalar(portSchema, {
 	name: 'Port',
-	literals: 'integer',
 	description: 'A TCP or UDP port number, from 0 to 65535.',
+	literals: 'integer',
 });

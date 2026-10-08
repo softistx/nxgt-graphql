@@ -11,5 +11,5 @@ export const dateSchema = z.iso.date();
 export const DateScalar = zodScalar(dateSchema, {
 	name: 'Date',
 	description: 'A calendar date, YYYY-MM-DD, with no time and no time zone.',
-	specifiedByURL: 'https://www.rfc-editor.org/rfc/rfc3339',
+	specifiedByURL: 'https://www.rfc-editor.org/rfc/rfc3339#section-5.6',
 });

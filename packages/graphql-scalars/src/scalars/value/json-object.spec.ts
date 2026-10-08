@@ -16,6 +16,7 @@ describe('JSONObject', () => {
 			new Map(),
 			{ a: undefined },
 			{ a: Number.NaN },
+			{ a: -0 },
 			undefined,
 		],
 	});

@@ -12,33 +12,26 @@ export function isCanonicalBase64(value: string): boolean {
 	}
 }
 
-/** The same for base64url, which has no padding and uses `-` and `_`. */
-export function isCanonicalBase64Url(value: string): boolean {
-	const standard = value.replaceAll('-', '+').replaceAll('_', '/');
-	const padded = standard.padEnd(Math.ceil(standard.length / 4) * 4, '=');
+/**
+ * The binary string a base64url value holds (each character one byte), or
+ * `undefined` when it is not base64url in its one spelling: no padding, and
+ * encoding the bytes again gives the value back (`YR` for `YQ` is refused).
+ */
+export function decodeBase64Url(value: string): string | undefined {
+	if (!/^[A-Za-z0-9_-]*$/.test(value)) return undefined;
 	try {
-		const back = btoa(atob(padded))
+		const bytes = atob(value.replaceAll('-', '+').replaceAll('_', '/'));
+		const back = btoa(bytes)
 			.replaceAll('+', '-')
 			.replaceAll('/', '_')
 			.replace(/=+$/, '');
-		return back === value;
+		return back === value ? bytes : undefined;
 	} catch {
-		return false;
+		return undefined;
 	}
 }
 
-/**
- * The binary string a base64url value holds (each character one byte), or
- * `undefined` when it is not base64url. Padding is not taken.
- */
-export function decodeBase64Url(value: string): string | undefined {
-	if (!/^[A-Za-z0-9_-]*$/.test(value) || value.length % 4 === 1) {
-		return undefined;
-	}
-	const standard = value.replaceAll('-', '+').replaceAll('_', '/');
-	try {
-		return atob(standard.padEnd(Math.ceil(standard.length / 4) * 4, '='));
-	} catch {
-		return undefined;
-	}
+/** Whether `value` is base64url in its one spelling: see {@link decodeBase64Url}. */
+export function isCanonicalBase64Url(value: string): boolean {
+	return decodeBase64Url(value) !== undefined;
 }

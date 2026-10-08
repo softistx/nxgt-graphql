@@ -1,6 +1,6 @@
 // The guards that let this folder grow to a hundred scalars: each file is
-// one scalar, named after it, specced beside it, registered through its
-// category's index.ts, and documented. Adding a scalar and forgetting any
+// one scalar, named after it, specced beside it (an integer one through
+// integerCases), registered through its category's index.ts, and documented. Adding a scalar and forgetting any
 // of those fails here, not in a consumer.
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
@@ -73,6 +73,13 @@ describe('every scalar file', () => {
 		test(`${file} has a spec beside it`, async () => {
 			const spec = join(HERE, file.replace(/\.ts$/, '.spec.ts'));
 			expect(await Bun.file(spec).exists()).toBe(true);
+		});
+
+		test(`${file}, if an integer scalar, runs integerCases`, async () => {
+			const source = await Bun.file(join(HERE, file)).text();
+			if (!source.includes("literals: 'integer'")) return;
+			const spec = join(HERE, file.replace(/\.ts$/, '.spec.ts'));
+			expect(await Bun.file(spec).text()).toContain('integerCases(');
 		});
 	}
 

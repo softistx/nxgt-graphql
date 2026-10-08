@@ -11,7 +11,7 @@ describe('IP', () => {
 	test('its refusal says what it takes, for any input', () => {
 		for (const value of ['x', 1, null]) {
 			expect(() => IPScalar.parseValue(value)).toThrow(
-				'IP cannot represent this input: Expected an IPv4 or IPv6 address',
+				'IP cannot represent this input: Invalid IP address: expected IPv4 or IPv6',
 			);
 		}
 	});

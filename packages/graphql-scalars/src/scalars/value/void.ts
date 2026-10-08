@@ -6,7 +6,7 @@ import { zodScalar } from '../../zod-scalar';
  * nothing to return. `null` is the one value; GraphQL writes it without
  * asking the scalar, and a resolver returning anything else is refused.
  */
-export const voidSchema = z.null({ error: 'Expected no value' });
+export const voidSchema = z.null({ error: 'Invalid void: expected null' });
 
 export const VoidScalar = zodScalar(voidSchema, {
 	name: 'Void',

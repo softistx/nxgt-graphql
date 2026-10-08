@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import { decodeBase64Url } from '../../rules/base64';
+import { isJsonObject } from '../../rules/json';
 import { zodScalar } from '../../zod-scalar';
 
-/** The JSON object a base64url part holds, or `undefined`. */
+/**
+ * The JSON object a base64url part holds, or `undefined`: a part in another
+ * spelling of its bytes, or that is not UTF-8 JSON, holds none.
+ */
 function jsonObjectOf(part: string): Record<string, unknown> | undefined {
 	const binary = decodeBase64Url(part);
 	if (binary === undefined) return undefined;
@@ -11,9 +15,7 @@ function jsonObjectOf(part: string): Record<string, unknown> | undefined {
 		const value: unknown = JSON.parse(
 			new TextDecoder('utf-8', { fatal: true }).decode(bytes),
 		);
-		return typeof value === 'object' && value !== null && !Array.isArray(value)
-			? (value as Record<string, unknown>)
-			: undefined;
+		return isJsonObject(value) ? (value as Record<string, unknown>) : undefined;
 	} catch {
 		return undefined;
 	}
@@ -21,8 +23,9 @@ function jsonObjectOf(part: string): Record<string, unknown> | undefined {
 
 /**
  * A signed JWT in compact form (RFC 7519, RFC 7515): three base64url parts,
- * a header and a payload that are JSON objects, a signature that is not
- * empty, and a header `alg` that is a string and not `none`, in any case. An
+ * each in its one spelling (no padding, no unused bits set), a header and a
+ * payload that are JSON objects, a signature that is not empty, and a
+ * header `alg` that is a string, not empty and not `none`, in any case. An
  * unsecured token is never one, even with a signature (RFC 7518, 3.6).
  */
 function isSignedJwt(token: string): boolean {
@@ -35,7 +38,7 @@ function isSignedJwt(token: string): boolean {
 	const fields = jsonObjectOf(header);
 	if (fields === undefined || jsonObjectOf(payload) === undefined) return false;
 	const { alg } = fields;
-	return typeof alg === 'string' && alg.toLowerCase() !== 'none';
+	return typeof alg === 'string' && alg !== '' && alg.toLowerCase() !== 'none';
 }
 
 /**

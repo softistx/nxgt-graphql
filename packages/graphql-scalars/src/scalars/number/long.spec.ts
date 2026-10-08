@@ -41,12 +41,19 @@ describe('Long', () => {
 	});
 
 	test('a literal past 2^53 written as a number is refused, not rounded', () => {
+		const hint = 'Invalid integer: past 2^53, write it as a string';
 		expect(() =>
 			LongScalar.parseLiteral(
 				{ kind: Kind.INT, value: '9007199254740993' },
 				undefined,
 			),
-		).toThrow('Long cannot represent this input');
+		).toThrow(`Long cannot represent this input: ${hint}`);
+		expect(() => LongScalar.parseValue(2 ** 53)).toThrow(
+			`Long cannot represent this input: ${hint}`,
+		);
+		expect(() => LongScalar.parseValue(-(2 ** 53))).toThrow(
+			`Long cannot represent this input: ${hint}`,
+		);
 		expect(
 			LongScalar.parseLiteral(
 				{ kind: Kind.STRING, value: '9007199254740993' },
@@ -60,6 +67,12 @@ describe('Long', () => {
 			'Long cannot represent this input',
 		);
 		expect(() => LongScalar.serialize(2n ** 63n)).toThrow(
+			'Long cannot serialize this value',
+		);
+		expect(() => LongScalar.parseValue('-9223372036854775809')).toThrow(
+			'Long cannot represent this input',
+		);
+		expect(() => LongScalar.serialize(-(2n ** 63n) - 1n)).toThrow(
 			'Long cannot serialize this value',
 		);
 	});

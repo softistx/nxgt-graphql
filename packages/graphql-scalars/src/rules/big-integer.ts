@@ -9,11 +9,19 @@ import { noNegativeZero } from './integer';
 const wire = z.union(
 	[
 		z.string().regex(/^(0|-?[1-9]\d*)$/, {
-			error: 'Expected a decimal integer, with no leading zero and no "-0"',
+			error: 'Invalid integer: no leading zero and no "-0"',
 		}),
-		noNegativeZero(z.int()),
+		// Past 2⁵³ a number has already been rounded: refused, with a hint.
+		noNegativeZero(
+			z.int({
+				error: (issue) =>
+					issue.code === 'too_big' || issue.code === 'too_small'
+						? 'Invalid integer: past 2^53, write it as a string'
+						: undefined,
+			}),
+		),
 	],
-	{ error: 'Expected a decimal integer string or a safe integer' },
+	{ error: 'Invalid integer: expected a decimal string or a safe integer' },
 );
 
 /**

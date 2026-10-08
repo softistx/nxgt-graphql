@@ -12,6 +12,8 @@ describe('HexColorCode', () => {
 			'#FF0000',
 			'#ff000080',
 			'#aBcDeF',
+			'#fA0',
+			'#Ff00aA80',
 		],
 		refused: [
 			'#f00\n',

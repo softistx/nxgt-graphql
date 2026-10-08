@@ -37,6 +37,9 @@ describe('JSON', () => {
 			undefined,
 			Number.NaN,
 			Number.POSITIVE_INFINITY,
+			-0,
+			[-0],
+			{ a: -0 },
 			1n,
 			new Date(0),
 			new Map(),
@@ -65,6 +68,8 @@ describe('JSON', () => {
 			b: { c: 'RED' },
 		});
 		expect(read('3')).toBe(3);
+		expect(() => read('[-0]')).toThrow('JSON cannot represent this input');
+		expect(() => read('-0.0')).toThrow('JSON cannot represent this input');
 	});
 
 	test('a variable inside a literal takes its value', async () => {

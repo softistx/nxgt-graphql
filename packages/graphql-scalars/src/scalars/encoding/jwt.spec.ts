@@ -33,6 +33,11 @@ describe('JWT', () => {
 			// Padding, which base64url in a JWT never has.
 			`${part({ alg: 'HS256', k: 'ab' })}=.${part({})}.c2ln`,
 			token({ alg: 'HS256' }).concat('.x'),
+			token({ alg: '' }),
+			// A signature, or a header, in a second spelling of its bytes.
+			'eyJhbGciOiJIUzI1NiJ9.e30.YR',
+			// {"alg":"HS256","k":"abc"}, its last character `fR` for `fQ`.
+			'eyJhbGciOiJIUzI1NiIsImsiOiJhYmMifR.e30.c2ln',
 			'a.b.c',
 			'a.b',
 			'',

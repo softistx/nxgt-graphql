@@ -7,6 +7,6 @@ export const nonNegativeIntSchema = noNegativeZero(z.int32().nonnegative());
 
 export const NonNegativeIntScalar = zodScalar(nonNegativeIntSchema, {
 	name: 'NonNegativeInt',
-	literals: 'integer',
 	description: 'An integer from 0 to 2147483647.',
+	literals: 'integer',
 });

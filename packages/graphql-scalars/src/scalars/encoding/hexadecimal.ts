@@ -7,7 +7,7 @@ import { zodScalar } from '../../zod-scalar';
  */
 export const hexadecimalSchema = z
 	.hex()
-	.min(1, { error: 'Expected at least one hexadecimal digit' });
+	.min(1, { error: 'Invalid hexadecimal: expected at least one digit' });
 
 export const HexadecimalScalar = zodScalar(hexadecimalSchema, {
 	name: 'Hexadecimal',

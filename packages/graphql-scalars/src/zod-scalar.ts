@@ -7,6 +7,9 @@ import {
 } from 'graphql';
 import { z } from 'zod';
 
+/** Which query literals a scalar reads: see {@link ZodScalarOptions.literals}. */
+type Literals = 'leaf' | 'integer' | 'any';
+
 export interface ZodScalarOptions<N extends string = string> {
 	/** The GraphQL name, as the schema's `scalar` declaration spells it. */
 	readonly name: N;
@@ -26,7 +29,7 @@ export interface ZodScalarOptions<N extends string = string> {
 	 * then with their values. On graphql 16, a variable of a custom scalar
 	 * arrives as its resolver value (a `Date`), on 17 as its wire value.
 	 */
-	readonly literals?: 'leaf' | 'integer' | 'any';
+	readonly literals?: Literals;
 }
 
 /**
@@ -139,7 +142,7 @@ type Variables = { readonly [name: string]: unknown } | null;
 function readLiteral(
 	node: ValueNode,
 	name: string,
-	literals: 'leaf' | 'integer' | 'any',
+	literals: Literals,
 	variables: Variables | undefined,
 ): unknown {
 	return literals === 'any'
@@ -189,7 +192,7 @@ function untypedValue(node: ValueNode, variables: Variables): unknown {
 function literalValue(
 	node: ValueNode,
 	name: string,
-	literals: 'leaf' | 'integer',
+	literals: Exclude<Literals, 'any'>,
 ): unknown {
 	switch (node.kind) {
 		case Kind.STRING:
