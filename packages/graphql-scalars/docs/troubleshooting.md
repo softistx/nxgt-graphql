@@ -51,6 +51,11 @@ bad *variable*, graphql 16 prefixes the message with the value the client sent,
 | `Timestamp cannot represent this input: Expected an integer, not -0` | `-0`; send `0` |
 | `Timestamp cannot represent this input: Invalid input: expected number, received boolean` | a boolean, or anything that is not a number |
 | `Timestamp cannot represent this input: Too big: expected number to be <=8640000000000000` | past what a `Date` holds; below -8.64e15 it says `Too small: expected number to be >=-8640000000000000` |
+| `HexColorCode cannot represent this input: Invalid hex color code` | no `#` (`ff0000`), a length other than 3, 4, 6 or 8 digits, a non-hex digit, or a space; send `#ff0000` |
+| `RGB cannot represent this input: Invalid RGB color: expected rgb(R, G, B), each 0 to 255` | a component above 255, a leading zero, a percentage, no space after the commas, the space-separated syntax, an alpha (use `RGBA`), or a fraction; send `rgb(255, 0, 0)` |
+| `RGBA cannot represent this input: Invalid RGBA color: expected rgba(R, G, B, A), each 0 to 255, A 0 to 1` | as `RGB`, or an alpha written `.5`, `1.0`, `0.50` or `50%`, above 1, or missing; send `0`, `1` or `0.5` |
+| `HSL cannot represent this input: Invalid HSL color: expected hsl(H, S%, L%), H 0 to 359, S and L 0 to 100` | a hue of 360 or more (write `0`), a `deg` unit, a saturation or lightness without `%` or above 100, a fraction, an alpha (use `HSLA`), or commas without spaces |
+| `HSLA cannot represent this input: Invalid HSLA color: expected hsla(H, S%, L%, A), H 0 to 359, S and L 0 to 100, A 0 to 1` | as `HSL`, or an alpha written `.5`, `1.0` or `50%`, above 1, or missing |
 | `IBAN cannot represent this input: Invalid IBAN` | a wrong check digit, lower case, or the printed form in groups of four (`FR14 2004 …`); strip the spaces and upper-case on the client |
 | `IBAN cannot represent this input: Invalid IBAN: unknown country, or not its length` | the check digits hold, but the country is not in the SWIFT IBAN registry or the IBAN is not its length (a German IBAN is 22 characters) |
 | `Currency cannot represent this input: Invalid currency: expected an ISO 4217 code in force` | lower case (`eur`), not three letters, an unknown code, or a withdrawn one (`FRF`, `HRK`, `SLL`); send `EUR` |

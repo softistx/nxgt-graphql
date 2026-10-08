@@ -119,6 +119,24 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   but got a: IntValue`); here `45` is accepted. Both refuse `NaN`, `null` and
   a value out of range; the messages differ (`Value must be between -90 and
   90: 91` there, `Too big: expected number to be <=90` here).
+- **`HexColorCode`** takes 3, 4, 6 and 8 digits, any case, kept as sent.
+  graphql-scalars takes 3, 6 and 8 (`#ff000080`) but refuses the 4-digit form
+  (`#f008`). Both require the `#`.
+- **`RGB`** and **`RGBA`** are one canonical spelling. graphql-scalars checks
+  the shape and not the range, and keeps what it is given: `rgb(256, 0, 0)`,
+  `rgb(01, 0, 0)`, `rgb(100%, 0%, 0%)`, `rgb(255,0,0)`, `rgb( 255 , 0 , 0 )`
+  and `rgba(255, 0, 0, 2)` all pass there. It also takes `.5`, `1.0` and
+  `0.50` as an alpha. Here components are integers from 0 to 255, the
+  separator is `", "`, and the alpha is `0`, `1` or `0.x` with no trailing
+  zero; every one of those is refused. Both refuse the space-separated syntax,
+  `50%` as an alpha and a missing alpha for `RGBA`.
+- **`HSL`** and **`HSLA`** are the same story: graphql-scalars takes
+  `hsl(360, 100%, 50%)`, `hsl(361, …)`, `hsl(-1, 0%, 0%)`, `hsl(120, 101%, 50%)`,
+  `hsl(120.5, 100.5%, 50%)`, `hsl(120,100%,50%)` and an alpha of `2`; here the
+  hue is 0 to 359 (360 is `0`), saturation and lightness are integers from 0%
+  to 100%, and the alpha is as for `RGBA`. Both refuse `120deg`, a percentage
+  without `%` and `50%` as an alpha. The messages differ (`Value is not a valid
+  HSL color: …` there).
 - **`Time`** is a string `10:15:30Z` on both sides and keeps the offset as
   sent. graphql-scalars resolves it to a `Date` (today's date at that time,
   moved to UTC: `10:15:30+02:00` is 08:15:30 UTC) and serializes a `Date` back
