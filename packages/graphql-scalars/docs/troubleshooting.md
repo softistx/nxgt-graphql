@@ -135,6 +135,39 @@ such as `"007"` says `Expected a decimal integer, with no leading zero and no "-
 instead.
 **Fix:** send a decimal string, or an integer number within 2^53.
 
+### `JSON cannot represent this input: Expected a JSON value`
+
+**When:** a variable or literal for a `JSON` field is something JSON cannot
+write back as it is: a cycle, `undefined` (also as an object's field or an
+array's hole), a `Date`, a `Map`, a class instance, `NaN`, `Infinity`, a
+`bigint`, or nesting past 1000 levels. The same message with `cannot
+serialize this value` is a resolver's result that is one of those.
+**Why:** `JSON` keeps the value as it is, so it refuses what would change on
+the way (a `Date` becomes a string, `undefined` vanishes, `NaN` becomes
+`null`).
+**Fix:** convert before sending or returning: `date.toISOString()`,
+`Object.fromEntries(map)`, `String(bigint)`, `null` instead of `undefined`.
+See [Value scalars](guide/scalars/value.md).
+
+### `JSONObject cannot represent this input: Expected a JSON object`
+
+**When:** the value is not a plain object whose fields are all JSON values:
+an array, `null`, a string, a number, a `Date`, or anything `JSON` refuses.
+**Why:** `JSONObject` takes an object only.
+**Fix:** send an object (`{ "items": [1, 2] }` for a list), or use `JSON` for
+a value of any kind.
+
+### `Void cannot represent this input: Expected no value`
+
+**When:** a variable or literal for a `Void` field is anything but `null`; or,
+with `cannot serialize this value`, a resolver returns a value for a `Void`
+field (`resolve: () => 'ok'`).
+**Why:** `Void` is `null` only. A resolver that returns nothing answers
+`null` by itself, but one that returns a value is refused, so the value is
+not dropped silently.
+**Fix:** return nothing from the resolver, or give the field a type that
+holds the value.
+
 ### `<Name> cannot represent a FloatValue literal`
 
 **When:** a query writes a float literal for an integer scalar, even one that
@@ -149,8 +182,11 @@ values go as a string: `views(id: "1000")`.
 **When:** a query writes a list, an object or an enum value where the scalar
 reads a literal, for example `later(at: [1])`. The kind is named in the
 message: `ListValue`, `ObjectValue`, `EnumValue`.
-**Why:** a scalar reads only string, int, float and boolean literals.
-**Fix:** pass a scalar literal, or a variable.
+**Why:** a scalar reads only string, int, float and boolean literals. `JSON`
+and `JSONObject` read every kind; a scalar of your own does with
+`literals: 'any'`.
+**Fix:** pass a scalar literal, or a variable; for an object, make the scalar
+with `literals: 'any'` (see [Custom scalars](guide/custom-scalars.md#literals)).
 
 ```graphql
 query ($at: DateTime) {
@@ -213,6 +249,30 @@ resolve: (row) => BigInt(row.count), // not row.count
 **When:** a resolver returns a non-`http(s)` URL or a relative path.
 **Why:** `URL` is absolute and `http`/`https` only, on the way out as well.
 **Fix:** return an absolute URL, or use another type for the field.
+
+## Schema
+
+### `Cannot convert value to AST: { a: 1 }.`
+
+**When:** on graphql 16, `printSchema` or an introspection query, for a
+schema where a `JSON` or `JSONObject` argument (or one of your own made with
+`literals: 'any'`) has an object or list default, such as
+`echo(v: JSON = { a: 1 }): JSON`. The introspection query fails with
+`Unexpected invariant triggered.`.
+**Why:** graphql 16 writes a default back as a literal with `astFromValue`,
+which knows no object value for a scalar and has no hook a scalar can fill.
+**Fix:** drop the default and apply it in the resolver
+(`args.v ?? { a: 1 }`), or move to graphql 17 with an SDL default or a
+code-first `default: { value: { a: 1 } }`.
+
+### `Argument "v" has invalid value {at: $d}.`
+
+**When:** on graphql 16, a variable of another custom scalar sits inside a
+`JSON` literal, such as `echo(v: { at: $d })` with `$d: DateTime`.
+**Why:** graphql 16 hands the literal its variables already parsed, so `$d`
+is a `Date`, which is not a JSON value. graphql 17 hands over the wire string.
+**Fix:** send the whole value as one `JSON` variable (`echo(v: $v)`), or
+type `$d` as `String` or `JSON`.
 
 ## Custom scalars
 

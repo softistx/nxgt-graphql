@@ -166,6 +166,21 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   (`Asia/Calcutta`, `US/Pacific`); here a zone newer than the runtime's tz data
   is refused, there it is whatever the list holds.
 
+- **`JSON`**, **`JSONObject`** and **`Void`** keep their names and are
+  stricter. graphql-scalars 2.0.0 passes through what JSON cannot hold: a
+  `Date` goes in and out as a `Date` (JSON writes it as a string), a field set
+  to `undefined` stays, `NaN` goes through `JSON` (and is written as `null`),
+  and an enum value in a literal reads as `undefined`. A cycle throws the
+  engine's `Converting circular structure to JSON`, and a `bigint` throws
+  `Do not know how to serialize a BigInt`. Here every one of them is refused
+  with `Expected a JSON value`, both ways, and an enum value in a literal is
+  its name (`'RED'`). `JSONObject` there refuses `null`, a number and an array
+  (`JSONObject cannot represent non-object value: …`) but accepts a `Date`;
+  here it also refuses a `Date`, and the message is `Expected a JSON object`.
+  `Void` there serializes any result as `""` and reads any input as `null`;
+  here a resolver returning a value, and any input but `null`, is refused
+  (`Expected no value`). A resolver returning nothing answers `null` in both.
+
 ### Stricter input
 
 graphql-scalars coerces a string with `parseInt` or `parseFloat`, so `"5"` is

@@ -18,8 +18,15 @@ export interface ZodScalarOptions<N extends string = string> {
 	 * string, a number or a boolean. `'integer'`: the same but a float
 	 * literal (`1.0`, `1e3`), refused as GraphQL's `Int` refuses it. A
 	 * variable is JSON, where `1.0` is the number 1: no scalar can tell.
+	 * `'any'`: every literal, objects and lists included, for a scalar that
+	 * holds JSON. An enum value reads as its name. A variable inside the
+	 * literal reads as graphql 17 reads it, on 16 as well: its value, or, when
+	 * it is not given, an object field left out and a list item `null`. The
+	 * schema sees the literal once with every variable left out (validation),
+	 * then with their values. On graphql 16, a variable of a custom scalar
+	 * arrives as its resolver value (a `Date`), on 17 as its wire value.
 	 */
-	readonly literals?: 'leaf' | 'integer';
+	readonly literals?: 'leaf' | 'integer' | 'any';
 }
 
 /**
@@ -97,8 +104,11 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 		run('serialize this value', () =>
 			z.safeEncode(schema, value as z.output<S>),
 		);
-	const literal = (node: ValueNode): z.output<S> =>
-		decode(literalValue(node, name, options.literals ?? 'leaf'), node);
+	const literals = options.literals ?? 'leaf';
+	// graphql 16 passes the operation's variables, for a variable inside an
+	// object or a list literal; graphql 17 substitutes them first.
+	const literal = (node: ValueNode, variables?: Variables): z.output<S> =>
+		decode(readLiteral(node, name, literals, variables), node);
 
 	// graphql 16 knows only the first three; graphql 17 also takes the
 	// `coerce*` ones, and marks the first three deprecated, to be removed in
@@ -120,6 +130,54 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 		S,
 		N
 	>;
+}
+
+/** An operation's variables, as graphql 16 passes them to `parseLiteral`. */
+type Variables = { readonly [name: string]: unknown } | null;
+
+/** The JavaScript value of a literal, as the scalar's `literals` reads it. */
+function readLiteral(
+	node: ValueNode,
+	name: string,
+	literals: 'leaf' | 'integer' | 'any',
+	variables: Variables | undefined,
+): unknown {
+	return literals === 'any'
+		? untypedValue(node, variables ?? null)
+		: literalValue(node, name, literals);
+}
+
+/**
+ * Any literal as a JSON value, a variable inside it as graphql 17's
+ * `replaceVariables` substitutes it: an object field whose variable is not
+ * given is left out, a list item `null`. Without variables (graphql 16's
+ * validation pass), every one is not given, as graphql 17's validation sees
+ * it.
+ */
+function untypedValue(node: ValueNode, variables: Variables): unknown {
+	switch (node.kind) {
+		case Kind.NULL:
+			return null;
+		case Kind.INT:
+		case Kind.FLOAT:
+			return Number(node.value);
+		case Kind.STRING:
+		case Kind.ENUM:
+		case Kind.BOOLEAN:
+			return node.value;
+		case Kind.LIST:
+			return node.values.map((item) => untypedValue(item, variables) ?? null);
+		case Kind.OBJECT: {
+			const object: Record<string, unknown> = {};
+			for (const field of node.fields) {
+				const value = untypedValue(field.value, variables);
+				if (value !== undefined) object[field.name.value] = value;
+			}
+			return object;
+		}
+		case Kind.VARIABLE:
+			return variables?.[node.name.value];
+	}
 }
 
 /**

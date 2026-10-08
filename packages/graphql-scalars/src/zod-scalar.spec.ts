@@ -132,4 +132,26 @@ describe('zodScalar', () => {
 		expect(scalar.description).toBe('A thing.');
 		expect(scalar.specifiedByURL).toBe('https://example.com/thing');
 	});
+
+	test("literals: 'any' gives a schema of your own the whole literal", () => {
+		const Settings = zodScalar(
+			z.object({ theme: z.enum(['light', 'dark']), size: z.int() }),
+			{ name: 'Settings', literals: 'any' },
+		);
+		expect(
+			Settings.parseLiteral(parseValue('{ theme: dark, size: 2 }'), undefined),
+		).toEqual({ theme: 'dark', size: 2 });
+		expect(
+			Settings.parseLiteral(parseValue('{ theme: dark, size: $s }'), { s: 3 }),
+		).toEqual({ theme: 'dark', size: 3 });
+		// Before the variables exist, $s is left out, and the schema says so.
+		expect(
+			thrown(() =>
+				Settings.parseLiteral(
+					parseValue('{ theme: dark, size: $s }'),
+					undefined,
+				),
+			).message,
+		).toStartWith('Settings cannot represent this input:');
+	});
 });

@@ -1,11 +1,11 @@
 # @nxgt/graphql-scalars
 
 Ready-made GraphQL scalars, by category (colors, dates and times, encodings,
-finance, geo, identifiers, locale, network, numbers, strings), whose every
-rule is a Zod schema, and `zodScalar` to turn any Zod schema of your own into
-one. An input is decoded into the value your resolver receives; a resolver's
-result is encoded and checked on the way out as strictly as on the way in. It
-works with `graphql` 16 and 17, code-first or schema-first.
+finance, geo, identifiers, locale, network, numbers, strings, values), whose
+every rule is a Zod schema, and `zodScalar` to turn any Zod schema of your own
+into one. An input is decoded into the value your resolver receives; a
+resolver's result is encoded and checked on the way out as strictly as on the
+way in. It works with `graphql` 16 and 17, code-first or schema-first.
 
 ## Install
 
@@ -49,6 +49,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 | [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `MAC` and 5 more |
 | [number](docs/guide/scalars/number.md) | 12: `PositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt` and the signed Int and Float variants |
 | [string](docs/guide/scalars/string.md) | 1: `NonEmptyString` |
+| [value](docs/guide/scalars/value.md) | 3: `JSON`, `JSONObject`, `Void` |
 
 The rule, the accepted and refused values and the exports of each scalar are
 in the [Scalars reference](docs/guide/scalars.md).
