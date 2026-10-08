@@ -11,6 +11,7 @@ are public.
 | package | what it is |
 | --- | --- |
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, and each schema (`dateTimeSchema`, or `schemas.dateTime`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out <file>]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -70,8 +71,8 @@ packages/graphql-scalars/src/
 
 ## Layering
 
-`@nxgt/graphql-scalars` depends on nothing at runtime; `graphql` and `zod` are
-peers, each pinned exactly as a devDependency at the oldest end of its range
+`@nxgt/graphql-scalars` and `@nxgt/graphql-validation` depend on nothing at
+runtime, and not on each other; `graphql` and `zod` are peers, each pinned exactly as a devDependency at the oldest end of its range
 (`graphql` `16.11.0`, `zod` `4.6.5`). `zod`'s range, `>=4.6.5 <5`, is
 nxgt-data's (`@nxgt/mongo`, `@nxgt/redis`): one range is one zod in an
 application's tree. Siblings, when there are some, depend on each other by
@@ -189,6 +190,73 @@ that weakens one is a breaking change, even when every spec stays green.
   a value's alias too (`en-u-ca-islamicc`, `en-u-kb-yes`). Measured
   identical on Node and Bun over 118 tags.
 
+## @nxgt/graphql-validation
+
+The sections above are `@nxgt/graphql-scalars`'; this one is the validation
+package's, laid out the same way for growth: a new rule or format is a file.
+
+### Layout
+
+```
+packages/graphql-validation/src/
+  constraint-directive.ts  constraintTypeDefs (written from the rules), assertOwnConstraint
+  with-validation.ts       wraps each constrained field's resolve (or subscribe) in place
+  validated.ts             a resolver checked by a hand-written schema
+  bad-user-input.ts        the one error, and parseArgs
+  typedefs-command.ts      the bin's `typedefs` command; cli.ts is the bin itself
+  registry.spec.ts         the guards below
+  rules/                   one @constraint argument per file: `<argument>Rule`
+    rule.ts                Rule, defineRule, literal
+    all.ts                 one `export *` line per rule
+    index.ts               `rules` keyed by argument, applyRule, constraintOf
+  formats/                 one format per file, `<name>Format`; format.ts, all.ts, index.ts alike
+  builder/                 GraphQL types to Zod: InputSchemas, argsSchemaOf, leaf, constraints
+packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `bun run graphqls`
+```
+
+- **A new rule or format is a file, its spec, and one line in its `all.ts`.**
+  The directive's SDL, the registry, `constraintOf` and the list of known
+  formats follow. `registry.spec.ts` fails a file that is unregistered, has no
+  spec, exports anything else (a helper would reach the registry), or is not
+  named after its argument (`minLength` in `min-length.ts`, `minLengthRule`).
+  Then regenerate `graphql/constraint.graphqls`: a spec fails until you do.
+- **Every rule and format is written twice:** `toZod`, applied at startup, and
+  `toCode`, the same schema as source for a code generator, `z` a free
+  identifier. Each spec goes through `test/rule-cases.ts`, which evaluates the
+  source and requires both to accept and refuse the same inputs, and every
+  refusal to be owned (`owns`) by that rule and no other.
+- Rules, formats and the builder are internal. Exporting them, for the Zod
+  codegen plugin, is a public-API decision: a subpath with its `exports` key.
+- `graphql/constraint.graphqls` is in `files` but not in `exports`:
+  `verify:artifacts` imports every `exports` key, and a `.graphqls` is no
+  module. Consumers reference it by path.
+
+### Invariants
+
+- **graphql 16 and 17 both work**, proved as for scalars.
+- **`@constraint` is never a silent promise.** It is declared on
+  `ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION` only. `withValidation` throws,
+  naming the place, on a constraint that cannot apply (wrong kind, custom
+  scalar, enum, input object, list rule off a list, unknown format, bad
+  pattern), in every input type whether an argument reaches it or not; on a
+  `@constraint` declared otherwise than `constraintTypeDefs`; on a default
+  value that breaks its own constraint; and on an object field that drops or
+  changes the `@constraint` its interface writes on an argument.
+- **The resolver receives the parsed arguments, and nothing else changes.** An
+  absent argument or input field stays absent, a `@oneOf` input keeps its one
+  key, a field with nothing to check is not wrapped, wrapping twice wraps
+  nothing, and a subscription is checked once, in `subscribe`.
+- **One error shape.** `Invalid arguments for <Type>.<field>. <path>: <first
+  message>`, `extensions.code` `BAD_USER_INPUT`, `extensions.issues` each with
+  its path relative to the arguments, Zod's `code`, and `constraint` (the
+  refusing `@constraint` argument) when a directive refused. `validated` and
+  `badUserInput` raise the same, without `constraint`.
+- **`uri` is http, https or ftp, scheme required; `date-time` is canonical
+  RFC 3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
+  on purpose, each pinned by a spec.
+- **The bin exits 0 done, 1 the file could not be written, 2 a usage error**,
+  nxgt-mongo-backup's convention, and runs under Node and Bun.
+
 ## The green bar
 
 ```sh
@@ -228,10 +296,20 @@ it, do not make it a required check.
   consumer does, and runs the stages of `scripts/artifacts/`, stopping at the
   first that fails. nxgt-data's AGENTS.md describes each stage; an unbuilt
   package stops at the first with `<package>: no dist/`, and a stale one with
-  `src/ is <n>s newer than dist/`. `test/declarations/scalars.ts` is what
-  `emit.ts` emits under a consumer's strict settings: an exported value whose
+  `src/ is <n>s newer than dist/`. `test/declarations/<package>.ts`
+  (`scalars.ts`, `validation.ts`) is what `emit.ts` emits under a consumer's
+  strict settings: an exported value whose
   inferred type names something the entry does not export fails there with
   TS2883.
+
+- **A source folder named `build`, `dist`, `coverage` or `node_modules` is out
+  of `bun run typecheck`.** `tsconfig.base.json` excludes `**/build` and the
+  rest, and a package's `tsconfig.json` has no `include`: such a folder's files
+  are checked only when something imports them, and a spec there by nothing
+  (the declaration build excludes specs). Only the build then sees a type
+  error. Do not name a source folder after them (`src/builder/`, not
+  `src/build/`); the cure, dropping `**/build` from the base, starts in
+  nxgt-data, whose file this is.
 
 ## Deliberate duplication: do not "clean this up"
 
