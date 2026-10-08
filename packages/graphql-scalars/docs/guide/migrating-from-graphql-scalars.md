@@ -99,6 +99,18 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   `FR`, `zh-hant-tw`, `x-foo` and `i-klingon`; here they are refused, not
   rewritten. Both refuse `en_US` and `en-`. Canonicalise on the client with
   `Intl.getCanonicalLocales` (see [Locale](scalars/locale.md)).
+- **`IBAN`** is the electronic form only. graphql-scalars 2.0.0 checks the
+  country, length and check digits too, but accepts the printed form with
+  spaces (`FR14 2004 1010 …`) and lower case (`fr14…`) and returns it as sent;
+  here both are refused, not rewritten. Strip the spaces and upper-case on the
+  client. The messages differ (`Value is not a valid IBAN: …` there,
+  `Invalid IBAN` here).
+- **`Currency`** is uppercase only and a list of codes in force.
+  graphql-scalars accepts `eur` and returns it as sent, and keeps `HRK` and
+  `SLL` while it refuses `FRF`; here all three are refused, as withdrawn. Both
+  accept `XAU`, `XXX` and `XTS`. The messages differ (`Value is not a valid
+  currency value: …` there, `Invalid currency: expected an ISO 4217 code in
+  force` here). The list is Zod's, so a newer Zod 4 may know newer codes.
 - **`Latitude`** and **`Longitude`** are numbers only. graphql-scalars
   accepts a string as well (`"48.8566"`, `"12"`) and reads
   degrees-minutes-seconds (`48°51'N` becomes `48.85`, rounded to two
@@ -173,8 +185,9 @@ One name per rule, so use the name on the right.
 
 ## Not here
 
-`PostalCode`, `USCurrency`, `SESSN`, `AccountNumber`, `RoutingNumber`,
-`DeweyDecimal`, `LCCSubclass`, `IPCPatent`, `CountryName`, `Byte` and `Cuid`
+`PostalCode`, `USCurrency` (a money amount; see
+[With an amount](scalars/finance.md#with-an-amount)), `SESSN`, `AccountNumber`,
+`RoutingNumber`, `DeweyDecimal`, `LCCSubclass`, `IPCPatent`, `CountryName`, `Byte` and `Cuid`
 (v1; `Cuid2` is a different format) are not planned. Write the one you
 need with `zodScalar`:
 
