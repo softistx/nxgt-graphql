@@ -2,9 +2,10 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSchema } from 'graphql';
+import { buildSchema, type GraphQLObjectType, graphql } from 'graphql';
 import { constraintTypeDefs } from './constraint-directive';
 import { graphqls, main } from './typedefs-command';
+import { withValidation } from './with-validation';
 
 const SHIPPED = join(import.meta.dir, '../graphql/constraint.graphqls');
 
@@ -66,5 +67,26 @@ describe('the typedefs command', () => {
 describe('graphql/constraint.graphqls, shipped in the package', () => {
 	test('is what the command writes: regenerate it with `bun run graphqls`', async () => {
 		expect(await readFile(SHIPPED, 'utf8')).toBe(graphqls());
+	});
+});
+
+describe('a schema whose scanned files include the generated copy', () => {
+	test('declares @constraint without constraintTypeDefs, and withValidation checks it', async () => {
+		const schema = buildSchema(
+			`${await readFile(SHIPPED, 'utf8')}\ntype Query { echo(word: String! @constraint(maxLength: 3)): String }`,
+		);
+		const echo = (schema.getQueryType() as GraphQLObjectType).getFields()[
+			'echo'
+		];
+		(echo as { resolve?: unknown }).resolve = (
+			_: unknown,
+			{ word }: { word: string },
+		) => word;
+		withValidation(schema);
+		expect(await graphql({ schema, source: '{ echo(word: "abc") }' })).toEqual({
+			data: { echo: 'abc' },
+		});
+		const refused = await graphql({ schema, source: '{ echo(word: "abcd") }' });
+		expect(refused.errors?.[0]?.extensions['code']).toBe('BAD_USER_INPUT');
 	});
 });

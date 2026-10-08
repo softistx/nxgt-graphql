@@ -153,8 +153,16 @@ bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
 
 Without `--out` the SDL is printed. Regenerate the file after upgrading the package.
 
-This file is for the IDE only: do not load it into the server's `typeDefs`
-together with `constraintTypeDefs`, or `buildSchema` throws
+The schema must declare `@constraint` once. Pick one source for the server:
+
+- **The generated file is part of your schema.** If the server loads its
+  type definitions by scanning `*.graphql(s)` files and the copy sits among
+  them, it already declares the directive: do not add `constraintTypeDefs`.
+- **`constraintTypeDefs` declares it.** Then the copy is for the IDE only:
+  keep it out of the folders the server scans (or exclude it from the glob).
+
+Both give the same schema, and `withValidation` accepts either: it checks that
+the directive declared is this package's. Both at once throw
 `There can be only one directive named "@constraint".`
 
 ## Exports

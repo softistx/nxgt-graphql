@@ -92,16 +92,18 @@ schema:
 bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
 ```
 
-Do not add the file to the server's `typeDefs` next to `constraintTypeDefs`: see
-the next entry.
+If the server scans the folder you write it to for its type definitions, the
+copy declares the directive for the server too: drop `constraintTypeDefs`, or
+keep the copy out of the scan. See the next entry.
 
 ### `There can be only one directive named "@constraint".`
 
 **When:** building the schema.
-**Why:** `@constraint` is declared twice, usually `constraintTypeDefs` plus
-`constraint.graphqls` (the IDE's file) loaded into `typeDefs`.
-**Fix:** keep `constraintTypeDefs` on the server; the `.graphqls` file is for the
-IDE only.
+**Why:** `@constraint` is declared twice, usually `constraintTypeDefs` plus a
+`constraint.graphqls` copy that the server's type definitions scan picked up.
+**Fix:** keep one. Either drop `constraintTypeDefs` and let the scanned copy
+declare the directive, or keep `constraintTypeDefs` and exclude the copy from
+the scan (it then serves the IDE only).
 
 ### `withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.`
 

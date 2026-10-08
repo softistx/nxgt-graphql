@@ -237,8 +237,18 @@ and list `schema/constraint.graphqls` in `graphql.config.yml` in place of the
 to stdout (`--help` lists the flags). It exits 0 when done, 1 when the file
 cannot be written (`typedefs failed: <message>` on stderr), and 2 on a usage
 error (`Unknown command "<x>".`, `Unexpected arguments: …`, or no command). Regenerate the file after upgrading the
-package. Never put it in the server's `typeDefs` next to `constraintTypeDefs`:
-the schema would declare the directive twice and `buildSchema` throws
+package.
+
+The schema must declare `@constraint` once. Pick one source for the server:
+
+- **The generated file is part of your schema.** If the server loads its
+  type definitions by scanning `*.graphql(s)` files and the copy sits among
+  them, it already declares the directive: do not add `constraintTypeDefs`.
+- **`constraintTypeDefs` declares it.** Then the copy is for the IDE only:
+  keep it out of the folders the server scans (or exclude it from the glob).
+
+Both give the same schema, and `withValidation` accepts either: it checks that
+the directive declared is this package's. Both at once throw
 `There can be only one directive named "@constraint".`
 
 ## A realistic schema
