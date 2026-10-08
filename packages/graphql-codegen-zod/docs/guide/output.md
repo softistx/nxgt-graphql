@@ -6,6 +6,9 @@ come out.
 
 ## The smallest example
 
+The SDL files for `@constraint` and the scalars, and how to run codegen, are in
+the README's [Setup](../../README.md#setup).
+
 ```graphql
 # schema
 input SignUpInput {
