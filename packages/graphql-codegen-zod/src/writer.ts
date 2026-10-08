@@ -9,11 +9,10 @@ import {
 	type GraphQLInputType,
 	type GraphQLNamedInputType,
 	GraphQLNonNull,
+	type GraphQLScalarType,
 	getNamedType,
-	getNullableType,
 	isEnumType,
 	isInputObjectType,
-	isListType,
 	isNonNullType,
 	isScalarType,
 	isSpecifiedScalarType,
@@ -50,6 +49,11 @@ export class Writer {
 		this.directive = directive;
 		this.#naming = naming;
 		this.#scalars = scalars;
+	}
+
+	/** The source of a custom scalar's schema, from its mapping. */
+	scalarCode(type: GraphQLScalarType): string {
+		return this.#scalars.code(type);
 	}
 
 	/** The schema's name of an enum or an input object. */
@@ -116,28 +120,26 @@ export class Writer {
 }
 
 /**
- * A list of scalars or enums that also takes a single value, as graphql
- * coerces it (`"a"` for `[String]` is `["a"]`): the value is wrapped, then
- * checked as the list, so a rule refuses it with the message, and at the
- * path, the server gives.
+ * A list that also takes a single value, as graphql coerces it (`"a"` for
+ * `[String]` is `["a"]`, for `[[String]]` `[["a"]]`): the value is wrapped,
+ * then checked as the list, so a rule refuses it with the message, and at
+ * the path, the server gives. An input object's or a custom scalar's schema
+ * may transform (a codec decodes): its single value goes to the pipe as it
+ * was sent, and is parsed once there. Never `null`: a nullable list says
+ * so with its own `.nullish()`, and graphql never wraps a null.
  */
 const singleOrList: NonNullable<InputCodeOptions['list']> = ({
 	type,
 	code,
 	single,
 }) => {
-	// Not for input objects: a transform behind a recursive getter leaves
-	// TypeScript unable to infer the schema's type.
 	const named = getNamedType(type);
-	if (isInputObjectType(named)) return code;
-	// A custom scalar's schema may decode (a string to a Date): the single
-	// value goes to the pipe as it came, the list's schema decodes it once.
-	// A list of lists of them would decode in the inner list: left as is.
-	let first = single;
-	if (isScalarType(named) && !isSpecifiedScalarType(named)) {
-		if (isListType(getNullableType(type.ofType))) return code;
-		first = `z.custom<z.input<typeof ${single}>>((value) => !Array.isArray(value))`;
-	}
+	const transforms =
+		isInputObjectType(named) ||
+		(isScalarType(named) && !isSpecifiedScalarType(named));
+	const first = transforms
+		? `z.custom<z.input<typeof ${single}>>((value) => value != null && !Array.isArray(value))`
+		: single;
 	// `unknown[]`: the pipe needs what it hands on to fit what the list
 	// takes, nullable items too.
 	return `z.union([${code}, ${first}.transform((value): unknown[] => [value]).pipe(${code})])`;

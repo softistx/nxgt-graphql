@@ -38,6 +38,8 @@ function server() {
 		users: [],
 		reach: true,
 		signUp: { id: 'u_1', name: 'n' },
+		groups: true,
+		log: true,
 		rate: true,
 	};
 	for (const root of [schema.getQueryType(), schema.getMutationType()]) {
@@ -94,6 +96,103 @@ describe('the generated file', () => {
 				'SignUp',
 				'zSignUpMutationVariables',
 				{ input: { email: 'a@b.co', name: 'Al', tags: 'toolongtag' } },
+			],
+			// A single input object for a list, as graphql wraps it.
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{
+					input: {
+						email: 'a@b.co',
+						name: 'Al',
+						contacts: { phone: '0612345678' },
+					},
+				},
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', contacts: { phone: '06' } } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{
+					input: {
+						email: 'a@b.co',
+						name: 'Al',
+						contacts: { phone: '0612345678', email: 'a@b.co' },
+					},
+				},
+			],
+			// graphql never wraps a null: a non-null list refuses it.
+			[
+				'Log',
+				'zLogQueryVariables',
+				{ at: '2020-01-01T00:00:00Z', groups: { name: 'Ops' } },
+			],
+			['Log', 'zLogQueryVariables', { at: null, groups: [] }],
+			['Log', 'zLogQueryVariables', { at: [], groups: null }],
+			['Log', 'zLogQueryVariables', { at: [], groups: [], nested: [null] }],
+			[
+				'Log',
+				'zLogQueryVariables',
+				{ at: [], groups: [], nested: { name: 'Ops' } },
+			],
+			['Log', 'zLogQueryVariables', { at: [null], groups: [null] }],
+			// Through a cycle, at any depth.
+			[
+				'Groups',
+				'zGroupsQueryVariables',
+				{ where: { name: 'Ops', members: { person: 'Al' } } },
+			],
+			[
+				'Groups',
+				'zGroupsQueryVariables',
+				{
+					where: {
+						name: 'Ops',
+						members: {
+							group: {
+								name: 'Sub',
+								members: { person: 'Bo' },
+								since: '2020-01-01T00:00:00Z',
+							},
+						},
+					},
+				},
+			],
+			[
+				'Groups',
+				'zGroupsQueryVariables',
+				{ where: { name: 'Ops', members: { person: 'A' } } },
+			],
+			[
+				'Groups',
+				'zGroupsQueryVariables',
+				{
+					where: {
+						name: 'Ops',
+						members: { group: { name: 'S', members: [] } },
+					},
+				},
+			],
+			[
+				'Groups',
+				'zGroupsQueryVariables',
+				{
+					where: {
+						name: 'Ops',
+						members: { group: { name: 'Sub', since: 'nope' } },
+					},
+				},
+			],
+			[
+				'Groups',
+				'zGroupsQueryVariables',
+				{
+					where: { name: 'Ops', members: [{ person: 'Al' }, { person: 'Bo' }] },
+				},
 			],
 			[
 				'SignUp',
@@ -497,6 +596,19 @@ describe('plugin, naming', () => {
 			[],
 		);
 		expect(float).toContain('.prefault(9007199254740992)');
+	});
+
+	test('refuses to declare one name twice', async () => {
+		await expect(
+			plugin(
+				tiny(
+					'input Filter { and: [Filter] }\ninput FilterInput { a: Int }\ntype Query { a(f: Filter, g: FilterInput): Int }',
+				),
+				[],
+			),
+		).rejects.toThrow(
+			'@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or an input type in a cycle and its Input type, give the same name. Rename one of the GraphQL types, or set typesSuffix.',
+		);
 	});
 
 	test('gives no import a name the file declares', async () => {

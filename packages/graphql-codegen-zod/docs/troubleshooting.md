@@ -149,19 +149,6 @@ resolver receives.
 zUserQueryVariables.safeParse({ id: String(id) });
 ```
 
-### `Invalid input: expected array, received object`
-
-**When:** `safeParse` with one input object where a list of input objects is
-expected: `zFilter.safeParse({ and: {} })`.
-**Why:** a single value is taken for a list of scalars or enums, as `graphql`
-takes it, but not for a list of input objects: behind the recursive getters
-an input object needs, TypeScript could no longer infer the schema's type.
-**Fix:** send a list of one.
-
-```ts
-zFilter.safeParse({ and: [filter] });
-```
-
 ### A client request is refused: `Unrecognized key: "nickname"`
 
 **When:** `safeParse` of a variables schema whose input object carries a field
@@ -171,6 +158,21 @@ field. The variables object itself ignores an extra variable, as `graphql` does.
 **Fix:** remove the field, or add it to the input type in the schema.
 
 ## The schema
+
+### `@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or an input type in a cycle and its Input type, give the same name. Rename one of the GraphQL types, or set typesSuffix.`
+
+**When:** running codegen on a schema where two declarations of the same kind
+get one name: an input type in a cycle (`Filter`) declares `FilterInput`, and
+the schema also has an input type `FilterInput`.
+**Why:** the file cannot declare one name twice.
+**Fix:** rename one of the GraphQL types, or set `typesSuffix`: `Filter`
+then declares `FilterTInput`, apart from `FilterInputT`. A `typesPrefix`
+does not part them.
+
+```graphql
+input Filter { and: [Filter] }
+input FilterFields { a: Int } # was FilterInput
+```
 
 ### `@nxgt/graphql-codegen-zod: the default of Query.a(n:) holds 9007199254740993, which a JavaScript number cannot keep exact. Write it as a string, if its scalar takes one.`
 

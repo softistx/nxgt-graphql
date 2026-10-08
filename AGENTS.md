@@ -306,6 +306,8 @@ packages/graphql-codegen-zod/src/
   defaults.ts              defaultLiteral, parsedDefault (exact integers), coerced
   source.ts                declare, docComment, objectMembers (getters)
   schema-output.ts         enums, input types (@oneOf as a union), field arguments
+  cycles.ts                inputCycles: the input types that reach themselves
+  type-code.ts             declareCyclic: a cyclic input type's Filter / FilterInput types
   variables-output.ts      each named operation's variables, constraints from their usages
   plugin.spec.ts           the guards below
 packages/graphql-codegen-zod/test/
@@ -328,14 +330,22 @@ packages/graphql-codegen-zod/test/
 - **Input types are `z.strictObject`**, as graphql refuses an unknown field;
   variables and args objects stay `z.object`. Defaults are coerced as graphql
   coerces them, through lists and nested input literals.
-- **A list of scalars or enums takes a single value, as graphql does**
-  (owner), through `inputCode`'s `list` option: the value is wrapped, then
-  piped into the list's schema, so the client's issue is the server's (path,
-  message). A custom scalar's first stage is `z.custom`, so a codec decodes
-  once. Not for a list of input objects (a transform behind a recursive
-  getter defeats inference), nor a list of lists of custom scalars. An Int
+- **Every list takes a single value, as graphql does** (owner: uniform),
+  through `inputCode`'s `list` option, which hands the list's named type: the
+  value is wrapped, then piped into the list's schema, so the client's issue
+  is the server's (path, message). An input object's or a custom scalar's
+  first stage is `z.custom<z.input<typeof X>>`, so it is parsed once. An Int
   for an ID stays refused (owner: « on garde seulement id comme string »).
-  The parity spec pins both, with a codec `DateTime` on both sides.
+  The parity spec pins it, with a codec `DateTime` on both sides and a cycle
+  through a `@oneOf`.
+- **An input type in a cycle has its types written out** (`Filter`,
+  `FilterInput`, `zFilter: z.ZodType<Filter, FilterInput>`), owner's call:
+  a transform around a type inside its own getter defeats TypeScript's
+  inference. Types outside a cycle stay derived (`z.output<typeof zX>`).
+  `type-code.ts` mirrors `Writer.value`'s optionality. The generated
+  file's typecheck proves the schema fits inside the written types, not
+  the reverse: test/types.ts pins them field by field with `Equal`. One name declared twice, per kind,
+  fails generation.
 - **`test/generated.ts` is generated and typechecked.** Never edit it: `bun
   run --cwd packages/graphql-codegen-zod generated:write` regenerates it, and
   a spec fails, naming that command, when it is stale. Biome skips it.

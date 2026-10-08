@@ -2,6 +2,7 @@ import {
 	type GraphQLInputType,
 	type GraphQLList,
 	type GraphQLNamedInputType,
+	getNamedType,
 	isInputObjectType,
 	isListType,
 	isNonNullType,
@@ -36,9 +37,9 @@ export function inputCode(
 export interface InputCodeOptions {
 	/**
 	 * A list's schema, given its `type`, `code` (the array with every rule)
-	 * and `single` (one item, non-null, without rules): to take a single
-	 * value for a list, as graphql does, `single` wrapped then piped into
-	 * `code`. Default: `code`.
+	 * and `single` (the list's named type, non-null, without rules): to
+	 * take a single value for a list, as graphql does, `single` wrapped then
+	 * piped into `code`. Default: `code`.
 	 */
 	readonly list?: (list: {
 		readonly type: GraphQLList<GraphQLInputType>;
@@ -77,7 +78,7 @@ function requiredCode(
 			own,
 		);
 		if (!write.options.list) return code;
-		const single = requiredCode(write, type.ofType, []);
+		const single = requiredCode(write, getNamedType(type), []);
 		return write.options.list({ type, code, single });
 	}
 	if (isInputObjectType(type)) {
