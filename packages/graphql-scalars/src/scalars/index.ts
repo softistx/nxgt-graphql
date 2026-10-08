@@ -35,6 +35,14 @@ export type Schemas = {
 		: never]: All[K];
 };
 
+/**
+ * The schema behind each scalar, keyed by its GraphQL name:
+ * `ScalarSchemas['DateTime']` is `typeof dateTimeSchema`.
+ */
+export type ScalarSchemas = {
+	[N in ScalarName]: ScalarResolvers[N]['schema'];
+};
+
 // A module namespace lists its exports in alphabetical order, so both maps,
 // and the SDL, come out in a stable order.
 const exported: [string, unknown][] = Object.entries(all);
@@ -63,6 +71,20 @@ export const schemas = Object.fromEntries(
 		)
 		.map(([key, value]) => [key.replace(/Schema$/, ''), value]),
 ) as Schemas;
+
+/**
+ * The schema behind each scalar, keyed by its GraphQL name, in the order of
+ * {@link scalarResolvers}: `scalarSchemas.DateTime` is `dateTimeSchema`, the
+ * very schema the scalar checks, so `z.decode(scalarSchemas.X, wire)` gives
+ * what a resolver receives and `z.input`/`z.output` are the wire and resolver
+ * types. Code generators read it under this name.
+ */
+export const scalarSchemas = Object.fromEntries(
+	Object.entries(scalarResolvers).map(([name, scalar]) => [
+		name,
+		scalar.schema,
+	]),
+) as ScalarSchemas;
 
 /** The SDL that declares every scalar of {@link scalarResolvers}. */
 export const scalarTypeDefs: string = typeDefsOf(

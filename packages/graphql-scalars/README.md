@@ -228,6 +228,20 @@ const signUp = z.object({
 type SignUp = z.output<typeof signUp>; // { email: string; birthday: string }
 ```
 
+`scalarSchemas` holds the same schemas keyed by GraphQL name, for code
+generated from a GraphQL schema (`@nxgt/graphql-codegen-zod` reads it), and
+each scalar `zodScalar` returns carries its own as `.schema` (a type rebuilt
+from its config, as `mapSchema` does, has none):
+
+```ts
+import { z } from 'zod';
+import { DateTimeScalar, scalarSchemas } from '@nxgt/graphql-scalars';
+
+scalarSchemas.UUID; // uuidSchema, typed exactly
+z.decode(scalarSchemas.DateTime, '2024-03-10T12:00:00Z'); // a Date, as the resolver gets it
+DateTimeScalar.schema === scalarSchemas.DateTime; // true
+```
+
 ## Errors
 
 A refusal is a `GraphQLError`:
