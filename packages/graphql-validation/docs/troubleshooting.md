@@ -158,8 +158,9 @@ graphql-constraint-directive and keeping its SDL.
 **Why:** the schema declares its own `@constraint`: extra locations would be
 accepted and checked by nothing, extra arguments mean nothing here, and an
 argument of another type would reach a rule as the wrong kind of value. The
-message lists every difference: `allowed on <LOCATION>`, `declares <name>,
-which no rule reads`, or `declares minLength: String, not Int`.
+message lists every difference: `repeatable, and only its first use is read`,
+`allowed on <LOCATION>`, `declares <name>, which no rule reads`, or
+`declares minLength: String, not Int`.
 **Fix:** drop the old directive declaration and use the package's.
 
 ```ts
@@ -172,11 +173,23 @@ const typeDefs = [constraintTypeDefs, yourTypeDefs]; // no other `directive @con
 input field (`Page.size`).
 **Why:** a request that leaves the value out would be refused for something the
 client never sent. The text after the colon is the first Zod message.
+The default is checked as graphql coerces it: a single value for a list
+(`[String!] = "ab"` is `["ab"]`), an input object filled with its fields' own
+defaults.
 **Fix:** make the default satisfy the constraint, or relax the constraint.
 
 ```graphql
 type Query { a(name: String = "xy" @constraint(minLength: 2)): Int }
 ```
+
+### `@constraint on @cached(ttl:) checks nothing: a directive's argument reaches no resolver. Remove it.`
+
+**When:** calling `withValidation`, with `@constraint` written on an argument
+of a directive definition (`directive @cached(ttl: Int @constraint(min: 1))`).
+**Why:** graphql allows it there (it is an ARGUMENT_DEFINITION), but no
+resolver receives a directive's argument, so the constraint would check
+nothing.
+**Fix:** remove it; check the directive's arguments where you read them.
 
 ## Silent traps
 

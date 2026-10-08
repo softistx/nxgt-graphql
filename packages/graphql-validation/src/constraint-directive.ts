@@ -32,6 +32,9 @@ const allowed = new Set<string>([
  */
 export function assertOwnConstraint(directive: GraphQLDirective): void {
 	const problems = [
+		...(directive.isRepeatable
+			? ['repeatable, and only its first use is read']
+			: []),
 		...directive.locations
 			.filter((location) => !allowed.has(location))
 			.map((location) => `allowed on ${location}`),

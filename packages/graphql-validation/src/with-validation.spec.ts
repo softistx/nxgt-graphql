@@ -191,6 +191,26 @@ describe('withValidation', () => {
 		).toBe('BAD_USER_INPUT');
 	});
 
+	test('checks a subscription with no subscribe of its own in the default one', async () => {
+		const schema = buildSchema(`${constraintTypeDefs}
+			type Query { a: Int }
+			type Subscription { ticks(every: Int! @constraint(min: 1)): Int }`);
+		withValidation(schema);
+		const ticks = (
+			schema.getType('Subscription') as GraphQLObjectType
+		).getFields()['ticks'];
+		expect(ticks?.resolve).toBeUndefined();
+		const result = await subscribe({
+			schema,
+			document: parse('subscription { ticks(every: 0) }'),
+			rootValue: { ticks: async function* () {} },
+		});
+		expect(
+			(result as { errors?: { extensions: Record<string, unknown> }[] })
+				.errors?.[0]?.extensions['code'],
+		).toBe('BAD_USER_INPUT');
+	});
+
 	test('checks a subscription once, in subscribe, not on every event', () => {
 		const { schema } = server();
 		const ticks = (
@@ -244,6 +264,16 @@ describe('withValidation', () => {
 			);
 		});
 
+		test('not on a default graphql coerces into a valid value', () => {
+			const sdl = `${constraintTypeDefs}
+				input I { a: String! = "xyz" @constraint(minLength: 2) }
+				type Query {
+					one(tags: [String!] = "ab" @constraint(minLength: 2)): Int
+					filled(i: I = {}): Int
+				}`;
+			expect(() => withValidation(buildSchema(sdl))).not.toThrow();
+		});
+
 		test('when a default value breaks its own constraint', () => {
 			const argument = `${constraintTypeDefs}
 				type Query { a(name: String = "x" @constraint(minLength: 2)): Int }`;
@@ -271,6 +301,13 @@ describe('withValidation', () => {
 				);
 			});
 
+			test('declared repeatable', () => {
+				const sdl = constraintTypeDefs.replace(') on', ') repeatable on');
+				expect(() =>
+					withValidation(buildSchema(`${sdl} type Query { a: Int }`)),
+				).toThrow('it is repeatable, and only its first use is read.');
+			});
+
 			test('with an argument of another type', () => {
 				const sdl =
 					'directive @constraint(minLength: String) on ARGUMENT_DEFINITION type Query { a: Int }';
@@ -278,6 +315,15 @@ describe('withValidation', () => {
 					'declares minLength: String, not Int',
 				);
 			});
+		});
+
+		test('on a @constraint written on a directive argument', () => {
+			const sdl = `${constraintTypeDefs}
+				directive @cached(ttl: Int @constraint(min: 1)) on FIELD_DEFINITION
+				type Query { a: Int }`;
+			expect(() => withValidation(buildSchema(sdl))).toThrow(
+				"@constraint on @cached(ttl:) checks nothing: a directive's argument reaches no resolver. Remove it.",
+			);
 		});
 
 		test('on a misplaced constraint in an input type no argument reaches', () => {
