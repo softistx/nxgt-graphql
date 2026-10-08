@@ -5,6 +5,7 @@ import {
 	isListType,
 	isNonNullType,
 } from 'graphql';
+import { applyRuleCode } from '../rules';
 import type { Constraint } from './constraints';
 import { assertLeafTargets, assertObjectTargets, baseCode } from './leaf';
 
@@ -57,11 +58,7 @@ function requiredCode(
 
 function applyCode(source: string, constraints: readonly Constraint[]): string {
 	return constraints.reduce(
-		(code, { rule, value }) =>
-			(rule.toCode as (schema: string, value: string | number) => string)(
-				code,
-				value,
-			),
+		(code, { rule, value }) => applyRuleCode(rule, code, value),
 		source,
 	);
 }

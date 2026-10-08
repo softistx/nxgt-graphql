@@ -27,6 +27,8 @@ const schema = buildSchema(`${constraintTypeDefs}
 		points: [Point!]
 		role: Role
 		on: Boolean
+		grid: [[String!]] @constraint(minItems: 1, minLength: 2)
+		counts: [Int] @constraint(maxItems: 2, min: 0)
 	}
 	type Query { probe(p: Probe!): Int }
 `);
@@ -100,6 +102,12 @@ describe('inputCode', () => {
 			{ ...valid, tags: ['a', 'b', 'c'] },
 			{ ...valid, tags: ['abcd'] },
 			{ ...valid, points: [{ x: -1 }] },
+			{ ...valid, grid: [['ab'], null] },
+			{ ...valid, grid: [] },
+			{ ...valid, grid: [['a']] },
+			{ ...valid, counts: [0, null] },
+			{ ...valid, counts: [1, 2, 3] },
+			{ ...valid, counts: [-1] },
 		];
 		for (const value of cases) {
 			expect([value, generated.safeParse(value).success]).toEqual([
@@ -140,7 +148,7 @@ describe('inputCode', () => {
 			expect(runtimeError).toBeInstanceOf(Error);
 			expect(() =>
 				inputCode(input.type, constraints, where, () => 'z.any()'),
-			).toThrow((runtimeError as Error).message);
+			).toThrow(new Error((runtimeError as Error).message));
 		}
 	});
 

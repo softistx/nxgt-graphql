@@ -3,18 +3,10 @@ import {
 	type GraphQLField,
 	type GraphQLFieldResolver,
 	type GraphQLSchema,
-	isInterfaceType,
-	isObjectType,
 } from 'graphql';
 import type { z } from 'zod';
 import { parseArgs } from './bad-user-input';
-import {
-	argsSchemaOf,
-	assertInterfaceConstraintsKept,
-} from './builder/args-schema';
-import { constraintsOn } from './builder/constraints';
-import { InputSchemas } from './builder/input-schema';
-import { assertOwnConstraint } from './constraint-directive';
+import { checkConstraints } from './builder/check-constraints';
 import { constraintOf } from './rules';
 
 // Symbol.for: two copies of the package in one tree still wrap a field once.
@@ -61,26 +53,6 @@ function wrap(
 }
 
 /**
- * Fails on a `@constraint` written on a directive's argument: graphql allows
- * it there (ARGUMENT_DEFINITION), but no resolver receives that argument, so
- * it would check nothing.
- */
-function assertNoDirectiveArgumentConstrained(
-	inputs: InputSchemas,
-	schema: GraphQLSchema,
-): void {
-	for (const directive of schema.getDirectives()) {
-		for (const arg of directive.args) {
-			if (constraintsOn(inputs.directive, arg.astNode).length > 0) {
-				throw new Error(
-					`@constraint on @${directive.name}(${arg.name}:) checks nothing: a directive's argument reaches no resolver. Remove it.`,
-				);
-			}
-		}
-	}
-}
-
-/**
  * Checks every `@constraint` of `schema` before the resolvers run. Each
  * field with a constrained argument — directly, or anywhere inside an input
  * type it takes — gets its resolver (and its `subscribe`) wrapped: the
@@ -104,35 +76,14 @@ function assertNoDirectiveArgumentConstrained(
  * is checked; a code-first schema with no SDL has no `@constraint` to read.
  */
 export function withValidation<S extends GraphQLSchema>(schema: S): S {
-	const inputs = new InputSchemas(schema);
-	if (!inputs.directive) {
+	const directive = checkConstraints(schema, (type, field, args) => {
+		const subscription = type === schema.getSubscriptionType();
+		wrap(field, args, `${type.name}.${field.name}`, subscription);
+	});
+	if (!directive) {
 		throw new Error(
 			'withValidation: this schema declares no @constraint directive. Add constraintTypeDefs to its type definitions.',
 		);
 	}
-	assertOwnConstraint(inputs.directive);
-	inputs.buildAll(schema);
-	assertNoDirectiveArgumentConstrained(inputs, schema);
-	for (const type of Object.values(schema.getTypeMap())) {
-		if (type.name.startsWith('__')) continue;
-		// An interface's fields resolve on its objects: built for their errors only.
-		if (isInterfaceType(type)) {
-			for (const field of Object.values(type.getFields()))
-				argsSchemaOf(inputs, type.name, field);
-		}
-		if (!isObjectType(type)) continue;
-		assertInterfaceConstraintsKept(inputs, type);
-		for (const field of Object.values(type.getFields()) as GraphQLField<
-			unknown,
-			unknown
-		>[]) {
-			const args = argsSchemaOf(inputs, type.name, field);
-			if (args) {
-				const subscription = type === schema.getSubscriptionType();
-				wrap(field, args, `${type.name}.${field.name}`, subscription);
-			}
-		}
-	}
-	inputs.checkDefaults();
 	return schema;
 }

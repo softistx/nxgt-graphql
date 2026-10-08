@@ -221,6 +221,7 @@ packages/graphql-validation/src/
     index.ts               `rules` keyed by argument, applyRule, constraintOf
   formats/                 one format per file, `<name>Format`; format.ts, all.ts, index.ts alike
   builder/                 GraphQL types to Zod: InputSchemas, argsSchemaOf, leaf, constraints;
+                           check-constraints.ts, every startup check;
                            input-code.ts, the same walk written as source
 packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `bun run typedefs:write`
 ```
@@ -237,8 +238,10 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   source and requires both to accept and refuse the same inputs, and every
   refusal to be owned (`owns`) by that rule and no other.
 - Rules, formats and the builder are internal. `./codegen` exports only what
-  the codegen plugin needs (`inputCode`, `constraintsOn`, `assertOwnConstraint`);
-  widening it is a public-API decision.
+  the codegen plugin needs (`checkConstraints`, `constraintsOn`, `inputCode`);
+  widening it is a public-API decision. `withValidation` runs its startup
+  checks through `checkConstraints`, so the generator refuses the same
+  schemas.
 - **`inputCode` mirrors `InputSchemas`:** both refuse a constraint that cannot
   apply through `assertLeafTargets`/`assertObjectTargets` (one message), and
   `input-code.spec.ts` requires the generated source to accept and refuse what
