@@ -8,6 +8,7 @@ is the one a client sees.
 - [Startup](#startup)
 - [Silent traps](#silent-traps)
 - [Runtime](#runtime)
+- [The bin](#the-bin)
 
 ## Install
 
@@ -223,3 +224,22 @@ every issue. The resolver did not run.
 | `Too big: expected array to have <=2 items` | `maxItems: 2` |
 | `Too small: expected number to be >=18` | `min: 18` |
 | `Invalid string: must match pattern /.../` | `pattern` |
+
+## The bin
+
+### `typedefs failed: <message>`
+
+**When:** `nxgt-graphql-validation typedefs --out <file>` exits 1, for example
+with `typedefs failed: EACCES: permission denied, mkdir 'schema'`, or
+`EISDIR` when `<file>` is a folder.
+**Why:** the file or its folder could not be written; the rest of the line is
+the system's own message.
+**Fix:** point `--out` at a file path you can write, or print to stdout and
+redirect: `nxgt-graphql-validation typedefs > schema/constraint.graphqls`.
+
+### `Unknown command "<x>".` or `Unexpected arguments: …`
+
+**When:** the bin exits 2 and prints its usage.
+**Why:** the only command is `typedefs`, and its only flag is `--out <file>`.
+**Fix:** `nxgt-graphql-validation typedefs [--out <file>]`; `--help` prints
+the usage and exits 0.

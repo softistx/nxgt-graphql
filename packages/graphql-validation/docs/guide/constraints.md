@@ -230,8 +230,13 @@ to commit it with your schema:
 bunx nxgt-graphql-validation typedefs --out schema/constraint.graphqls
 ```
 
+and list `schema/constraint.graphqls` in `graphql.config.yml` in place of the
+`node_modules/...` line.
+
 `npx` works the same; `--out` creates the folder, and without it the SDL goes
-to stdout (`--help` lists the flags). Regenerate the file after upgrading the
+to stdout (`--help` lists the flags). It exits 0 when done, 1 when the file
+cannot be written (`typedefs failed: <message>` on stderr), and 2 on a usage
+error (`Unknown command "<x>".`, `Unexpected arguments: …`, or no command). Regenerate the file after upgrading the
 package. Never put it in the server's `typeDefs` next to `constraintTypeDefs`:
 the schema would declare the directive twice and `buildSchema` throws
 `There can be only one directive named "@constraint".`
