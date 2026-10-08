@@ -47,6 +47,8 @@ describe('the typedefs command', () => {
 		const message = String(err.mock.calls[0]?.[0]);
 		expect(message).toStartWith('pickScalars: no scalar is named "Nope".');
 		expect(message).toContain('DateTime');
+		// Then the usage, as every other usage error.
+		expect(message).toContain('.\n\nUsage: nxgt-graphql-scalars typedefs');
 		expect(out).not.toHaveBeenCalled();
 	});
 

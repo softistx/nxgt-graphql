@@ -114,7 +114,7 @@ bunx nxgt-graphql-scalars typedefs DateTime URL --out        # only those two
 | Command line | Does |
 | --- | --- |
 | `typedefs` | prints every scalar |
-| `typedefs <Name>...` | prints those only, as `pickScalars(...names).typeDefs` does; an unknown name exits 2 with `pickScalars: no scalar is named "<name>". The names are …` |
+| `typedefs <Name>...` | prints those only, as `pickScalars(...names).typeDefs` does; an unknown name exits 2 with `pickScalars: no scalar is named "<name>". The names are …`, then the usage |
 | `--out [<file>]` | writes instead of printing, creating the folder; with no file, `generated/graphql/scalars.graphqls` relative to the current directory. The names come before it: `--out DateTime` is refused |
 | `--help`, `-h` | shows the usage, anywhere on the line |
 
