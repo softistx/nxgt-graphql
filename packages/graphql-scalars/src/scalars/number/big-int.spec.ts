@@ -41,12 +41,19 @@ describe('BigInt', () => {
 	});
 
 	test('a literal past 2^53 written as a number is refused, not rounded', () => {
+		const hint = 'Invalid integer: past 2^53, write it as a string';
 		expect(() =>
 			BigIntScalar.parseLiteral(
 				{ kind: Kind.INT, value: '9007199254740993' },
 				undefined,
 			),
-		).toThrow('BigInt cannot represent this input');
+		).toThrow(`BigInt cannot represent this input: ${hint}`);
+		expect(() => BigIntScalar.parseValue(2 ** 53)).toThrow(
+			`BigInt cannot represent this input: ${hint}`,
+		);
+		expect(() => BigIntScalar.parseValue(-(2 ** 53))).toThrow(
+			`BigInt cannot represent this input: ${hint}`,
+		);
 		expect(
 			BigIntScalar.parseLiteral(
 				{ kind: Kind.STRING, value: '9007199254740993' },

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validDate } from '../../rules/date';
 import { noNegativeZero } from '../../rules/integer';
 import { zodScalar } from '../../zod-scalar';
 
@@ -12,11 +13,7 @@ const LIMIT = 8.64e15;
  */
 export const timestampSchema = z.codec(
 	noNegativeZero(z.int().min(-LIMIT).max(LIMIT)),
-	// Zod's own message for `new Date(NaN)` is "expected date, received Date".
-	z.date({
-		error: (issue) =>
-			issue.input instanceof Date ? 'Invalid Date' : undefined,
-	}),
+	validDate(),
 	{
 		decode: (milliseconds) => new Date(milliseconds),
 		encode: (date) => date.getTime(),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { noNegativeZeroOffset, OFFSET } from '../../rules/offset';
 import { zodScalar } from '../../zod-scalar';
 
 /**
@@ -7,15 +8,16 @@ import { zodScalar } from '../../zod-scalar';
  * The offset is canonical: an uppercase `Z`, hours 00 to 23, and no
  * `-00:00` (write `+00:00`, as `UtcOffset` does). No leap second.
  */
-export const timeSchema = z
-	.string()
-	.regex(
-		/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$/,
-		{ error: 'Invalid time: expected HH:MM:SS with an offset' },
-	)
-	.refine((text) => !text.endsWith('-00:00'), {
-		error: 'Invalid time: write no offset as +00:00',
-	});
+export const timeSchema = noNegativeZeroOffset(
+	z
+		.string()
+		.regex(
+			new RegExp(`^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?${OFFSET}$`),
+			{
+				error: 'Invalid time: expected HH:MM:SS with an offset',
+			},
+		),
+);
 
 export const TimeScalar = zodScalar(timeSchema, {
 	name: 'Time',

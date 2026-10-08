@@ -7,6 +7,7 @@ describe('SHA256', () => {
 		accepted: [
 			'a'.repeat(64),
 			'A'.repeat(64),
+			'aB'.repeat(32),
 			`${'0'.repeat(32)}${'f'.repeat(32)}`,
 		],
 		refused: [

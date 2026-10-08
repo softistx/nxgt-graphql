@@ -4,8 +4,9 @@ export const MAX_DEPTH = 1000;
 /**
  * Whether `value` is what `JSON.stringify` writes back as it is: `null`, a
  * boolean, a string, a finite number, an array or a plain object of them.
- * A cycle, `undefined` (even as an object's field or an array's hole), a `Date`, a `Map`, a
- * class instance, `NaN` or a `bigint` is not. Nesting deeper than
+ * A cycle, `undefined` (even as an object's field or an array's hole), a
+ * `Date`, a `Map`, a class instance, `NaN`, `-0` (written `0`) or a
+ * `bigint` is not. Nesting deeper than
  * {@link MAX_DEPTH} is refused, so a hostile value cannot overflow the stack.
  */
 export function isJsonValue(value: unknown): boolean {
@@ -39,7 +40,7 @@ function walk(
 		case 'boolean':
 			return true;
 		case 'number':
-			return Number.isFinite(value);
+			return Number.isFinite(value) && !Object.is(value, -0);
 		case 'object':
 			break;
 		default:

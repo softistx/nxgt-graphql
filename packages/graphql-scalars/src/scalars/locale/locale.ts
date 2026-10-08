@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { zodScalar } from '../../zod-scalar';
 
-/** The tag `Intl` writes for `tag`, or `undefined` when it is not well-formed. */
-function canonical(tag: string): string | undefined {
+/** Whether `Intl` takes `tag` as well-formed: engines agree on that much. */
+function isWellFormed(tag: string): boolean {
 	try {
-		return Intl.getCanonicalLocales(tag)[0];
+		Intl.getCanonicalLocales(tag);
+		return true;
 	} catch {
-		return undefined;
+		return false;
 	}
 }
 
@@ -27,30 +28,89 @@ function hasCanonicalCase(subtags: readonly string[]): boolean {
 	});
 }
 
+/** Whether every string is after the one before it: sorted, no duplicate. */
+function isAscending(keys: readonly string[]): boolean {
+	return keys.every(
+		(key, index) => index === 0 || (keys[index - 1] as string) < key,
+	);
+}
+
 /**
- * Whether `tag` is a well-formed BCP 47 tag in canonical case. The case rule
- * is written here, not taken from `Intl`: engines do not agree on which
- * aliases they rewrite (V8 turns `tl` into `fil` and `en-UK` into `en-GB`,
- * JavaScriptCore keeps both), so an alias is not refused. Extensions are
- * compared with what `Intl` writes, so their order is canonical.
+ * Whether a `-u-` extension (RFC 6067) is in canonical order: its
+ * attributes first, sorted, then its keywords sorted by key, each key once.
+ * A keyword's `true` is written by leaving it out (`kn`, not `kn-true`).
+ */
+function isCanonicalUnicode(subtags: readonly string[]): boolean {
+	const firstKey = subtags.findIndex((subtag) => subtag.length === 2);
+	const attributes = firstKey === -1 ? subtags : subtags.slice(0, firstKey);
+	if (!isAscending(attributes)) return false;
+	const keys: string[] = [];
+	for (let index = attributes.length; index < subtags.length; ) {
+		keys.push(subtags[index] as string);
+		let end = index + 1;
+		while (end < subtags.length && (subtags[end] as string).length > 2) end++;
+		if (end === index + 2 && subtags[index + 1] === 'true') return false;
+		index = end;
+	}
+	return isAscending(keys);
+}
+
+/**
+ * Whether a `-t-` extension (RFC 6497) is in canonical order: an optional
+ * source language, then its fields sorted by key (a letter and a digit).
+ */
+function isCanonicalTransformed(subtags: readonly string[]): boolean {
+	return isAscending(subtags.filter((subtag) => /^[a-z]\d$/.test(subtag)));
+}
+
+/**
+ * Whether the extensions, from the first singleton on, are in canonical
+ * form: lowercase, the singletons in ascending order, and `-u-` and `-t-`
+ * each in its own order. `-x-` (private use) ends the tag: what follows it
+ * is not read as extensions. A value's alias (`islamicc`, `kb-yes`) is kept,
+ * as a language's alias is.
+ */
+function hasCanonicalExtensions(subtags: readonly string[]): boolean {
+	if (subtags.some((subtag) => subtag !== subtag.toLowerCase())) return false;
+	const singletons: string[] = [];
+	for (let index = 0; index < subtags.length; ) {
+		const singleton = subtags[index] as string;
+		if (singleton === 'x') break;
+		singletons.push(singleton);
+		let end = index + 1;
+		while (end < subtags.length && (subtags[end] as string).length > 1) end++;
+		const body = subtags.slice(index + 1, end);
+		if (singleton === 'u' && !isCanonicalUnicode(body)) return false;
+		if (singleton === 't' && !isCanonicalTransformed(body)) return false;
+		index = end;
+	}
+	return isAscending(singletons);
+}
+
+/**
+ * Whether `tag` is a well-formed BCP 47 tag in canonical form. `Intl` says
+ * only whether it is well-formed: engines do not agree on what they rewrite
+ * (V8 turns `tl` into `fil`, `en-UK` into `en-GB` and `en-t-iw` into
+ * `en-t-he`; JavaScriptCore keeps all three), so case and order are checked
+ * here and an alias is not refused.
  */
 function isLocale(tag: string): boolean {
-	const written = canonical(tag);
-	if (written === undefined) return false;
+	if (!isWellFormed(tag)) return false;
 	const subtags = tag.split('-');
 	const start = subtags.findIndex((subtag) => subtag.length === 1);
 	if (start === -1) return hasCanonicalCase(subtags);
-	const extensions = `-${subtags.slice(start).join('-')}`;
 	return (
-		hasCanonicalCase(subtags.slice(0, start)) && written.endsWith(extensions)
+		hasCanonicalCase(subtags.slice(0, start)) &&
+		hasCanonicalExtensions(subtags.slice(start))
 	);
 }
 
 /**
  * A well-formed BCP 47 language tag in canonical case, kept as sent: `fr`,
- * `fr-FR`, `zh-Hant-TW`, `en-US-u-ca-buddhist`. Another case (`fr-fr`), `_`
- * (`en_US`) or an extension out of order is refused, not rewritten. An alias
- * (`tl`, `iw`, `en-UK`) is taken. Well-formed only: the subtags are not
+ * `fr-FR`, `zh-Hant-TW`, `en-US-u-ca-buddhist`. Another case (`fr-fr`,
+ * `en-U-CA-BUDDHIST`), `_` (`en_US`), or extensions or `-u-` keywords out
+ * of order are refused, not rewritten. An alias (`tl`, `iw`, `en-UK`,
+ * `en-t-iw`, `en-u-ca-islamicc`) is taken. Well-formed only: the subtags are not
  * checked against the IANA registry, so `xx` and `en-ZZ` pass. At most 255
  * characters.
  */

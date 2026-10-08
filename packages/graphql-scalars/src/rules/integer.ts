@@ -8,6 +8,6 @@ export function noNegativeZero<S extends z.ZodNumber | z.ZodNumberFormat>(
 	schema: S,
 ) {
 	return schema.refine((n) => !Object.is(n, -0), {
-		error: 'Expected an integer, not -0',
+		error: 'Invalid integer: write -0 as 0',
 	});
 }

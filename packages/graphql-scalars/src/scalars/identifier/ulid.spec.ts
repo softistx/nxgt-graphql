@@ -7,6 +7,7 @@ describe('ULID', () => {
 		accepted: [
 			'01ARZ3NDEKTSV4RRFFQ69G5FAV',
 			'01arz3ndektsv4rrffq69g5fav',
+			'01ARZ3ndektsv4RRFFQ69g5fav',
 			'7ZZZZZZZZZZZZZZZZZZZZZZZZZ',
 		],
 		refused: [
