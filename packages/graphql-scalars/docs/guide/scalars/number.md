@@ -1,16 +1,23 @@
 # Number scalars
 
-The `number` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `number` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 Integers of 32 bits (as GraphQL's `Int`), finite floats, then the integers
 beyond 32 bits. A float refuses `NaN` and `Infinity`.
 
+A number outside a scalar's range is refused with Zod's own message, which
+names the bound and never the value: `Too small: expected number to be >0`,
+`Too big: expected number to be <=2147483647`. The bound is written in each
+section below; [Troubleshooting](../../troubleshooting.md) lists them.
 
 Every integer scalar here (`PositiveInt`, `NegativeInt`, `NonNegativeInt`,
 `NonPositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt`) reads literals as
 GraphQL's `Int` does: a float literal is refused even when it holds an
 integer (`1.0`, `1e3`: `PositiveInt cannot represent a FloatValue literal`),
-and so is `-0` (`Expected an integer, not -0`). A JSON variable `1.0` is the
+and so is `-0` (`Invalid integer: write -0 as 0`; `PositiveInt` and
+`NegativeInt` refuse it by their bound). A JSON variable `1.0` is the
 number 1 and is accepted: JSON does not keep the difference.
 
 ## `PositiveInt`
@@ -21,8 +28,8 @@ and `"1"`.
 
 An integer from 1 to 2147483647. GraphQL's own `Int` is 32 bits, so this one
 is too: a larger number could not be written by a client that follows the spec.
-A float literal whose value is whole, such as `1.0`, is read as `1` and
-accepted, where GraphQL's `Int` refuses it; `1.5` is refused.
+A float literal is refused, even a whole one such as `1.0`, as GraphQL's `Int`
+refuses it.
 
 ```ts
 import { PositiveIntScalar } from '@nxgt/graphql-scalars';
@@ -150,9 +157,11 @@ LongScalar.parseValue(42); // 42n
 LongScalar.serialize(-9223372036854775808n); // '-9223372036854775808'
 
 LongScalar.parseValue('007');
-// throws: Long cannot represent this input: Expected a decimal integer, with no leading zero and no "-0"
+// throws: Long cannot represent this input: Invalid integer: no leading zero and no "-0"
 LongScalar.parseValue(1.5);
-// throws: Long cannot represent this input: Expected a decimal integer string or a safe integer
+// throws: Long cannot represent this input: Invalid integer: expected a decimal string or a safe integer
+LongScalar.parseValue(2 ** 60);
+// throws: Long cannot represent this input: Invalid integer: past 2^53, write it as a string
 LongScalar.parseValue('9223372036854775808');
 // throws: Long cannot represent this input: Too big: expected bigint to be <=9223372036854775807
 ```

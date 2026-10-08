@@ -1,7 +1,8 @@
 # Scalars
 
-The scalars of the package, grouped by category, the exact rule of each, and
-how to put them in a schema. For your own scalars see [Custom scalars](custom-scalars.md).
+The scalars of the package, grouped by category, the exact rule of each, and how
+to put them in a schema. For your own scalars see [Custom
+scalars](custom-scalars.md).
 
 ## The smallest example
 
@@ -58,8 +59,11 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 ```ts
 // every scalar has this shape, `X` being its GraphQL name
 const XScalar: ZodScalar<typeof xSchema, 'X'>; // GraphQLScalarType<Output, Input>
-// DateTime: GraphQLScalarType<Date, string>; Timestamp: <Date, number>; PositiveInt: <number, number>;
-// Long, BigInt: <bigint, string | number>; the others: <string, string>
+// DateTime: GraphQLScalarType<Date, string>; Timestamp: <Date, number>;
+// Long, BigInt: <bigint, string | number>;
+// the number scalars (PositiveInt, Port, …), Latitude, Longitude: <number, number>;
+// JSON, JSONObject: <unknown, unknown> (checked as JSON); Void: <null, null>;
+// the others: <string, string>
 
 // every scalar, keyed by its GraphQL name
 type ScalarResolvers = { DateTime: typeof DateTimeScalar /* , Date, ... */ };
@@ -72,8 +76,11 @@ const schemas: Schemas;
 const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scalar
 ```
 
-`scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order
-of their export.
+`scalarTypeDefs`, `scalarResolvers` and `schemas` list the scalars in the
+code-unit order of their names, not a dictionary's: every upper-case letter
+sorts before every lower-case one. `scalarTypeDefs` and `scalarResolvers`
+follow the `…Scalar` export names (`HSLA` before `HSL`, `HSL` before
+`HexColorCode`); `schemas` follows the `…Schema` names (`hsl` before `hsla`).
 
 A scalar with a standard behind it has a `specifiedBy` pointing at it (RFC 3339
 for `DateTime`, the WHATWG URL standard for `URL`, RFC 4291 for `IPv6`); the
@@ -82,7 +89,9 @@ category pages name the exports and rules of each, and the SDL of
 
 ## Schema-first with a server
 
-Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both whole, so every scalar a resolver names is declared. To declare only some, use [`pickScalars`](#pickscalars).
+Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both
+whole, so every scalar a resolver names is declared. To declare only some, use
+[`pickScalars`](#pickscalars).
 
 ```ts
 import { createSchema } from 'graphql-yoga';
@@ -155,7 +164,7 @@ function pickScalars<const N extends readonly ScalarName[]>(
 | `pickScalars()` | `{ typeDefs: '', resolvers: {} }` |
 | `pickScalars('URL', 'URL')` | `URL` declared once |
 | `pickScalars('Datetime')` | does not compile (`TS2345`): not a `ScalarName` |
-| a name that got past the compiler | throws `TypeError: pickScalars: no scalar is named "Datetime". The names are Date, DateTime, ….` |
+| a name that got past the compiler | throws `TypeError: pickScalars: no scalar is named "Datetime". The names are Base64, Base64URL, BigInt, ….` |
 
 `resolvers` is typed by the names you pass, so `resolvers.URL` exists and
 `resolvers.UUID` does not. Declare in your own SDL only the scalars you
@@ -163,10 +172,10 @@ picked: a field typed with another one fails when the schema is built.
 
 ## The same rules outside GraphQL
 
-Each scalar's Zod schema is exported on its own, named in its heading above
-(`dateTimeSchema` is a codec between the wire string and a `Date`), and
-`schemas` holds them all under the name without `Schema`: `schemas.dateTime`
-is `dateTimeSchema`.
+Each scalar's Zod schema is exported on its own, named in its section of its
+category's page (`dateTimeSchema` is a codec between the wire string and a
+`Date`), and `schemas` holds them all under the name without `Schema`:
+`schemas.dateTime` is `dateTimeSchema`.
 
 ```ts
 import { z } from 'zod';
@@ -186,4 +195,5 @@ const parsed = body.parse({
 }); // parsed.at is a Date
 ```
 
-Next: [Custom scalars](custom-scalars.md), or [Migrating from graphql-scalars](migrating-from-graphql-scalars.md).
+Next: [Custom scalars](custom-scalars.md), or [Migrating from
+graphql-scalars](migrating-from-graphql-scalars.md).

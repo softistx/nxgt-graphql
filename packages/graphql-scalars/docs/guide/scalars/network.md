@@ -1,6 +1,8 @@
 # Network scalars
 
-The `network` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `network` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 ## `IPv4`
 
@@ -47,7 +49,7 @@ import { IPScalar } from '@nxgt/graphql-scalars';
 
 IPScalar.parseValue('::1'); // '::1'
 IPScalar.parseValue('example.com');
-// throws: IP cannot represent this input: Expected an IPv4 or IPv6 address
+// throws: IP cannot represent this input: Invalid IP address: expected IPv4 or IPv6
 ```
 
 ## `CIDRv4`
@@ -84,11 +86,10 @@ CIDRv6Scalar.parseValue('2001:db8::/129');
 ## `MAC`
 
 Export `MACScalar`, schema `macSchema`. A string on both sides: six hex pairs
-separated by `:`, all lowercase or all uppercase. Accepts `00:1a:2b:3c:4d:5e`
-and `00:1A:2B:3C:4D:5E`; refuses mixed case (`00:1a:2B:3c:4d:5e`), `-` or `.`
-separators, five pairs and the empty string. The case is kept: the two
-spellings of one address are two different strings, so lowercase them before
-comparing.
+separated by `:`, in any case. Accepts `00:1a:2b:3c:4d:5e`, `00:1A:2B:3C:4D:5E`
+and a mixed `00:1a:2B:3c:4d:5e`; refuses `-` or `.` separators, five pairs and
+the empty string. The case is kept as sent: the spellings of one address are
+different strings, so lowercase them before comparing.
 
 ```ts
 import { MACScalar } from '@nxgt/graphql-scalars';
@@ -103,9 +104,10 @@ MACScalar.parseValue('00-1a-2b-3c-4d-5e');
 Export `HostnameScalar`, schema `hostnameSchema`. A string on both sides:
 dot-separated labels of letters, digits and hyphens (RFC 1123), none starting
 or ending with a hyphen, each up to 63 characters and 253 in all. A trailing
-dot is allowed (`example.com.`). The last label is not all digits, so an
-IPv4 address (`1.2.3.4`) or `example.123` is not a host name (RFC 1123, 2.1:
-use `IP` for an address). A single label (`localhost`) and punycode
+dot is allowed (`example.com.`). The last label is not a number: not all digits
+and not `0x` and hex digits, which a URL parser reads as an IPv4 address too. So
+`1.2.3.4`, `example.123` and `a.0x7f` are not host names (RFC 1123, 2.1: use
+`IP` for an address). A single label (`localhost`) and punycode
 (`xn--bcher-kva.example`) are; a Unicode label (`bücher.example`) is not.
 Accepts `example.com`, `api.example.com` and `localhost`; refuses
 `-example.com`, `exa_mple.com`, `1.2.3.4`, a space, the empty string and a
@@ -139,21 +141,40 @@ PhoneNumberScalar.parseValue('+33 6 12 34 56 78');
 ## `URL`
 
 Export `URLScalar`, schema `urlSchema`. A string on both sides. Accepts
-`https://example.com/a?b=c` and `http://localhost:3000`; refuses
-`javascript:`, `data:`, `mailto:` and `example.com`.
+`https://example.com/a?b=c`, `http://localhost:3000` and
+`https://[2001:db8::1]/`; refuses `javascript:`, `data:`, `mailto:` and
+`example.com`.
 
 An absolute `http:` or `https:` URL, and nothing else. `javascript:` and
 `data:` URLs are refused because a client is likely to put the value in an
-`href`, which makes them a script-injection vector. As with `z.url()`, the
-value is trimmed and tabs and line breaks are dropped, both ways:
-`' https://x.com\n'` is `'https://x.com'`.
+`href`, which makes them a script-injection vector. On top of `z.url()`:
+
+- the scheme is lowercase (`HTTPS://x.com` is refused);
+- the host, as written, is a `Hostname`, a canonical IPv4 or a bracketed IPv6
+  address. What only a URL parser reads as a host (`https://123`,
+  `https://0x7f.1`, `https://a_b.com`) is refused, and so is an empty host. A
+  Unicode host is refused too: send its punycode form
+  (`https://xn--bcher-kva.example`);
+- no user info (`https://user:pass@x.com`): credentials in an `href` leak;
+- a port is digits with no leading zero, and not empty (`:080` and `:` are
+  refused);
+- no white space, control or invisible format character anywhere, the path and
+  query included. Where `z.url()` alone would trim or drop them, the value is
+  refused, both ways: `' https://x.com\n'` is an error, not `'https://x.com'`.
+
+What a parser rewrites to an equivalent URL is kept as sent: an uppercase host,
+a default port (`:443`), dot segments (`/a/../b`) and percent-escapes in the
+path.
 
 ```ts
 import { URLScalar } from '@nxgt/graphql-scalars';
 
 URLScalar.parseValue('https://example.com/a?b=c'); // fine
+URLScalar.parseValue('https://EXAMPLE.COM:443/a/../b%2f'); // kept as sent
 URLScalar.parseValue('javascript:alert(1)');
 // throws: URL cannot represent this input: Invalid URL
+URLScalar.parseValue('https://user:pass@example.com');
+// throws: URL cannot represent this input: Invalid URL: expected a host name, an IPv4 address or a bracketed IPv6 address, with no user info
 ```
 
 ## `EmailAddress`
@@ -162,4 +183,17 @@ Export `EmailAddressScalar`, schema `emailAddressSchema`. A string on both
 sides. Accepts `ada@example.com` and `a.b+c@sub.example.org`; refuses `ada`,
 `ada@` and `a b@example.com`.
 
-It is `z.email()`.
+The local part is `z.email()`'s (letters, digits, `_`, `'`, `+`, `-` and dots
+between them; no quoted form). The domain follows `Hostname`'s rule, with at
+least two labels and a last label of letters or `xn--`: `ada@x.xn--p1ai` is
+accepted; `ada@localhost`, `ada@a-.com`, `ada@x.c0m`, a label past 63
+characters and a domain past 253 are refused. Any case, kept as sent. Only the
+shape is checked, not that the address receives mail.
+
+```ts
+import { EmailAddressScalar } from '@nxgt/graphql-scalars';
+
+EmailAddressScalar.parseValue('ada@example.com'); // 'ada@example.com'
+EmailAddressScalar.parseValue('ada@x.c0m');
+// throws: EmailAddress cannot represent this input: Invalid email address
+```

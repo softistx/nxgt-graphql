@@ -1,6 +1,8 @@
-# Strings scalars
+# String scalars
 
-The `string` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `string` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 ## `NonEmptyString`
 
@@ -8,15 +10,26 @@ Export `NonEmptyStringScalar`, schema `nonEmptyStringSchema`. A string on both
 sides. Accepts `a` and ` a `; refuses `""`, `"   "` and `"\n\t"`.
 
 A string with at least one non-white-space character; `" a "` is kept as it
-is, not trimmed.
+is, not trimmed. "White space" is JavaScript's `\s`: a no-break space
+(U+00A0) is white space and refused, while a zero-width space (U+200B) is not
+and is taken.
+
+```ts
+import { NonEmptyStringScalar } from '@nxgt/graphql-scalars';
+
+NonEmptyStringScalar.parseValue(' a '); // ' a ', not trimmed
+NonEmptyStringScalar.parseValue('\u00a0');
+// throws: NonEmptyString cannot represent this input: Invalid string: empty or only white space
+```
 
 ## `Emoji`
 
 Export `EmojiScalar`, schema `emojiSchema`. A string on both sides. Accepts
 `😀`, `👍🏽`, `👨‍👩‍👧`, `🇫🇷`, `1️⃣` and `❤️`; refuses `😀😀`, `🇫🇷🇩🇪`, `a`, `😀a`,
 `" 😀"`, `""`, a lone zero-width joiner, variation selector, skin tone (`🏻`)
-or keycap mark (U+20E3), and anything longer than 32 code points. A lone
-regional indicator (`🇫`) is taken: it is an emoji, drawn as a boxed letter.
+or keycap mark (U+20E3), a joiner at the end, a doubled variation selector or
+skin tone, a lone regional indicator (`🇫`: a flag is a pair) and anything
+longer than 32 code points.
 
 Exactly one emoji, as one user-perceived character. A skin tone, a ZWJ
 sequence, a flag and a keycap each count as one. The typical use is a reaction:

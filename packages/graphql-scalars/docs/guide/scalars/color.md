@@ -1,6 +1,8 @@
 # Color scalars
 
-The `color` category of `@nxgt/graphql-scalars`. Every scalar's export is `<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md) covers what they share.
+The `color` category of `@nxgt/graphql-scalars`. Every scalar's export is
+`<Name>Scalar` and its schema `<name>Schema`; [the scalars guide](../scalars.md)
+covers what they share.
 
 A color is a string on both sides, in one canonical spelling that is kept as
 sent. The CSS functions use the comma syntax with `", "` between the
@@ -27,10 +29,10 @@ convert between them.
 ## `HexColorCode`
 
 Export `HexColorCodeScalar`, schema `hexColorCodeSchema`. A string on both
-sides: `#` then 3, 4, 6 or 8 hexadecimal digits, in either case, kept as
-sent (`#F00` stays `#F00`). The 4 and 8 digit forms carry an alpha. Accepts
-`#f00`, `#F00`, `#f008`, `#ff0000`, `#FF0000`, `#ff000080` and `#aBcDeF`;
-refuses `f00` (no `#`), `#ff`, `#fffff`, `#fffffff`, `#ggg`, `# f00`,
+sides: `#` then 3, 4, 6 or 8 hexadecimal digits, in any case (mixed included),
+kept as sent (`#F00` stays `#F00`). The 4 and 8 digit forms carry an alpha.
+Accepts `#f00`, `#F00`, `#f008`, `#ff0000`, `#FF0000`, `#ff000080` and
+`#aBcDeF`; refuses `f00` (no `#`), `#ff`, `#fffff`, `#fffffff`, `#ggg`, `# f00`,
 `#ff0000 `, `""` and a number.
 
 ```ts

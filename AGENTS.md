@@ -46,7 +46,8 @@ packages/graphql-scalars/src/
   `index.ts`. A new category is a folder and one line in `all.ts`. Nothing is
   listed by hand anywhere else: `scalarResolvers`, `schemas` and
   `scalarTypeDefs` are derived from what `all.ts` exports, in the
-  code-unit order of a module namespace (`IPv4` before `Iban`).
+  code-unit order of a module namespace (`IBAN` before `IP`, `HSLA` before
+  `HSL`; `schemas` by the `…Schema` names, `hsl` before `hsla`).
 - **`registry.spec.ts` fails when one is forgotten**: a file that is not
   registered, has no spec beside it, exports anything but one scalar and one
   schema (a helper would reach the package root), is not named after its
