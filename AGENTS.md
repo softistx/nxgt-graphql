@@ -320,6 +320,8 @@ packages/graphql-codegen-zod/src/
 packages/graphql-codegen-zod/test/
   fixture.ts               the SDL and operations the specs generate from
   generated.ts             generated, typechecked: `bun run generated:write`
+  real-scalars.ts          every @nxgt/graphql-scalars scalar, alone and in a list
+  generated-scalars.ts     generated against the real scalarSchemas record, typechecked
   types.ts                 what the generated types say, checked by typecheck
 ```
 
@@ -356,6 +358,12 @@ packages/graphql-codegen-zod/test/
 - **`test/generated.ts` is generated and typechecked.** Never edit it: `bun
   run --cwd packages/graphql-codegen-zod generated:write` regenerates it, and
   a spec fails, naming that command, when it is stale. Biome skips it.
+- **The real scalar record is a parity target too.** `@nxgt/graphql-scalars`
+  is a devDependency only (`workspace:^`), never a dependency: the plugin
+  reads it by name at generation. `test/generated-scalars.ts` covers each of
+  its scalars, alone and in a list; `real-scalars.spec.ts` checks every key
+  is mapped and that the client takes, refuses and decodes what a server with
+  `scalarResolvers` does (codecs to `Date` and `bigint` included).
 - **A default is `.prefault(v)` then `.nullable()`:** optional on the way in
   (`z.input`), present on the way out (`z.output`); `test/types.ts` pins it.
   `.default` would not run a nested input's own defaults, and `.nullish()`
