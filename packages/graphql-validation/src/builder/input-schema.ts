@@ -10,7 +10,7 @@ import {
 	isInputObjectType,
 	isListType,
 	isNonNullType,
-	valueFromASTUntyped,
+	valueFromAST,
 } from 'graphql';
 import { z } from 'zod';
 import { applyRule } from '../rules';
@@ -29,6 +29,7 @@ export class InputSchemas {
 	readonly #defaults: {
 		schema: z.ZodType;
 		literal: ConstValueNode;
+		type: GraphQLInputType;
 		where: string;
 	}[] = [];
 	/** The input types a value can break a constraint inside. */
@@ -90,7 +91,8 @@ export class InputSchemas {
 			where,
 		);
 		const literal = input.astNode?.defaultValue;
-		if (literal) this.#defaults.push({ schema, literal, where });
+		if (literal)
+			this.#defaults.push({ schema, literal, type: input.type, where });
 		return schema;
 	}
 
@@ -100,8 +102,12 @@ export class InputSchemas {
 	 * sent. Run once every schema is built, so a recursive type is complete.
 	 */
 	checkDefaults(): void {
-		for (const { schema, literal, where } of this.#defaults.splice(0)) {
-			const result = schema.safeParse(valueFromASTUntyped(literal));
+		for (const { schema, literal, type, where } of this.#defaults.splice(0)) {
+			// Coerced as graphql coerces it: a single value for a list, an input
+			// object's own field defaults. One graphql refuses is its to report.
+			const value = valueFromAST(literal, type);
+			if (value === undefined) continue;
+			const result = schema.safeParse(value);
 			if (!result.success) {
 				throw new Error(
 					`The default value of ${where} breaks its @constraint: ${result.error.issues[0]?.message}`,

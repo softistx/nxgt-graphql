@@ -248,13 +248,15 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   naming the place, on a constraint that cannot apply (wrong kind, custom
   scalar, enum, input object, list rule off a list, unknown format, bad
   pattern), in every input type whether an argument reaches it or not; on a
-  `@constraint` declared otherwise than `constraintTypeDefs`; on a default
-  value that breaks its own constraint; and on an object field that drops or
+  `@constraint` declared otherwise than `constraintTypeDefs` (repeatable
+  included); on a `@constraint` on a directive's argument; on a default value
+  that breaks its own constraint, coerced as graphql coerces it; and on an object field that drops or
   changes the `@constraint` its interface writes on an argument.
 - **The resolver receives the parsed arguments, and nothing else changes.** An
   absent argument or input field stays absent, a `@oneOf` input keeps its one
   key, a field with nothing to check is not wrapped, wrapping twice wraps
-  nothing, and a subscription is checked once, in `subscribe`.
+  nothing, and a subscription is checked once, in `subscribe` (graphql's default one
+  when the field has none).
 - **One error shape.** `Invalid arguments for <Type>.<field>. <path>: <first
   message>`, `extensions.code` `BAD_USER_INPUT`, `extensions.issues` each with
   its path relative to the arguments, Zod's `code`, and `constraint` (the
