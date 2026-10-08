@@ -14,7 +14,7 @@
     },
     "packages/graphql-codegen-zod": {
       "name": "@nxgt/graphql-codegen-zod",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@nxgt/graphql-validation": "workspace:^",
         "change-case": "^5.4.4",
@@ -32,7 +32,7 @@
     },
     "packages/graphql-scalars": {
       "name": "@nxgt/graphql-scalars",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "graphql": "16.11.0",
@@ -46,7 +46,7 @@
     },
     "packages/graphql-validation": {
       "name": "@nxgt/graphql-validation",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "nxgt-graphql-validation": "./dist/cli.js",
       },

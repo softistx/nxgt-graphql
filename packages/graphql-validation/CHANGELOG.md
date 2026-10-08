@@ -1,5 +1,11 @@
 # @nxgt/graphql-validation
 
+## 0.2.0
+
+### Minor Changes
+
+- [#36](https://github.com/softistx/nxgt-graphql/pull/36) [`bef8114`](https://github.com/softistx/nxgt-graphql/commit/bef8114b0d408559363b4d5ae57f5989eb7265be) Thanks [@SteveGT96](https://github.com/SteveGT96)! - New subpath `@nxgt/graphql-validation/codegen` for code generators, read by the new `@nxgt/graphql-codegen-zod`. `inputCode(type, constraints, where, named, options?)` writes the schema of an argument or input field as source; `options.list` lets a generator rewrite each list, for example to take a single value as graphql does. It applies the same rules as `withValidation`, and a constraint that cannot apply is refused with the same message as at startup. It comes with `constraintsOn` and the `Constraint` type, and with `checkConstraints(schema)`, which runs every startup check of `withValidation` without wrapping anything, so a generator refuses the same schemas. Servers keep using the main entry.
+
 ## 0.1.0
 
 ### Minor Changes
