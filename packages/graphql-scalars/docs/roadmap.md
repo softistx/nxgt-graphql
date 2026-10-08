@@ -19,6 +19,7 @@ Next release (a minor):
 - **Extended scalars, category by category** — each category's page in
   [the scalars guide](guide/scalars.md) lists what it adds. In the next
   release:
+  - color: `HexColorCode`, `RGB`, `RGBA`, `HSL`, `HSLA`;
   - finance: `IBAN`, `Currency`;
   - geo: `Latitude`, `Longitude`;
   - locale: `CountryCode`, `Locale`;
@@ -33,8 +34,7 @@ Next release (a minor):
   - date-time: `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`,
     `TimeZone`, `Timestamp`.
 
-  Coming: color, value (`JSON`,
-  `JSONObject`, `Void`) and string (`Emoji`). See
+  Coming: value (`JSON`, `JSONObject`, `Void`) and string (`Emoji`). See
   [Migrating from graphql-scalars](guide/migrating-from-graphql-scalars.md).
 
 ## Next
