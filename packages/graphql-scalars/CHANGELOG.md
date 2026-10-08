@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.3.1
+
+### Patch Changes
+
+- [#32](https://github.com/softistx/nxgt-graphql/pull/32) [`059a3f7`](https://github.com/softistx/nxgt-graphql/commit/059a3f7c534a65f0122613bd273f24387a5509f2) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `nxgt-graphql-scalars` with no command now says `No command.` on stderr before the usage (still exit 2), as `nxgt-graphql-validation` does, instead of printing the usage on stdout.
+
 ## 0.3.0
 
 ### Minor Changes
