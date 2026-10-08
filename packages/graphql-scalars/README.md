@@ -1,11 +1,11 @@
 # @nxgt/graphql-scalars
 
-Ready-made GraphQL scalars, by category (dates and times, identifiers,
-network, numbers, strings), whose every rule is a Zod schema, and
-`zodScalar` to turn any Zod schema of your own into one. An input is decoded
-into the value your resolver receives; a resolver's result is encoded and
-checked on the way out as strictly as on the way in. It works with `graphql`
-16 and 17, code-first or schema-first.
+Ready-made GraphQL scalars, by category (colors, dates and times, encodings,
+finance, geo, identifiers, locale, network, numbers, strings, values), whose
+every rule is a Zod schema, and `zodScalar` to turn any Zod schema of your own
+into one. An input is decoded into the value your resolver receives; a
+resolver's result is encoded and checked on the way out as strictly as on the
+way in. It works with `graphql` 16 and 17, code-first or schema-first.
 
 ## Install
 
@@ -39,11 +39,17 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 
 | Category | Scalars |
 | --- | --- |
-| date-time | `DateTime`, `Date` |
-| identifier | `UUID` |
-| network | `URL`, `EmailAddress` |
-| number | `PositiveInt` |
-| string | `NonEmptyString` |
+| [date-time](docs/guide/scalars/date-time.md) | 9: `DateTime`, `Timestamp`, `Date`, `Duration`, `TimeZone` and 4 more |
+| [encoding](docs/guide/scalars/encoding.md) | 6: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`, `SHA512` |
+| [identifier](docs/guide/scalars/identifier.md) | 12: `UUID`, `UUIDv7`, `ULID`, `ObjectID`, `ISBN`, `SemVer` and 6 more |
+| [color](docs/guide/scalars/color.md) | 5: `HexColorCode`, `RGB`, `RGBA`, `HSL`, `HSLA` |
+| [finance](docs/guide/scalars/finance.md) | 2: `IBAN`, `Currency` |
+| [geo](docs/guide/scalars/geo.md) | 2: `Latitude`, `Longitude` |
+| [locale](docs/guide/scalars/locale.md) | 2: `CountryCode`, `Locale` |
+| [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `MAC` and 5 more |
+| [number](docs/guide/scalars/number.md) | 12: `PositiveInt`, `SafeInt`, `Port`, `Long`, `BigInt` and the signed Int and Float variants |
+| [string](docs/guide/scalars/string.md) | 2: `NonEmptyString`, `Emoji` |
+| [value](docs/guide/scalars/value.md) | 3: `JSON`, `JSONObject`, `Void` |
 
 The rule, the accepted and refused values and the exports of each scalar are
 in the [Scalars reference](docs/guide/scalars.md).
@@ -206,11 +212,17 @@ Every message is in [Troubleshooting](docs/troubleshooting.md).
   result is encoded; use `z.codec`.
 - `DateTime` serializes a `Date` only: parse a stored string before returning it.
 - `Date` is a string on both sides, never a `Date` object.
+- `URL` takes `http:` and `https:` only and refuses white space, user info and
+  a Unicode host rather than rewriting them: send `https://xn--bcher-kva.example`,
+  not `https://bücher.example`.
+- `Long` and `BigInt` are a `bigint` in resolvers and always a string on the
+  wire: return `BigInt(row.count)`, not a `number`.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
 - Guides: [Scalars](docs/guide/scalars.md),
-  [Custom scalars](docs/guide/custom-scalars.md)
+  [Custom scalars](docs/guide/custom-scalars.md),
+  [Migrating from graphql-scalars](docs/guide/migrating-from-graphql-scalars.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Roadmap](docs/roadmap.md)

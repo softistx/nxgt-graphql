@@ -1,7 +1,8 @@
 # Scalars
 
-The scalars of the package, grouped by category, the exact rule of each, and
-how to put them in a schema. For your own scalars see [Custom scalars](custom-scalars.md).
+The scalars of the package, grouped by category, the exact rule of each, and how
+to put them in a schema. For your own scalars see [Custom
+scalars](custom-scalars.md).
 
 ## The smallest example
 
@@ -40,149 +41,29 @@ exported as `XScalar`, its Zod schema as `xSchema`, and that schema is also
 
 | Category | Scalars |
 | --- | --- |
-| [date-time](#date-time) | `DateTime`, `Date` |
-| [identifier](#identifier) | `UUID` |
-| [network](#network) | `URL`, `EmailAddress` |
-| [number](#number) | `PositiveInt` |
-| [string](#string) | `NonEmptyString` |
+| [date-time](scalars/date-time.md) | `DateTime`, `Timestamp`, `Date`, `Time`, `LocalTime`, `LocalDateTime`, `Duration`, `UtcOffset`, `TimeZone` |
+| [encoding](scalars/encoding.md) | `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`, `SHA512` |
+| [identifier](scalars/identifier.md) | `UUID`, `UUIDv4`, `UUIDv7`, `GUID`, `ULID`, `Cuid2`, `NanoID`, `KSUID`, `XID`, `ObjectID`, `ISBN`, `SemVer` |
+| [color](scalars/color.md) | `HexColorCode`, `RGB`, `RGBA`, `HSL`, `HSLA` |
+| [finance](scalars/finance.md) | `IBAN`, `Currency` |
+| [geo](scalars/geo.md) | `Latitude`, `Longitude` |
+| [locale](scalars/locale.md) | `CountryCode`, `Locale` |
+| [network](scalars/network.md) | `URL`, `EmailAddress`, `IPv4`, `IPv6`, `IP`, `CIDRv4`, `CIDRv6`, `MAC`, `Hostname`, `PhoneNumber` |
+| [number](scalars/number.md) | `PositiveInt`, `NegativeInt`, `NonNegativeInt`, `NonPositiveInt`, `PositiveFloat`, `NegativeFloat`, `NonNegativeFloat`, `NonPositiveFloat`, `SafeInt`, `Port`, `Long`, `BigInt` |
+| [string](scalars/string.md) | `NonEmptyString`, `Emoji` |
+| [value](scalars/value.md) | `JSON`, `JSONObject`, `Void` |
 
-## date-time
-
-### `DateTime`
-
-Export `DateTimeScalar`, schema `dateTimeSchema`. Wire value a string,
-resolver value a `Date`. Accepts `2024-03-10T12:00:00+02:00` and
-`2024-03-10T10:00:00Z`; refuses a time with no offset, an impossible day and
-`2024-03-10`.
-
-An RFC 3339 date-time **with its offset** (`Z` or `±hh:mm`). A time without an
-offset names no instant, so it is refused. A variable becomes a `Date`; the
-way out calls `toISOString()`, so the wire value is always UTC, to the
-millisecond: `…00.123456789Z` comes back as `…00.123Z`. A `Date` before year
-0 or after 9999 has no RFC 3339 form and is refused on the way out.
-
-```ts
-import { DateTimeScalar } from '@nxgt/graphql-scalars';
-
-const date = DateTimeScalar.parseValue('2024-03-10T12:00:00+02:00'); // Date
-DateTimeScalar.serialize(date); // '2024-03-10T10:00:00.000Z'
-
-DateTimeScalar.parseValue('2024-03-10T12:00:00');
-// throws: DateTime cannot represent this input: Invalid ISO datetime
-```
-
-It serializes a `Date` **only**. A resolver that returns the string it read
-from a database, without parsing it, is refused:
-
-```ts
-import { DateTimeScalar } from '@nxgt/graphql-scalars';
-
-DateTimeScalar.serialize('2024-03-10T10:00:00.000Z');
-// throws: DateTime cannot serialize this value: Invalid input: expected date, received string
-
-DateTimeScalar.serialize(new Date('2024-03-10T10:00:00.000Z')); // fine
-```
-
-An invalid `Date` (`new Date(Number.NaN)`) is refused too.
-
-### `Date`
-
-Export `DateScalar`, schema `dateSchema`. A string on both sides. Accepts
-`2024-02-29`; refuses `2023-02-29`, `2024-2-1`, a date-time and a number.
-
-A calendar date, `YYYY-MM-DD`. It is not a `Date`
-because a `Date` is an instant: turning a birthday into one shifts it by a day
-in half the time zones. An impossible day (`2021-02-30`) is refused. If you
-need arithmetic, parse it yourself where the zone is known.
-
-```ts
-import { DateScalar } from '@nxgt/graphql-scalars';
-
-DateScalar.parseValue('2024-02-29'); // '2024-02-29'
-DateScalar.parseValue('2023-02-29');
-// throws: Date cannot represent this input: Invalid ISO date
-```
-
-## identifier
-
-### `UUID`
-
-Export `UUIDScalar`, schema `uuidSchema`. A string on both sides. Accepts
-`550e8400-e29b-41d4-a716-446655440000`; refuses a value with no hyphens and
-`not-a-uuid`.
-
-It is `z.uuid()`, the 8-4-4-4-12 form (RFC 9562).
-
-## network
-
-### `URL`
-
-Export `URLScalar`, schema `urlSchema`. A string on both sides. Accepts
-`https://example.com/a?b=c` and `http://localhost:3000`; refuses
-`javascript:`, `data:`, `mailto:` and `example.com`.
-
-An absolute `http:` or `https:` URL, and nothing else. `javascript:` and
-`data:` URLs are refused because a client is likely to put the value in an
-`href`, which makes them a script-injection vector. As with `z.url()`, the
-value is trimmed and tabs and line breaks are dropped, both ways:
-`' https://x.com\n'` is `'https://x.com'`.
-
-```ts
-import { URLScalar } from '@nxgt/graphql-scalars';
-
-URLScalar.parseValue('https://example.com/a?b=c'); // fine
-URLScalar.parseValue('javascript:alert(1)');
-// throws: URL cannot represent this input: Invalid URL
-```
-
-### `EmailAddress`
-
-Export `EmailAddressScalar`, schema `emailAddressSchema`. A string on both
-sides. Accepts `ada@example.com` and `a.b+c@sub.example.org`; refuses `ada`,
-`ada@` and `a b@example.com`.
-
-It is `z.email()`.
-
-## number
-
-### `PositiveInt`
-
-Export `PositiveIntScalar`, schema `positiveIntSchema`. A number on both
-sides. Accepts `1` and `2147483647`; refuses `0`, `-1`, `1.5`, `2147483648`
-and `"1"`.
-
-An integer from 1 to 2147483647. GraphQL's own `Int` is 32 bits, so this one
-is too: a larger number could not be written by a client that follows the spec.
-A float literal whose value is whole, such as `1.0`, is read as `1` and
-accepted, where GraphQL's `Int` refuses it; `1.5` is refused.
-
-```ts
-import { PositiveIntScalar } from '@nxgt/graphql-scalars';
-
-PositiveIntScalar.parseValue(2147483648);
-// throws: PositiveInt cannot represent this input: Too big: expected number to be <=2147483647
-```
-
-## string
-
-### `NonEmptyString`
-
-Export `NonEmptyStringScalar`, schema `nonEmptyStringSchema`. A string on both
-sides. Accepts `a` and ` a `; refuses `""`, `"   "` and `"\n\t"`.
-
-A string with at least one non-white-space character; `" a "` is kept as it
-is, not trimmed.
 
 ## Signatures
 
 ```ts
-const DateTimeScalar: ZodScalar<typeof dateTimeSchema, 'DateTime'>; // GraphQLScalarType<Date, string>
-const DateScalar: ZodScalar<typeof dateSchema, 'Date'>; // GraphQLScalarType<string, string>
-const EmailAddressScalar: ZodScalar<typeof emailAddressSchema, 'EmailAddress'>;
-const URLScalar: ZodScalar<typeof urlSchema, 'URL'>;
-const UUIDScalar: ZodScalar<typeof uuidSchema, 'UUID'>;
-const NonEmptyStringScalar: ZodScalar<typeof nonEmptyStringSchema, 'NonEmptyString'>;
-const PositiveIntScalar: ZodScalar<typeof positiveIntSchema, 'PositiveInt'>; // GraphQLScalarType<number, number>
+// every scalar has this shape, `X` being its GraphQL name
+const XScalar: ZodScalar<typeof xSchema, 'X'>; // GraphQLScalarType<Output, Input>
+// DateTime: GraphQLScalarType<Date, string>; Timestamp: <Date, number>;
+// Long, BigInt: <bigint, string | number>;
+// the number scalars (PositiveInt, Port, …), Latitude, Longitude: <number, number>;
+// JSON, JSONObject: <unknown, unknown> (checked as JSON); Void: <null, null>;
+// the others: <string, string>
 
 // every scalar, keyed by its GraphQL name
 type ScalarResolvers = { DateTime: typeof DateTimeScalar /* , Date, ... */ };
@@ -195,16 +76,22 @@ const schemas: Schemas;
 const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scalar
 ```
 
-`scalarTypeDefs` and `scalarResolvers` list the scalars in alphabetical order
-of their export: `Date`, `DateTime`, `EmailAddress`, `NonEmptyString`,
-`PositiveInt`, `URL`, `UUID`.
+`scalarTypeDefs`, `scalarResolvers` and `schemas` list the scalars in the
+code-unit order of their names, not a dictionary's: every upper-case letter
+sorts before every lower-case one. `scalarTypeDefs` and `scalarResolvers`
+follow the `…Scalar` export names (`HSLA` before `HSL`, `HSL` before
+`HexColorCode`); `schemas` follows the `…Schema` names (`hsl` before `hsla`).
 
-`EmailAddress`, `NonEmptyString` and `PositiveInt` have no `specifiedBy`; the
-others point at RFC 3339, the WHATWG URL standard and RFC 9562.
+A scalar with a standard behind it has a `specifiedBy` pointing at it (RFC 3339
+for `DateTime`, the WHATWG URL standard for `URL`, RFC 4291 for `IPv6`); the
+category pages name the exports and rules of each, and the SDL of
+`scalarTypeDefs` shows which have one.
 
 ## Schema-first with a server
 
-Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both whole, so every scalar a resolver names is declared. To declare only some, use [`pickScalars`](#pickscalars).
+Declare once with `scalarTypeDefs`, bind with `scalarResolvers`; spread both
+whole, so every scalar a resolver names is declared. To declare only some, use
+[`pickScalars`](#pickscalars).
 
 ```ts
 import { createSchema } from 'graphql-yoga';
@@ -277,7 +164,7 @@ function pickScalars<const N extends readonly ScalarName[]>(
 | `pickScalars()` | `{ typeDefs: '', resolvers: {} }` |
 | `pickScalars('URL', 'URL')` | `URL` declared once |
 | `pickScalars('Datetime')` | does not compile (`TS2345`): not a `ScalarName` |
-| a name that got past the compiler | throws `TypeError: pickScalars: no scalar is named "Datetime". The names are Date, DateTime, ….` |
+| a name that got past the compiler | throws `TypeError: pickScalars: no scalar is named "Datetime". The names are Base64, Base64URL, BigInt, ….` |
 
 `resolvers` is typed by the names you pass, so `resolvers.URL` exists and
 `resolvers.UUID` does not. Declare in your own SDL only the scalars you
@@ -285,11 +172,10 @@ picked: a field typed with another one fails when the schema is built.
 
 ## The same rules outside GraphQL
 
-Each scalar's Zod schema is exported on its own (`dateTimeSchema`, a codec
-between the wire string and a `Date`; `dateSchema`; `emailAddressSchema`;
-`urlSchema`; `uuidSchema`; `nonEmptyStringSchema`; `positiveIntSchema`), and
-`schemas` holds them all under the name without `Schema`: `schemas.dateTime`
-is `dateTimeSchema`.
+Each scalar's Zod schema is exported on its own, named in its section of its
+category's page (`dateTimeSchema` is a codec between the wire string and a
+`Date`), and `schemas` holds them all under the name without `Schema`:
+`schemas.dateTime` is `dateTimeSchema`.
 
 ```ts
 import { z } from 'zod';
@@ -309,4 +195,5 @@ const parsed = body.parse({
 }); // parsed.at is a Date
 ```
 
-Next: [Custom scalars](custom-scalars.md).
+Next: [Custom scalars](custom-scalars.md), or [Migrating from
+graphql-scalars](migrating-from-graphql-scalars.md).
