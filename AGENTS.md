@@ -123,6 +123,15 @@ that weakens one is a breaking change, even when every spec stays green.
   `ObjectID` (24 hex digits) takes either case on the owner's decision, kept
   as sent. Where the format's own reference reads one case only (rs/xid's
   `XID`), the scalar takes that case only.
+- **`TimeZone` is what the runtime's `Intl` knows, aliases included.** Node
+  and Bun disagree on which name of a zone is canonical (Node turns
+  `Asia/Kolkata` into `Asia/Calcutta`), so an alias is not refused, and the
+  value is kept as sent. The case must be the zone's own; for an alias Node
+  rewrites, that is a heuristic over each word's shape (`time-zone.ts`): it
+  refuses no tzdata name, measured on Bun and Node, and on Node lets through
+  a miscasing whose words still look like IANA words (`ASIA/Kolkata`,
+  `ZULU`, `Prc`). Bun lets none through. An offset is
+  `UtcOffset`'s, never a `TimeZone`.
 
 ## The green bar
 

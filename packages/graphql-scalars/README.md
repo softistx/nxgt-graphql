@@ -39,7 +39,7 @@ Scalars are grouped in categories. Each one `X` is exported as `XScalar`
 
 | Category | Scalars |
 | --- | --- |
-| [date-time](docs/guide/scalars/date-time.md) | 2: `DateTime`, `Date` |
+| [date-time](docs/guide/scalars/date-time.md) | 9: `DateTime`, `Timestamp`, `Date`, `Duration`, `TimeZone` and 4 more |
 | [encoding](docs/guide/scalars/encoding.md) | 6: `Base64`, `Base64URL`, `Hexadecimal`, `JWT`, `SHA256`, `SHA512` |
 | [identifier](docs/guide/scalars/identifier.md) | 12: `UUID`, `UUIDv7`, `ULID`, `ObjectID`, `ISBN`, `SemVer` and 6 more |
 | [network](docs/guide/scalars/network.md) | 10: `URL`, `EmailAddress`, `IPv4`, `IPv6`, `MAC` and 5 more |
