@@ -159,6 +159,18 @@ query Both($e: String, $u: String) { e(v: $e) u(v: $u) }
 bun add @nxgt/graphql-scalars@latest
 ```
 
+### `TS2305: Module '"@nxgt/zod"' has no exported member 'scalarSchemas'`
+
+**When:** type-checking the generated file under `moduleResolution`
+`nodenext` or `node16`, with `scalarSchemas: '@nxgt/zod'`.
+**Why:** `@nxgt/zod` before 0.1.2 ships declarations that `nodenext` does not
+resolve.
+**Fix:** upgrade it to 0.1.2 or later.
+
+```bash
+bun add @nxgt/zod@latest
+```
+
 ### `Property 'Money' does not exist on type '{ DateTime: ... }'` (or `TS2339`)
 
 **When:** type-checking the generated file, with `scalarSchemas` set.

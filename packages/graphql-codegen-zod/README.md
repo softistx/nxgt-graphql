@@ -34,7 +34,8 @@ Write the SDL files codegen reads: `@constraint` from
 `@nxgt/graphql-validation` and the custom scalars from `@nxgt/graphql-scalars`.
 Install both, so their bins are yours, whatever the package manager links:
 `bun add @nxgt/graphql-validation @nxgt/graphql-scalars` (the generated file
-imports `@nxgt/graphql-scalars` at run time anyway). Without the directive
+imports `@nxgt/graphql-scalars` at run time, unless it takes `@nxgt/zod`; see
+below). Without the directive
 nothing is constrained; plain types are still generated.
 
 ```sh
@@ -71,6 +72,10 @@ const config: CodegenConfig = {
 };
 export default config;
 ```
+
+A client that only runs the generated file can set
+`scalarSchemas: '@nxgt/zod'` instead: the same record, without `graphql`. See
+[On a client](docs/guide/output.md#on-a-client-nxgtzod).
 
 The plugin writes types named as `@graphql-codegen/typescript` names them
 (`SignUpInput`, `MutationSignUpArgs`), which would collide with that plugin's

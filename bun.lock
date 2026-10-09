@@ -21,6 +21,7 @@
       },
       "devDependencies": {
         "@nxgt/graphql-scalars": "workspace:^",
+        "@nxgt/zod": "^0.1.2",
         "@types/bun": "^1.4.0",
         "graphql": "16.11.0",
         "zod": "4.6.5",
@@ -137,6 +138,8 @@
     "@nxgt/graphql-scalars": ["@nxgt/graphql-scalars@workspace:packages/graphql-scalars"],
 
     "@nxgt/graphql-validation": ["@nxgt/graphql-validation@workspace:packages/graphql-validation"],
+
+    "@nxgt/zod": ["@nxgt/zod@0.1.2", "", { "peerDependencies": { "typescript": "^6.0.3", "zod": ">=4.6.5 <5" } }, "sha512-9WAyRMlEZJAtTsnayMItC6vZrep1/8IUayGQZn8D15SmEKTlkufSOwGmgKMwP32VYZFDkd+SBLovoFdn1/BhDQ=="],
 
     "@pnpm/deps.graph-sequencer": ["@pnpm/deps.graph-sequencer@1100.0.1", "", {}, "sha512-pOr5+q1fLYKwFN3LAJuGZEnfXDcQ73zqgDHMtGy+K+uIoUqyY+6MeDCWFwfu+4EFuq76I5EPFofoNAI+Bmmq4A=="],
 
