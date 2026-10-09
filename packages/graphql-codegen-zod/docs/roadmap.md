@@ -4,10 +4,7 @@ What `@nxgt/graphql-codegen-zod` is heading for, phrased as what you get.
 
 ## Now
 
-- **Output types.** Zod schemas and types for the SDL's object types,
-  interfaces and unions, and for each named operation's result and each
-  fragment, with `__typename` discriminating abstract types. Both parts are
-  written; they ship with the next release.
+Nothing in progress.
 
 ## Next
 
@@ -32,6 +29,13 @@ Nothing yet.
 
 ## Shipped
 
+- **Declarations that resolve under `nodenext`, 0.2.1.** The generated
+  file's `scalarSchemas` import typechecks with `moduleResolution`
+  `nodenext` or `node16`, with `@nxgt/graphql-scalars` 0.4.1 or later.
+- **Output types, 0.2.0.** Zod schemas and types for the SDL's object types,
+  interfaces and unions, and for each named operation's result and each
+  fragment, with `__typename` discriminating abstract types; `objects: false`
+  or `operations: false` turns either part off.
 - **The first release, 0.1.0.** Zod 4 schemas and types for enums, input
   types, field arguments and operation variables, carrying every
   `@constraint` of `@nxgt/graphql-validation`, so the client refuses what the
