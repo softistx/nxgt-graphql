@@ -111,7 +111,7 @@ export const zQueryUserArgs = z.object({
 | `z<Input>` | an `input` | `z.output` | the value a resolver receives |
 | `z<Parent><Field>Args` | an object or interface field with arguments | `z.output` | typing the resolver's arguments |
 | `z<Operation><Kind>Variables` | a named operation in `documents` | `z.input` | checking a form before sending it |
-| `z<Type>` | an object type, interface or union | `z.output` | typing or checking what a resolver returns |
+| `z<Type>` | an object type, interface or union | `z.output` | typing what a resolver returns; `z.encode` checks it |
 | `z<Operation><Kind>` | a named operation in `documents` | `z.output` | parsing the response on the client |
 | `z<Fragment>Fragment` | a fragment in `documents` | `z.output` | parsing the part of a response a fragment selects |
 
@@ -544,12 +544,13 @@ export const zUser: z.ZodType<User, UserWire> = z.object({
   field is `.nullish()`.
 - **Every custom scalar needs a schema**, an output-only one included
   (`createdAt: DateTime` on an object type): generation fails naming it,
-  as for inputs. 0.1.0 did not read output fields; `objects: false` gives
-  its output back.
+  as for inputs. 0.1.0 did not read output fields, and nor operations'
+  results; 0.1.0's output needs both `objects: false` and `operations: false`.
 - **A name the plugin already writes clashes:** an object type named
   `QueryFindArgs`, or `FilterInput` beside a cyclic input `Filter`, fails
   generation with "would declare … twice". Rename it, set `typesSuffix`, or
-  set `objects: false`.
+  set `objects: false` (or `operations: false`, for a clash with a result
+  such as `SearchQuery`).
 
 ## Operation results
 

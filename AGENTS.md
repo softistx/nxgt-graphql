@@ -399,7 +399,9 @@ packages/graphql-codegen-zod/test/
   before `.prefault` would keep `undefined` in the output type.
 - **Names follow the typescript plugins** (`@graphql-codegen/visitor-plugin-common`'s
   `convertFactory`): `Args` is `convert(parent + convert(field) + 'Args')`,
-  variables `convert(name + suffix + 'Variables')`. Read that code before
+  variables `convert(name + suffix + 'Variables')`, a result
+  `convert(name + suffix)`, a fragment `convert(name + fragment suffix)`, the
+  suffix following `omitOperationSuffix`/`dedupeOperationSuffix`. Read that code before
   changing a name.
 
 ## The green bar

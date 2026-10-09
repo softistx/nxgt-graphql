@@ -9,7 +9,7 @@ import {
 	introspectionFromSchema,
 	parse,
 } from 'graphql';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { documents, schema, sdl } from '../test/fixture';
 import * as generatedModule from '../test/generated';
 import { scalarSchemas } from '../test/scalars';
@@ -41,6 +41,21 @@ function server() {
 		groups: true,
 		log: true,
 		rate: true,
+		search: [
+			{
+				__typename: 'User',
+				id: 'u_1',
+				name: 'n',
+				joined: '2020-01-01T00:00:00Z',
+			},
+			{
+				__typename: 'Post',
+				id: 'p_1',
+				title: 'T',
+				author: { id: 'u_1', name: 'n' },
+			},
+		],
+		node: { __typename: 'Post', id: 'p_1', title: 'T' },
 	};
 	for (const root of [schema.getQueryType(), schema.getMutationType()]) {
 		for (const field of Object.values(root?.getFields() ?? {})) {
@@ -565,7 +580,7 @@ describe('the generated file, output types', () => {
 	const zSearchResult = schemas['zSearchResult'];
 	const user = { id: 'u_1', name: 'Al', joined: '2020-01-01T00:00:00Z' };
 
-	test('parses what a resolver returns: scalars decoded, unknown fields dropped, no __typename needed', () => {
+	test('parses the wire value into what a resolver returns: scalars decoded, unknown fields dropped, no __typename needed', () => {
 		expect(zUser?.parse({ ...user, extra: 1 })).toEqual({
 			id: 'u_1',
 			name: 'Al',
@@ -575,6 +590,19 @@ describe('the generated file, output types', () => {
 			false,
 		);
 		expect(zUser?.safeParse({ ...user, joined: 'nope' }).success).toBe(false);
+	});
+
+	test('checks what a resolver returns by encoding it', () => {
+		const returned = {
+			id: 'u_1',
+			name: 'Al',
+			joined: new Date('2020-01-01T00:00:00Z'),
+		};
+		expect(z.safeEncode(zUser as z.ZodType, returned).data).toEqual({
+			...user,
+			joined: '2020-01-01T00:00:00.000Z',
+		});
+		expect(z.safeEncode(zUser as z.ZodType, user).success).toBe(false);
 	});
 
 	test('nests through getters, and reads an abstract type as a union of its objects', () => {
@@ -749,6 +777,33 @@ describe('the generated file, operation results', () => {
 		expect(out).toContain('export const zLFragment = z.never();');
 	});
 
+	test('parses what the served schema answers, operation by operation', async () => {
+		const served = server();
+		const operations: [string, Record<string, unknown>][] = [
+			['User', { id: 'u_1' }],
+			['SignUp', { input: { email: 'a@b.co', name: 'Al' } }],
+			['Users', {}],
+			['Search', { text: 'a', id: 'p_1', withTags: true }],
+			['PinnedUser', { id: 'u_1' }],
+			['Friends', { id: 'u_1', v: true }],
+			['Deep', { id: 'u_1' }],
+		];
+		for (const [operationName, variableValues] of operations) {
+			const result = await graphql({
+				schema: served,
+				source,
+				operationName,
+				variableValues,
+			});
+			expect(result.errors).toBeUndefined();
+			const kind = /^(SignUp)$/.test(operationName) ? 'Mutation' : 'Query';
+			const data = JSON.parse(JSON.stringify(result.data));
+			expect(schemas[`z${operationName}${kind}`]?.safeParse(data).success).toBe(
+				true,
+			);
+		}
+	});
+
 	test('fails on an abstract selection without __typename', async () => {
 		const bare = [
 			{
@@ -847,6 +902,40 @@ describe('plugin, naming', () => {
 		).rejects.toThrow(
 			'@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types or operations, set typesSuffix, or set objects: false or operations: false.',
 		);
+	});
+
+	test('refuses an output type or a result named like another declaration', async () => {
+		const wire = tiny(
+			'type User { friends: [User] }\ntype UserWire { a: Int }\ntype Query { u: User, w: UserWire }',
+		);
+		await expect(plugin(wire, [])).rejects.toThrow(
+			'the file would declare UserWire twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types or operations, set typesSuffix, or set objects: false or operations: false.',
+		);
+		const result = tiny(
+			'type UserQuery { a: Int }\ntype Query { u: UserQuery }',
+		);
+		await expect(
+			plugin(result, [{ document: parse('query User { u { a } }') }]),
+		).rejects.toThrow(
+			'the file would declare zUserQuery twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types or operations, set typesSuffix, or set objects: false or operations: false.',
+		);
+	});
+
+	test('gives no import the name of a deep selection declared apart', async () => {
+		const deep = tiny(
+			'scalar Money\ntype N { n: N, v: Money }\ntype Query { n: N }',
+		);
+		const out = await plugin(
+			deep,
+			[
+				{
+					document: parse('query D { n { n { n { n { n { n { v } } } } } } }'),
+				},
+			],
+			{ zodScalars: { Money: './money#zDQuery$1' } },
+		);
+		expect(out).toContain('import { zDQuery$1 as zDQuery$12 } from "./money";');
+		expect(out).toMatch(/^const zDQuery\$1: /m);
 	});
 
 	test('gives no import a name the file declares', async () => {

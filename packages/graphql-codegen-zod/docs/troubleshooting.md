@@ -30,14 +30,15 @@ config: { namingConvention: (name) => name.toUpperCase() }
 ### `@nxgt/graphql-codegen-zod: the scalar Money is not in zodScalars, and no scalarSchemas is set. Map it: zodScalars: { Money: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`
 
 **When:** running codegen on a schema with a custom scalar (here `Money`),
-on an input or, since 0.2.0, on an object type's field only
-(`createdAt: Money`). 0.1.0 did not read output fields, so such a scalar used
-to need no schema.
+on an input or, since 0.2.0, on an object type's field or in an operation's
+result only (`createdAt: Money`). 0.1.0 did not read output fields, so such a
+scalar used to need no schema.
 **Why:** a scalar written as `z.unknown()` would check nothing, in silence, so
 the plugin refuses instead.
 **Fix:** map the scalar, or point `scalarSchemas` at a module that has it. If
-the scalar is only on output fields and you do not need the output types,
-`objects: false` skips them.
+the scalar is only on output fields and in operations' results, and you do not
+need those types, `objects: false` and `operations: false` together skip them:
+either alone still reads it, wherever an operation selects the scalar.
 
 ```ts
 config: { zodScalars: { Money: './money#moneySchema' } }

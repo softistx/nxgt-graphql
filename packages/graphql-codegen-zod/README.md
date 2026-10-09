@@ -121,8 +121,11 @@ import type { User } from './generated/zod';
 export const me = (): User => ({ id: 'u_1', name: 'Al', joined: new Date() });
 ```
 
-`zUser.parse(value)` checks a whole object: it decodes custom scalars and
-drops a field the schema does not declare.
+`zUser.parse(value)` reads a wire value: a `DateTime` string becomes a
+`Date`, and a field the schema does not declare is dropped. To check what a
+resolver returns, which holds a `Date`, encode it back to the wire form:
+`z.encode(zUser, value)`, or `z.safeEncode(zUser, value)` for a result. A
+resolver's string for a `DateTime` is refused.
 
 ### On the client: check before sending
 
@@ -180,7 +183,7 @@ are in [Output](docs/guide/output.md).
 | `typesPrefix`, `typesSuffix` | `string` | none | around each type's name |
 | `addUnderscoreToArgsType` | `boolean` | `false` | `Query_FindUserArgs` |
 | `dedupeOperationSuffix`, `omitOperationSuffix` | `boolean` | `false` | as in `typescript-operations` |
-| `objects` | `boolean` | `true` | write the object types, interfaces and unions; `false` writes the input side only |
+| `objects` | `boolean` | `true` | write the object types, interfaces and unions; `false` writes no object types, interfaces or unions; results are still written unless `operations: false` |
 | `operations` | `boolean` | `true` | write each named operation's result and each fragment; `false` writes none, the variables stay |
 
 Each is detailed in [Output](docs/guide/output.md).
@@ -204,17 +207,19 @@ Each is detailed in [Output](docs/guide/output.md).
   [validation troubleshooting](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md).
 - A custom scalar mapped nowhere fails generation, naming it, rather than
   becoming an unchecked `z.unknown()`.
-- Generate into a file of its own: the type names collide with the typescript
-  plugins'.
 - An abstract type whose possible types select different fields is a union on
   `__typename`: select it, under one key for every member, or generation
   fails. When they all select the same fields, no `__typename` is needed.
 - A field under `@skip`, `@include` or `@defer` may be absent: it is
   `.optional()`.
-- Generate into a file of its own: a `*Query` or `*Fragment` type collides with
-  typescript-operations'. Take them from this plugin, or set `operations: false`.
-- An input type in a cycle also declares `<Type>Input`: a GraphQL type of
-  that name fails generation. Rename it, or set `typesSuffix`.
+- Generate into a file of its own: the type names collide with the typescript
+  plugins', `*Query` and `*Fragment` with typescript-operations'. Take them from
+  this plugin, or set `objects: false` and `operations: false`.
+- An input type in a cycle also declares `<Type>Input`, and an object type in a
+  cycle `<Type>Wire`: a GraphQL type of that name fails generation. Rename it,
+  or set `typesSuffix`.
+- 0.1.0's output needs both `objects: false` and `operations: false`: a custom
+  scalar an operation selects needs a schema, whichever option is set alone.
 
 Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 
