@@ -29,6 +29,7 @@
 import { readdir, rm } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { $ } from 'bun';
+import { declarationSpecifiers } from './scripts/artifacts/declarations';
 import { withExtensions } from './scripts/artifacts/dts-imports';
 
 const pkg = await Bun.file('package.json').json();
@@ -91,6 +92,18 @@ for (const file of emitted) {
 		process.exit(1);
 	}
 	if (fixed.text !== text) await Bun.write(file, fixed.text);
+	// The scanner verify:artifacts reads imports with, strings and template
+	// types handled, is the judge: a relative import it finds without `.js`
+	// is one the rewrite missed, and would fail under `nodenext`.
+	const missed = declarationSpecifiers(fixed.text).filter(
+		(path) => path.startsWith('.') && !/\.[cm]?js$/.test(path),
+	);
+	if (missed.length > 0) {
+		console.error(
+			`${name}: ${file} still imports ${missed.join(', ')} without an extension`,
+		);
+		process.exit(1);
+	}
 }
 
 // Copy hand-written declarations, preserving their path under src/.
