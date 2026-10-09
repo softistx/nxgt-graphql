@@ -1,53 +1,7 @@
-import { z } from 'zod';
-import { decodeBase64Url } from '../../rules/base64';
-import { isJsonObject } from '../../rules/json';
+import { jwtSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * The JSON object a base64url part holds, or `undefined`: a part in another
- * spelling of its bytes, or that is not UTF-8 JSON, holds none.
- */
-function jsonObjectOf(part: string): Record<string, unknown> | undefined {
-	const binary = decodeBase64Url(part);
-	if (binary === undefined) return undefined;
-	try {
-		const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-		const value: unknown = JSON.parse(
-			new TextDecoder('utf-8', { fatal: true }).decode(bytes),
-		);
-		return isJsonObject(value) ? (value as Record<string, unknown>) : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-/**
- * A signed JWT in compact form (RFC 7519, RFC 7515): three base64url parts,
- * each in its one spelling (no padding, no unused bits set), a header and a
- * payload that are JSON objects, a signature that is not empty, and a
- * header `alg` that is a string, not empty and not `none`, in any case. An
- * unsecured token is never one, even with a signature (RFC 7518, 3.6).
- */
-function isSignedJwt(token: string): boolean {
-	const parts = token.split('.');
-	if (parts.length !== 3) return false;
-	const [header, payload, signature] = parts as [string, string, string];
-	if (signature === '' || decodeBase64Url(signature) === undefined) {
-		return false;
-	}
-	const fields = jsonObjectOf(header);
-	if (fields === undefined || jsonObjectOf(payload) === undefined) return false;
-	const { alg } = fields;
-	return typeof alg === 'string' && alg !== '' && alg.toLowerCase() !== 'none';
-}
-
-/**
- * A JSON Web Token in compact form, signed: see {@link isSignedJwt}. Only its
- * shape is checked: verify the signature in your application.
- */
-export const jwtSchema = z
-	.string()
-	.refine(isSignedJwt, { error: 'Invalid JWT' });
+export { jwtSchema };
 
 export const JWTScalar = zodScalar(jwtSchema, {
 	name: 'JWT',

@@ -1,10 +1,7 @@
-import { z } from 'zod';
+import { uuidv4Schema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * An RFC 9562 UUID of version 4 (random).
- */
-export const uuidv4Schema = z.uuidv4();
+export { uuidv4Schema };
 
 export const UUIDv4Scalar = zodScalar(uuidv4Schema, {
 	name: 'UUIDv4',

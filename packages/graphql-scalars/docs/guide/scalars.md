@@ -250,6 +250,11 @@ const parsed = body.parse({
 }); // parsed.at is a Date
 ```
 
+The schemas come from [`@nxgt/zod`](https://www.npmjs.com/package/@nxgt/zod),
+this package's one dependency: `import { uuidSchema } from '@nxgt/zod'` (or
+`@nxgt/zod/scalars`) gives the very same schema, `===` to this package's,
+without `graphql`. A change to a rule is made there.
+
 ### Keyed by GraphQL name
 
 `scalarSchemas` holds the same schemas under the GraphQL name, which is what

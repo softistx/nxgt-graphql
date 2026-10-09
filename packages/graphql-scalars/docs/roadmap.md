@@ -6,7 +6,9 @@ and Later are candidates, not promises.
 
 ## Now
 
-Nothing in progress.
+- **The schemas come from `@nxgt/zod`** — the same exports and behaviour; each
+  schema is `@nxgt/zod`'s own instance, so an application importing both
+  holds one copy of each rule.
 
 ## Next
 

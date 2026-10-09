@@ -36,6 +36,20 @@ extension, which `nodenext` does not resolve, so no export was found.
 bun add @nxgt/graphql-scalars@latest
 ```
 
+### `uuidSchema` from `@nxgt/graphql-scalars` is not `===` the one from `@nxgt/zod`
+
+**When:** an application imports schemas from both packages and compares
+them, or keys a map by schema.
+**Why:** the schemas are `@nxgt/zod`'s, so the two are the same instance only
+when the tree holds one copy of `@nxgt/zod`. A range elsewhere that does not
+overlap (`@nxgt/zod@0.2` beside this package's `^0.1.2`) installs a second
+copy; the rules are the same, the objects are not.
+**Fix:** find the copies, then align the ranges so they dedupe.
+
+```bash
+npm ls @nxgt/zod   # or: bun pm ls --all | grep @nxgt/zod
+```
+
 ## Input
 
 ### `<Name> cannot represent this input: <issue>`

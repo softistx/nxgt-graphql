@@ -10,14 +10,15 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL. Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
 
-It is **Bun-first**: ESM, tested with `bun test`, no Bun-only API in the library.
+It is **Bun-first**: ESM, tested with `bun test`, no Bun-only API in the
+library.
 
 ## Layout
 
@@ -38,14 +39,16 @@ packages/graphql-scalars/src/
     registry.spec.ts       the guards below
     <category>/            date-time, identifier, network, number, string, ...
       index.ts             one `export *` line per scalar
-      <name>.ts            one scalar: `<name>Schema`, then `<Name>Scalar`
+      <name>.ts            one scalar: `<name>Schema` re-exported from
+                           `@nxgt/zod/scalars`, then `<Name>Scalar` (its
+                           name, description, specifiedByURL, literals)
       <name>.spec.ts       its cases, through test/scalar-cases.ts
                            (scalarCases; integerCases for an integer one)
-  rules/                   building blocks several scalars share, never
-                           exported from the package: base64.ts,
-                           big-integer.ts, color.ts, date.ts, hostname.ts,
-                           integer.ts, json.ts, offset.ts
 ```
+
+The rules themselves are not here: each schema, and the building blocks
+several share (`src/rules/` there: offset, hostname, big-integer, integer,
+json, ...), live in `@nxgt/zod` (softistx/nxgt-zod, `packages/zod`).
 
 - **`packages/graphql-scalars/graphql/scalars.graphqls` is generated**: the
   SDL of every scalar, shipped by path (`graphql` is in `files`, not in
@@ -54,11 +57,12 @@ packages/graphql-scalars/src/
   typedefs:write` regenerates it, and `typedefs-command.spec.ts` fails, naming
   that command, when a scalar was added and the file was not.
 - **A new scalar is a file, its spec, and one line** in its category's
-  `index.ts`. A new category is a folder and one line in `all.ts`. Nothing is
-  listed by hand anywhere else: `scalarResolvers`, `scalarSchemas`,
-  `schemas` and `scalarTypeDefs` are derived from what `all.ts` exports, in the
-  code-unit order of a module namespace (`IBAN` before `IP`, `HSLA` before
-  `HSL`; `schemas` by the `…Schema` names, `hsl` before `hsla`).
+  `index.ts`, once its schema is published in `@nxgt/zod`. A new category is a
+  folder and one line in `all.ts`. Nothing is listed by hand anywhere else:
+  `scalarResolvers`, `scalarSchemas`, `schemas` and `scalarTypeDefs` are derived
+  from what `all.ts` exports, in the code-unit order of a module namespace
+  (`IBAN` before `IP`, `HSLA` before `HSL`; `schemas` by the `…Schema` names,
+  `hsl` before `hsla`).
 - **`registry.spec.ts` fails when one is forgotten**: a file that is not
   registered, has no spec beside it, exports anything but one scalar and one
   schema (a helper would reach the package root), is not named after its
@@ -81,11 +85,15 @@ packages/graphql-scalars/src/
 
 ## Layering
 
-`@nxgt/graphql-scalars` and `@nxgt/graphql-validation` depend on nothing at
-runtime, and not on each other. `@nxgt/graphql-codegen-zod` depends on
+`@nxgt/graphql-scalars` depends at runtime on `@nxgt/zod` only, by an npm
+range (`^0.1.2`: another repository, so never `workspace:`), for its schemas;
+`@nxgt/zod` peers the same `zod` range, so an application holds one `zod`.
+`@nxgt/graphql-validation` depends on nothing at runtime. Neither depends on
+the other. `@nxgt/graphql-codegen-zod` depends on
 `@nxgt/graphql-validation` (its `./codegen` subpath) and `change-case` (the
 typescript plugins' PascalCase), never on scalars: it imports a scalar record
-by the module name its config gives; `graphql` and `zod` are peers, each pinned exactly as a devDependency at the oldest end of its range
+by the module name its config gives; `graphql` and `zod` are peers, each pinned
+exactly as a devDependency at the oldest end of its range
 (`graphql` `16.11.0`, `zod` `4.6.5`). `zod`'s range, `>=4.6.5 <5`, is
 nxgt-data's (`@nxgt/mongo`, `@nxgt/redis`): one range is one zod in an
 application's tree. Siblings, when there are some, depend on each other by
@@ -101,7 +109,9 @@ that weakens one is a breaking change, even when every spec stays green.
   schema the scalar checks, typed exactly, are read by
   `@nxgt/graphql-codegen-zod`'s generated code (`typeof scalarSchemas.X`).
   It is derived from each scalar's `.schema`, so a new scalar joins it with
-  no step of its own; `scalar-schemas.spec.ts` pins all three.
+  no step of its own; `scalar-schemas.spec.ts` pins all three, and that it is
+  `@nxgt/zod`'s `scalarSchemas` entry for entry (`===`, same keys, same
+  order), so a schema there with no scalar here, or the reverse, fails.
 
 - **graphql 16 and 17 both work.** `zodScalar` passes the legacy
   `serialize`/`parseValue`/`parseLiteral` (all graphql 16 calls) and the
@@ -114,17 +124,17 @@ that weakens one is a breaking change, even when every spec stays green.
   fit, rather than written to the wire as it is. A schema that changes a value
   must be a `z.codec`; a `.transform()` has no way back.
 - **A refusal never names the value.** `<Name> cannot represent this input:
-  <issue>` and `<Name> cannot serialize this value: <issue>`, with Zod's
-  first issue only; no issue of a built-in schema contains the value
-  (Zod's `received NaN` or `received Infinity` names a kind of number, not
-  the input). A refused literal carries its node, so the client gets its location.
-  What Zod throws rather than fails on (a `.transform()` on the way out, an
-  async check, a codec's own error) is a `GraphQLError` too, the original as
-  its `originalError`. A user schema's own issue can hold input (a custom
-  message, `Unrecognized key`), and graphql 16 — not 17 — adds a bad
-  variable's value to its own message: neither is ours to remove. Our own
-  messages read `Invalid <format>[: hint]` (`Invalid URL: write the scheme
-  lowercase`), the hint saying what to send, never what was sent.
+  <issue>` and `<Name> cannot serialize this value: <issue>`, with Zod's first
+  issue only; no issue of a built-in schema contains the value (Zod's `received
+  NaN` or `received Infinity` names a kind of number, not the input). A refused
+  literal carries its node, so the client gets its location. What Zod throws
+  rather than fails on (a `.transform()` on the way out, an async check, a
+  codec's own error) is a `GraphQLError` too, the original as its
+  `originalError`. A user schema's own issue can hold input (a custom message,
+  `Unrecognized key`), and graphql 16 — not 17 — adds a bad variable's value to
+  its own message: neither is ours to remove. Our own messages read `Invalid
+  <format>[: hint]` (`Invalid URL: write the scheme lowercase`), the hint saying
+  what to send, never what was sent.
 - **An input is taken in its canonical form only.** A scalar refuses a
   variant spelling rather than rewriting it (`007`, `-0`, `-00:00`, a URL
   with a tab), so the value a resolver receives is the one the client sent.
@@ -138,77 +148,74 @@ that weakens one is a breaking change, even when every spec stays green.
   both taken, unchanged. Where the format's own reference reads one case
   only (rs/xid's `XID`), the scalar takes that case only.
 - **`DateTime` is an instant, `Date` is not.** `DateTime` requires an offset,
-  not `-00:00` (`src/rules/offset.ts`, shared with `Time` and `UtcOffset`),
-  resolves to a `Date` and serializes a `Date` only, in UTC. The fraction is
-  cut to three digits before `new Date` reads it, so no engine's own parser
-  is involved, and an instant outside 0000-01-01 to 9999-12-31 UTC (what
+  not `-00:00` (`@nxgt/zod`'s `src/rules/offset.ts`, shared with `Time` and
+  `UtcOffset`), resolves to a `Date` and serializes a `Date` only, in UTC. The
+  fraction is cut to three digits before `new Date` reads it, so no engine's own
+  parser is involved, and an instant outside 0000-01-01 to 9999-12-31 UTC (what
   `toISOString()` writes as RFC 3339) is refused both ways. `Date` stays a
   `YYYY-MM-DD` string on both sides: a `Date` would shift it by a day in half
   the time zones.
 - **`URL` is `http:` or `https:` only.** Zod's `z.url()` alone accepts
-  `javascript:` (measured on zod 4.6.5), and a client is likely to put the
-  value in an `href`. The pattern must stay exactly `/^https?$/`: Zod reads
-  that source to also refuse `https:example.com`; the refines below refuse
-  it too, so a spec reads the check's `protocol` source and pins it. On
-  top of Zod: the scheme lowercase, then `//` and a host as written that is
-  a `Hostname` (`src/rules/hostname.ts`), a canonical IPv4 or a bracketed
-  IPv6 — never what only a URL parser reads as one (`https://123`,
-  `https://0x7f.1`, `a_b.com`) — and an optional port with no leading zero;
-  no user info (credentials in an `href` leak); no white space, control or
-  invisible format character (`\p{Cf}`) anywhere. What a parser rewrites
-  to an equivalent is kept as sent: an uppercase host, a default port
-  (`:443`), dot segments, percent-escapes in the path. That check runs before `z.url()`, as a check of the
-  same `z.string()` rather than a pipe, so it sees the value Zod would trim.
+  `javascript:` (measured on zod 4.6.5), and a client is likely to put the value
+  in an `href`. The pattern must stay exactly `/^https?$/`: Zod reads that
+  source to also refuse `https:example.com`; the refines below refuse it too, so
+  a spec reads the check's `protocol` source and pins it. On top of Zod: the
+  scheme lowercase, then `//` and a host as written that is a `Hostname`
+  (`@nxgt/zod`'s `src/rules/hostname.ts`), a canonical IPv4 or a bracketed IPv6
+  — never what only a URL parser reads as one (`https://123`, `https://0x7f.1`,
+  `a_b.com`) — and an optional port with no leading zero; no user info
+  (credentials in an `href` leak); no white space, control or invisible format
+  character (`\p{Cf}`) anywhere. What a parser rewrites to an equivalent is kept
+  as sent: an uppercase host, a default port (`:443`), dot segments,
+  percent-escapes in the path. That check runs before `z.url()`, as a check of
+  the same `z.string()` rather than a pipe, so it sees the value Zod would trim.
 - **`PositiveInt`, `NegativeInt`, `NonNegativeInt` and `NonPositiveInt`
   are 32 bits**, as GraphQL's `Int` is. `SafeInt` (±(2⁵³ − 1)), `Long`
   (64 bits) and `BigInt` (unbounded) are not, and say so in their name.
 - **`Long` and `BigInt` are a string on the wire, always.** A `bigint` in the
   resolvers; as input a canonical decimal string or a safe-integer number. A
   number past 2⁵³ is refused, never rounded, and a resolver's `number` is
-  refused rather than converted (`src/rules/big-integer.ts`).
+  refused rather than converted (`@nxgt/zod`'s `src/rules/big-integer.ts`).
 - **An integer scalar reads literals as GraphQL's `Int` does**: a float
   literal (`1.0`, `1e3`) is refused, through `zodScalar`'s
   `literals: 'integer'`, and so is `-0`: by the bound for `PositiveInt` and
-  `NegativeInt`, by `src/rules/big-integer.ts` for `Long` and `BigInt`, by
-  `src/rules/integer.ts` for the rest. `integerCases()` in
+  `NegativeInt`, by `@nxgt/zod`'s `src/rules/big-integer.ts` for `Long` and
+  `BigInt`, by its `src/rules/integer.ts` for the rest. `integerCases()` in
   `test/scalar-cases.ts` proves both for each one.
-- **`TimeZone` is what the runtime's `Intl` knows, aliases included.** Node
-  and Bun disagree on which name of a zone is canonical (Node turns
-  `Asia/Kolkata` into `Asia/Calcutta`), so an alias is not refused, and the
-  value is kept as sent. The case must be the zone's own; for an alias Node
-  rewrites, that is a heuristic over each word's shape (`time-zone.ts`): it
-  refuses no tzdata name, measured on Bun and Node, and on Node lets through
-  a miscasing whose words still look like IANA words (`ASIA/Kolkata`,
-  `ZULU`, `Prc`). Bun lets none through. An offset is
-  `UtcOffset`'s, never a `TimeZone`.
-- **`JSON` and `JSONObject` read every literal** (`literals: 'any'`), and
-  refuse both ways what JSON cannot write back as it is: a cycle,
-  `undefined`, a hole, a `Date`, `NaN`, `-0` (JSON writes it `0`), nesting
-  past 1000 levels
-  (`src/rules/json.ts`). A variable inside a literal is read as graphql 17's
-  `replaceVariables` reads it, on 16 too (`untypedValue` in
-  `zod-scalar.ts`, not graphql 16's `valueFromASTUntyped`): left out, it
-  drops an object field and makes a list item `null`; validation sees every
-  variable left out, on both. Two graphql 16 limits a scalar cannot fix: a
-  variable of a custom scalar inside the literal arrives as its resolver
-  value (a `Date`, so `JSON` refuses it; 17 passes its wire value), and an
-  object or list *default* for a `JSON` argument makes introspection and
-  `printSchema` throw (`Cannot convert value to AST`).
+- **`TimeZone` is what the runtime's `Intl` knows, aliases included.** Node and
+  Bun disagree on which name of a zone is canonical (Node turns `Asia/Kolkata`
+  into `Asia/Calcutta`), so an alias is not refused, and the value is kept as
+  sent. The case must be the zone's own; for an alias Node rewrites, that is a
+  heuristic over each word's shape (`@nxgt/zod`'s `time-zone.ts`): it refuses no
+  tzdata name, measured on Bun and Node, and on Node lets through a miscasing
+  whose words still look like IANA words (`ASIA/Kolkata`, `ZULU`, `Prc`). Bun
+  lets none through. An offset is `UtcOffset`'s, never a `TimeZone`.
+- **`JSON` and `JSONObject` read every literal** (`literals: 'any'`), and refuse
+  both ways what JSON cannot write back as it is: a cycle, `undefined`, a hole,
+  a `Date`, `NaN`, `-0` (JSON writes it `0`), nesting past 1000 levels
+  (`@nxgt/zod`'s `src/rules/json.ts`). A variable inside a literal is read as
+  graphql 17's `replaceVariables` reads it, on 16 too (`untypedValue` in
+  `zod-scalar.ts`, not graphql 16's `valueFromASTUntyped`): left out, it drops
+  an object field and makes a list item `null`; validation sees every variable
+  left out, on both. Two graphql 16 limits a scalar cannot fix: a variable of a
+  custom scalar inside the literal arrives as its resolver value (a `Date`, so
+  `JSON` refuses it; 17 passes its wire value), and an object or list *default*
+  for a `JSON` argument makes introspection and `printSchema` throw (`Cannot
+  convert value to AST`).
 - **`Void` is `null` only.** GraphQL writes `null` without calling the
   scalar, so a resolver that returns nothing answers `null`; one that
   returns a value is refused, not silently dropped.
 - **`Locale`'s canonical form is checked here, not taken from `Intl`.** V8
-  rewrites every CLDR alias (`tl` → `fil`, `en-UK` → `en-GB`, and inside
-  `-t-`: `en-t-iw` → `en-t-he`), JavaScriptCore only some, so comparing a
-  tag, or its extensions, with `Intl.getCanonicalLocales` answered
-  differently on Node and Bun. `Intl` only says whether the tag is
-  well-formed, which both engines agree on; `locale.ts` checks the rest:
-  the case before the first extension, then extensions all lowercase,
-  singletons ascending (`-x-` ends the tag: what follows is private use),
-  `-u-` attributes sorted before keywords sorted by key, each key once and
-  never `-true`, `-t-` fields sorted by key. An alias is kept as sent,
-  a value's alias too (`en-u-ca-islamicc`, `en-u-kb-yes`). Measured
-  identical on Node and Bun over 118 tags.
+  rewrites every CLDR alias (`tl` → `fil`, `en-UK` → `en-GB`, and inside `-t-`:
+  `en-t-iw` → `en-t-he`), JavaScriptCore only some, so comparing a tag, or its
+  extensions, with `Intl.getCanonicalLocales` answered differently on Node and
+  Bun. `Intl` only says whether the tag is well-formed, which both engines agree
+  on; `@nxgt/zod`'s `locale.ts` checks the rest: the case before the first
+  extension, then extensions all lowercase, singletons ascending (`-x-` ends the
+  tag: what follows is private use), `-u-` attributes sorted before keywords
+  sorted by key, each key once and never `-true`, `-t-` fields sorted by key. An
+  alias is kept as sent, a value's alias too (`en-u-ca-islamicc`,
+  `en-u-kb-yes`). Measured identical on Node and Bun over 118 tags.
 
 ## @nxgt/graphql-validation
 
@@ -274,20 +281,21 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   pattern), in every input type whether an argument reaches it or not; on a
   `@constraint` declared otherwise than `constraintTypeDefs` (repeatable
   included); on a `@constraint` on a directive's argument; on a default value
-  that breaks its own constraint, coerced as graphql coerces it; and on an object field that drops or
-  changes the `@constraint` its interface writes on an argument.
+  that breaks its own constraint, coerced as graphql coerces it; and on an
+  object field that drops or changes the `@constraint` its interface writes on
+  an argument.
 - **The resolver receives the parsed arguments, and nothing else changes.** An
   absent argument or input field stays absent, a `@oneOf` input keeps its one
   key, a field with nothing to check is not wrapped, wrapping twice wraps
-  nothing, and a subscription is checked once, in `subscribe` (graphql's default one
-  when the field has none).
+  nothing, and a subscription is checked once, in `subscribe` (graphql's default
+  one when the field has none).
 - **One error shape.** `Invalid arguments for <Type>.<field>. <path>: <first
   message>`, `extensions.code` `BAD_USER_INPUT`, `extensions.issues` each with
   its path relative to the arguments, Zod's `code`, and `constraint` (the
   refusing `@constraint` argument) when a directive refused. `validated` and
   `badUserInput` raise the same, without `constraint`.
-- **`uri` is http, https or ftp, scheme required; `date-time` is canonical
-  RFC 3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
+- **`uri` is http, https or ftp, scheme required; `date-time` is canonical RFC
+  3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
   on purpose, each pinned by a spec.
 - **The bin exits 0 done, 1 the file could not be written, 2 a usage error**,
   nxgt-mongo-backup's convention, and runs under Node and Bun. Its flags read
@@ -354,8 +362,11 @@ packages/graphql-codegen-zod/test/
   through a `@oneOf`.
 - **Output types are what a resolver returns** (owner): `z.object`, so an
   unknown field is dropped; `__typename` optional; custom scalars decoded;
-  interfaces and unions a plain `z.union`, declared after every object type; an object type in a cycle has its types written out (`outputCycles`, `output-types.ts`), as an input type in a cycle does (TS2589 past a loop of ten);
-  objects reaching each other through getters. `objects: false` writes none.
+  interfaces and unions a plain `z.union`, declared after every object type; an
+  object type in a cycle has its types written out (`outputCycles`,
+  `output-types.ts`), as an input type in a cycle does (TS2589 past a loop of
+  ten); objects reaching each other through getters. `objects: false` writes
+  none.
 - **Operation results are what the response holds** (owner): `z.output`, so
   custom scalars are decoded (`joined` is a `Date`); `z.object`, so an unknown
   field is dropped; a fragment spread is inlined; a selection on an abstract
@@ -377,13 +388,13 @@ packages/graphql-codegen-zod/test/
   `z.unknown()`. Fragments come before operations. `operations: false` writes
   none and keeps the variables.
 - **An input type in a cycle has its types written out** (`Filter`,
-  `FilterInput`, `zFilter: z.ZodType<Filter, FilterInput>`), owner's call:
-  a transform around a type inside its own getter defeats TypeScript's
-  inference. Types outside a cycle stay derived (`z.output<typeof zX>`).
-  `type-code.ts` mirrors `Writer.value`'s optionality. The generated
-  file's typecheck proves the schema fits inside the written types, not
-  the reverse: test/types.ts pins them field by field with `Equal`. One name declared twice, per kind,
-  fails generation.
+  `FilterInput`, `zFilter: z.ZodType<Filter, FilterInput>`), owner's call: a
+  transform around a type inside its own getter defeats TypeScript's inference.
+  Types outside a cycle stay derived (`z.output<typeof zX>`). `type-code.ts`
+  mirrors `Writer.value`'s optionality. The generated file's typecheck proves
+  the schema fits inside the written types, not the reverse: test/types.ts pins
+  them field by field with `Equal`. One name declared twice, per kind, fails
+  generation.
 - **`test/generated.ts` is generated and typechecked.** Never edit it: `bun
   run --cwd packages/graphql-codegen-zod generated:write` regenerates it, and
   a spec fails, naming that command, when it is stale. Biome skips it.
@@ -403,12 +414,13 @@ packages/graphql-codegen-zod/test/
   (`z.input`), present on the way out (`z.output`); `test/types.ts` pins it.
   `.default` would not run a nested input's own defaults, and `.nullish()`
   before `.prefault` would keep `undefined` in the output type.
-- **Names follow the typescript plugins** (`@graphql-codegen/visitor-plugin-common`'s
-  `convertFactory`): `Args` is `convert(parent + convert(field) + 'Args')`,
-  variables `convert(name + suffix + 'Variables')`, a result
-  `convert(name + suffix)`, a fragment `convert(name + fragment suffix)`, the
-  suffix following `omitOperationSuffix`/`dedupeOperationSuffix`. Read that code before
-  changing a name.
+- **Names follow the typescript plugins**
+  (`@graphql-codegen/visitor-plugin-common`'s `convertFactory`): `Args` is
+  `convert(parent + convert(field) + 'Args')`, variables `convert(name + suffix
+  + 'Variables')`, a result `convert(name + suffix)`, a fragment `convert(name +
+  fragment suffix)`, the suffix following
+  `omitOperationSuffix`/`dedupeOperationSuffix`. Read that code before changing
+  a name.
 
 ## The green bar
 
@@ -431,6 +443,12 @@ it, do not make it a required check.
 
 ## Traps
 
+- **A rule of a scalar is changed in softistx/nxgt-zod, not here.** The
+  schemas are `@nxgt/zod`'s: a fix is a PR there, a publish, then bumping
+  the `@nxgt/zod` range in `packages/graphql-scalars/package.json` (and
+  `bun install`). A spec here that expects the new behaviour stays red until
+  the bump; the scalar's options (name, description, `specifiedByURL`,
+  `literals`) and `zodScalar` stay here.
 - **graphql 17 types `parseLiteral` with two parameters.** A spec that calls
   `scalar.parseLiteral(node)` typechecks on 16 and fails `tsc` on 17; pass
   `undefined` for the variables. Only the "Newest peers" job sees it.
@@ -481,7 +499,7 @@ it, do not make it a required check.
 | `scripts/newest-peers.ts`, its spec, and the "Newest peers" job in `ci.yml` | byte copies of nxgt-data's script and spec; the job is nxgt-data's without its four server caches and `REDISMS_DISABLE_POSTINSTALL`. The script reads `examples/*` too, which matches nothing here |
 | `.github/actions/setup/action.yml`, `.github/workflows/release.yml`, `.github/workflows/deprecate.yml`, the `ci` job of `ci.yml` | nxgt-di's, which are nxgt-data's without its servers (`deprecate.yml` is nxgt-telemetry's) |
 | `CLAUDE.md`, `.claude/settings.json` | nxgt-di's, byte for byte |
-| The 65 scalar names (GraphQL names and `<name>Schema` exports) | copied outside this repository: `@nxgt/typespec` (softistx/nxgt-http) declares each as a TypeSpec scalar and OpenAPI component of the same name, with `x-nxgt-scalar: <Name>`, and pins the list in its `test/scalars/index.ts` (`GRAPHQL_SCALARS`); `@nxgt/zod` (softistx/nxgt-zod) holds the same schemas under the same names, with its own `scalarSchemas`. Adding, renaming or changing the rule of a scalar here means the same change there: tell the session or open the PR in both |
+| The 65 scalar names (GraphQL names and `<name>Schema` exports) | copied outside this repository: `@nxgt/typespec` (softistx/nxgt-http) declares each as a TypeSpec scalar and OpenAPI component of the same name, with `x-nxgt-scalar: <Name>`, and pins the list in its `test/scalars/index.ts` (`GRAPHQL_SCALARS`); the rules are no longer copied: they live in `@nxgt/zod` (softistx/nxgt-zod), whose schemas this package re-exports, the same instances. Adding or renaming a scalar means a PR in `@nxgt/zod` first and the same change in `@nxgt/typespec`: tell the session or open the PR in each |
 
 ## Declared divergences from nxgt-data
 

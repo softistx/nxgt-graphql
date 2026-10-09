@@ -1,12 +1,7 @@
-import { z } from 'zod';
+import { localTimeSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * A time of day with no offset: `HH:MM`, or `HH:MM:SS` with an optional
- * fraction (`10:15`, `10:15:30.5`). It names no instant until a date and a
- * place are given.
- */
-export const localTimeSchema = z.iso.time();
+export { localTimeSchema };
 
 export const LocalTimeScalar = zodScalar(localTimeSchema, {
 	name: 'LocalTime',
