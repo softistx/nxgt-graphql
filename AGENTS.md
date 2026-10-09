@@ -12,7 +12,7 @@ are public.
 | --- | --- |
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives) and each named operation's variables (`z.input`, what a client sends), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -313,7 +313,12 @@ packages/graphql-codegen-zod/src/
   defaults.ts              defaultLiteral, parsedDefault (exact integers), coerced
   source.ts                declare, docComment, objectMembers (getters)
   schema-output.ts         enums, input types (@oneOf as a union), field arguments
-  cycles.ts                inputCycles: the input types that reach themselves
+  objects-output.ts        object types, then interfaces and unions as z.union (option `objects`)
+  results-output.ts        each fragment's and named operation's result (option `operations`), deep selections declared apart
+  results-selections.ts    a selection as z.object, a union of members on __typename, the optional and nullable rules
+  collect-fields.ts        graphql's CollectFields: inline fragments and spreads, @skip/@include/@defer, merged keys
+  output-types.ts          an object type in a cycle, its types written out
+  cycles.ts                inputCycles, outputCycles: the types that reach themselves
   type-code.ts             declareCyclic: a cyclic input type's Filter / FilterInput types
   variables-output.ts      each named operation's variables, constraints from their usages
   plugin.spec.ts           the guards below
@@ -347,6 +352,30 @@ packages/graphql-codegen-zod/test/
   for an ID stays refused (owner: « on garde seulement id comme string »).
   The parity spec pins it, with a codec `DateTime` on both sides and a cycle
   through a `@oneOf`.
+- **Output types are what a resolver returns** (owner): `z.object`, so an
+  unknown field is dropped; `__typename` optional; custom scalars decoded;
+  interfaces and unions a plain `z.union`, declared after every object type; an object type in a cycle has its types written out (`outputCycles`, `output-types.ts`), as an input type in a cycle does (TS2589 past a loop of ten);
+  objects reaching each other through getters. `objects: false` writes none.
+- **Operation results are what the response holds** (owner): `z.output`, so
+  custom scalars are decoded (`joined` is a `Date`); `z.object`, so an unknown
+  field is dropped; a fragment spread is inlined; a selection on an abstract
+  type is a `z.discriminatedUnion` on `__typename` only when its possible
+  types select different fields (owner), and then `__typename` must be
+  selected under one key for every member (aliased, it is the discriminator
+  under its alias; `__typename` preferred), else generation fails; when they
+  all select the same fields it is one plain object, no `__typename` needed;
+  past 5 nested levels a selection is declared apart (`zX$1$` and a
+  `z.ZodType<output, input>` const, shared when identical) so TypeScript
+  infers any depth (owner; TS2589 at 14); fragment names follow
+  `omitOperationSuffix`/`dedupeOperationSuffix`;
+  possible types selecting the same fields share one member,
+  `__typename: z.enum([...])`, and one group is a plain object; a field under
+  `@skip`/`@include`/`@defer` is `.optional()`, and so is a sub-field only a
+  conditional node selects, unless that node is the field's only one (its
+  presence implies the condition); a nullable field is `.nullable()`, a
+  response holding null, not undefined; an introspection field is
+  `z.unknown()`. Fragments come before operations. `operations: false` writes
+  none and keeps the variables.
 - **An input type in a cycle has its types written out** (`Filter`,
   `FilterInput`, `zFilter: z.ZodType<Filter, FilterInput>`), owner's call:
   a transform around a type inside its own getter defeats TypeScript's
@@ -370,7 +399,9 @@ packages/graphql-codegen-zod/test/
   before `.prefault` would keep `undefined` in the output type.
 - **Names follow the typescript plugins** (`@graphql-codegen/visitor-plugin-common`'s
   `convertFactory`): `Args` is `convert(parent + convert(field) + 'Args')`,
-  variables `convert(name + suffix + 'Variables')`. Read that code before
+  variables `convert(name + suffix + 'Variables')`, a result
+  `convert(name + suffix)`, a fragment `convert(name + fragment suffix)`, the
+  suffix following `omitOperationSuffix`/`dedupeOperationSuffix`. Read that code before
   changing a name.
 
 ## The green bar

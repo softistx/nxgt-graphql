@@ -1,16 +1,26 @@
 // What the generated types say, checked by the package's typecheck.
 import type {
+	DeepQuery,
+	FriendsQuery,
 	Group,
 	GroupInput,
 	GroupsQueryVariables,
 	LogQueryVariables,
+	Lonely,
 	Member,
 	MemberInput,
 	MutationSignUpArgs,
+	Post,
 	QueryUsersArgs,
+	Ring0,
+	Ring11,
 	Role,
+	SearchQuery,
+	SearchResult,
 	SignUpInput,
 	SignUpMutationVariables,
+	Solo,
+	User,
 	UsersQueryVariables,
 } from './generated';
 
@@ -85,4 +95,40 @@ holds<
 	>
 >();
 
-export { group, none, sent };
+// An output type is what a resolver returns: decoded scalars, no
+// __typename needed, nullable fields optional.
+const returned: User = { id: 'u_1', name: 'Al', joined: new Date() };
+holds<Equal<User['joined'], Date>>();
+holds<Equal<User['friends'], User[] | null | undefined>>();
+holds<Equal<SearchResult, User | Post>>();
+holds<Equal<Solo, User>>();
+holds<Equal<Lonely, never>>();
+holds<
+	Equal<
+		Ring0['next']['next']['next']['next']['next']['next']['next']['next']['next']['next']['next'],
+		Ring11
+	>
+>();
+
+// A result is narrowed by __typename.
+type Found = SearchQuery['search'][number];
+const found = (item: Found): string =>
+	item.__typename === 'User' ? item.who : item.title;
+holds<Equal<Extract<Found, { __typename: 'User' }>['joined'], Date>>();
+holds<
+	Equal<
+		SearchQuery['node'],
+		{ __typename: 'User' | 'Post'; id: string; kind: 'User' | 'Post' } | null
+	>
+>();
+
+// A deep selection, declared apart, still infers to the end.
+type Leaf<T> = T extends { friends: infer F }
+	? Leaf<NonNullable<F> extends readonly (infer I)[] ? I : never>
+	: T;
+holds<Equal<Leaf<NonNullable<DeepQuery['user']>>, { id: string }>>();
+
+// Under @include, the field may be absent; once there, its fields are.
+holds<Equal<NonNullable<FriendsQuery['maybe']>, { id: string }>>();
+
+export { found, group, none, returned, sent };

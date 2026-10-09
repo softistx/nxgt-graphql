@@ -61,7 +61,47 @@ input Member @oneOf {
 	group: Group
 }
 
-type User { id: ID!, name: String! }
+"""Someone with an account."""
+type User implements Node {
+	id: ID!
+	name: String!
+	role: Role
+	"Who they follow."
+	friends: [User!]
+	pinned: SearchResult
+	joined: DateTime!
+}
+
+type Post implements Node {
+	id: ID!
+	title: String!
+	author: User!
+	tags: [[String]]
+}
+
+union SearchResult = User | Post
+
+# Edge cases: one member, none, an interface implementing another, a root
+# type returned by a field, and a loop longer than TypeScript infers (TS2589
+# past ten).
+# An input named as the usual SDL names it, beside the cyclic User.
+input UserInput { name: String }
+union Solo = User
+interface Lonely { id: ID! }
+interface Named implements Node { id: ID!, name: String! }
+type SignUpPayload { query: Query! }
+type Ring0 { next: Ring1! }
+type Ring1 { next: Ring2! }
+type Ring2 { next: Ring3! }
+type Ring3 { next: Ring4! }
+type Ring4 { next: Ring5! }
+type Ring5 { next: Ring6! }
+type Ring6 { next: Ring7! }
+type Ring7 { next: Ring8! }
+type Ring8 { next: Ring9! }
+type Ring9 { next: Ring10! }
+type Ring10 { next: Ring11! }
+type Ring11 { next: Ring0! }
 
 interface Node { id: ID! }
 
@@ -70,6 +110,8 @@ type Query {
 	users(filter: Filter, first: Int = 10 @constraint(min: 1, max: 50)): [User!]!
 	reach(contact: Contact!): Boolean
 	groups(where: Group): Boolean
+	search(text: String!): [SearchResult!]!
+	node(id: ID!): Node
 	log(at: [DateTime]!, groups: [Group]!, nested: [[Group]!]): Boolean
 }
 
@@ -98,6 +140,25 @@ export const documents = [
 			query Log($at: [DateTime]!, $groups: [Group]!, $nested: [[Group]!]) {
 				log(at: $at, groups: $groups, nested: $nested)
 			}
+			query Search($text: String!, $id: ID!, $withTags: Boolean!) {
+				search(text: $text) {
+					__typename
+					... on User { id who: name joined role }
+					... on Post { id title tags @include(if: $withTags) author { ...UserFields } }
+				}
+				node(id: $id) { __typename id kind: __typename }
+			}
+			fragment Pinned on User { pinned { __typename ... on Post { title } } }
+			query PinnedUser($id: ID!) { user(id: $id) { id ...Pinned } }
+			query Friends($id: ID!, $v: Boolean!) {
+				user(id: $id) { friends { id } friends @include(if: $v) { name } }
+				node(id: $id) { id ...UserName @include(if: $v) __typename }
+				plain: node(id: $id) { id }
+				maybe: user(id: $id) @include(if: $v) { id }
+			}
+			fragment UserName on User { name }
+			# Past what TypeScript infers in one z.object (TS2589 at 14).
+			query Deep($id: ID!) { user(id: $id) { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { id } } } } } } } } } } } } } } } } } }
 		`),
 	},
 	// No name, so no schema: it is skipped, not an error.

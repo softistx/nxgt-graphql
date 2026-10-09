@@ -142,9 +142,20 @@ export const zQueryAllArgs = z.object({
 });
 export type QueryAllArgs = z.output<typeof zQueryAllArgs>;
 
+export const zQuery = z.object({
+	__typename: z.literal("Query").optional(),
+	all: z.boolean().nullish(),
+});
+export type Query = z.output<typeof zQuery>;
+
 export const zAllQueryVariables = z.object({
 	get input() {
 		return zAllScalars;
 	},
 });
 export type AllQueryVariables = z.input<typeof zAllQueryVariables>;
+
+export const zAllQuery = z.object({
+	all: z.boolean().nullable(),
+});
+export type AllQuery = z.output<typeof zAllQuery>;

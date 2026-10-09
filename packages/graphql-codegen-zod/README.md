@@ -3,7 +3,8 @@
 A [graphql-codegen](https://the-guild.dev/graphql/codegen) plugin that writes
 Zod 4 schemas, and their TypeScript types, from your SDL: one per enum and per
 input type, one per field that takes arguments, one per named operation's
-variables. It carries every `@constraint` of
+variables, one per object type, interface and union, and one per named
+operation's result and per fragment. It carries every `@constraint` of
 [`@nxgt/graphql-validation`](https://www.npmjs.com/package/@nxgt/graphql-validation),
 through that package's own rules, so the server (`withValidation`) and the
 generated code accept and refuse the same values. For graphql-codegen 5 to 7
@@ -74,7 +75,10 @@ export default config;
 The plugin writes types named as `@graphql-codegen/typescript` names them
 (`SignUpInput`, `MutationSignUpArgs`), which would collide with that plugin's
 in one file. Its `*Args` and `*Variables` types can replace the typescript
-plugin's.
+plugin's; so can its object types, interfaces and unions (`User`), or
+`objects: false` leaves them to that plugin. Its `*Query`, `*Mutation` and
+`*Fragment` types can replace typescript-operations' (`SearchQuery`,
+`UserFieldsFragment`), or `operations: false` leaves them to it.
 
 `scalarSchemas` supplies a Zod schema for each custom scalar of the schema;
 see [Scalars](docs/guide/output.md#scalars).
@@ -105,6 +109,24 @@ export const signUp = (_: unknown, { input }: MutationSignUpArgs) => {
 };
 ```
 
+### On the server: type what a resolver returns
+
+Object types, interfaces and unions are typed
+`z.output`: custom scalars decoded, `__typename` optional, nullable fields
+optional.
+
+```ts
+import type { User } from './generated/zod';
+
+export const me = (): User => ({ id: 'u_1', name: 'Al', joined: new Date() });
+```
+
+`zUser.parse(value)` reads a wire value: a `DateTime` string becomes a
+`Date`, and a field the schema does not declare is dropped. To check what a
+resolver returns, which holds a `Date`, encode it back to the wire form:
+`z.encode(zUser, value)`, or `z.safeEncode(zUser, value)` for a result. A
+resolver's string for a `DateTime` is refused.
+
 ### On the client: check before sending
 
 Variables are typed `z.input`: what a client sends. A schema per named
@@ -118,6 +140,32 @@ const result = zSignUpMutationVariables.safeParse({
 });
 if (!result.success) {
 	for (const issue of result.error.issues) showError(issue.path, issue.message);
+}
+```
+
+### On the client: parse the response
+
+An operation's result is typed `z.output`: what the response holds, custom
+scalars decoded. An abstract type's selection is a union on `__typename` when
+its members select different fields, so checking it narrows.
+
+```graphql
+query Search($text: String!) {
+  search(text: $text) {
+    __typename
+    ... on User { id joined }
+    ... on Post { id title }
+  }
+}
+```
+
+```ts
+import { zSearchQuery } from './generated/zod';
+
+const search = zSearchQuery.parse(response.data).search;
+for (const hit of search) {
+	if (hit.__typename === 'User') hit.joined.getFullYear(); // a Date
+	else hit.title; // Post
 }
 ```
 
@@ -135,6 +183,8 @@ are in [Output](docs/guide/output.md).
 | `typesPrefix`, `typesSuffix` | `string` | none | around each type's name |
 | `addUnderscoreToArgsType` | `boolean` | `false` | `Query_FindUserArgs` |
 | `dedupeOperationSuffix`, `omitOperationSuffix` | `boolean` | `false` | as in `typescript-operations` |
+| `objects` | `boolean` | `true` | write the object types, interfaces and unions; `false` writes no object types, interfaces or unions; results are still written unless `operations: false` |
+| `operations` | `boolean` | `true` | write each named operation's result and each fragment; `false` writes none, the variables stay |
 
 Each is detailed in [Output](docs/guide/output.md).
 
@@ -157,10 +207,19 @@ Each is detailed in [Output](docs/guide/output.md).
   [validation troubleshooting](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md).
 - A custom scalar mapped nowhere fails generation, naming it, rather than
   becoming an unchecked `z.unknown()`.
+- An abstract type whose possible types select different fields is a union on
+  `__typename`: select it, under one key for every member, or generation
+  fails. When they all select the same fields, no `__typename` is needed.
+- A field under `@skip`, `@include` or `@defer` may be absent: it is
+  `.optional()`.
 - Generate into a file of its own: the type names collide with the typescript
-  plugins'.
-- An input type in a cycle also declares `<Type>Input`: a GraphQL type of
-  that name fails generation. Rename it, or set `typesSuffix`.
+  plugins', `*Query` and `*Fragment` with typescript-operations'. Take them from
+  this plugin, or set `objects: false` and `operations: false`.
+- An input type in a cycle also declares `<Type>Input`, and an object type in a
+  cycle `<Type>Wire`: a GraphQL type of that name fails generation. Rename it,
+  or set `typesSuffix`.
+- 0.1.0's output needs both `objects: false` and `operations: false`: a custom
+  scalar an operation selects needs a schema, whichever option is set alone.
 
 Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 

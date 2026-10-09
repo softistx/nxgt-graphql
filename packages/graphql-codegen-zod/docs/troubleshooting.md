@@ -29,10 +29,16 @@ config: { namingConvention: (name) => name.toUpperCase() }
 
 ### `@nxgt/graphql-codegen-zod: the scalar Money is not in zodScalars, and no scalarSchemas is set. Map it: zodScalars: { Money: './module#export' }, or set scalarSchemas: '@nxgt/graphql-scalars'.`
 
-**When:** running codegen on a schema with a custom scalar (here `Money`).
+**When:** running codegen on a schema with a custom scalar (here `Money`),
+on an input or, since 0.2.0, on an object type's field or in an operation's
+result only (`createdAt: Money`). 0.1.0 did not read output fields, so such a
+scalar used to need no schema.
 **Why:** a scalar written as `z.unknown()` would check nothing, in silence, so
 the plugin refuses instead.
-**Fix:** map the scalar, or point `scalarSchemas` at a module that has it.
+**Fix:** map the scalar, or point `scalarSchemas` at a module that has it. If
+the scalar is only on output fields and in operations' results, and you do not
+need those types, `objects: false` and `operations: false` together skip them:
+either alone still reads it, wherever an operation selects the scalar.
 
 ```ts
 config: { zodScalars: { Money: './money#moneySchema' } }
@@ -93,6 +99,38 @@ document.
 
 ```graphql
 mutation SignUp($input: SignUpInput!) { signUp(input: $input) }
+```
+
+### `@nxgt/graphql-codegen-zod: Bare.search selects the abstract type SearchResult without __typename for User. Select __typename there, so the result tells its members apart.`
+
+**When:** running codegen on a named operation or a fragment. The operation
+(or `fragment <Name>`), the path, the type and the member in the message are
+yours.
+**Why:** when the possible types of an interface or a union select different
+fields, the selection becomes a union discriminated on `__typename`, and
+without it the result cannot tell the members apart. When they all select the
+same fields, no `__typename` is needed. A `__typename` under `@skip` or
+`@include` may be absent, so it counts as missing.
+**Fix:** select `__typename` in that selection, or set `operations: false`.
+
+```graphql
+# fails
+query Bare { search(text: "a") { ... on User { id } } }
+# generates
+query Bare { search(text: "a") { __typename ... on User { id } } }
+```
+
+### `@nxgt/graphql-codegen-zod: Keys.search selects __typename under a different key for each member of SearchResult (t, k). Select it under one key for every member, so the result tells its members apart.`
+
+**When:** running codegen on an operation or a fragment. The path, the type
+and the keys in the message are yours.
+**Why:** the union is discriminated on one key, and the members select
+`__typename` under different aliases. When several keys select it,
+`__typename` itself is preferred.
+**Fix:** select `__typename` under one key for every member.
+
+```graphql
+query Keys { search(text: "a") { ... on User { t: __typename id } ... on Post { k: __typename title } } }
 ```
 
 ### `@nxgt/graphql-codegen-zod: Both($v:) is passed to Query.e(v:) (format: "email") and to Query.u(v:) (format: "uuid"), whose schemas cannot both apply. Use one variable for each.`
@@ -159,15 +197,24 @@ field. The variables object itself ignores an extra variable, as `graphql` does.
 
 ## The schema
 
-### `@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or an input type in a cycle and its Input type, give the same name. Rename one of the GraphQL types, or set typesSuffix.`
+### `@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types or operations, set typesSuffix, or set objects: false or operations: false.`
 
 **When:** running codegen on a schema where two declarations of the same kind
-get one name: an input type in a cycle (`Filter`) declares `FilterInput`, and
-the schema also has an input type `FilterInput`.
+get one name:
+- an input type in a cycle (`Filter`) declares `FilterInput`, or an object
+  type in a cycle (`User`) declares `UserWire`, and the schema also has a
+  type of that name;
+- an object type is named like a type the plugin already writes, such as
+  `QueryFindArgs` beside a field `Query.find(...)`. With 0.1.0 this generated,
+  because object types were not written.
+
 **Why:** the file cannot declare one name twice.
 **Fix:** rename one of the GraphQL types, or set `typesSuffix`: `Filter`
 then declares `FilterTInput`, apart from `FilterInputT`. A `typesPrefix`
-does not part them.
+does not part them. When the clash comes from an object type and you do not
+need the output types, `objects: false` writes none of them. When it comes
+from an operation's or a fragment's result (`SearchQuery`), `operations:
+false` writes none of them.
 
 ```graphql
 input Filter { and: [Filter] }

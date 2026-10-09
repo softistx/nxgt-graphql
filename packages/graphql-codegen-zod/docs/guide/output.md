@@ -1,8 +1,8 @@
 # Output
 
 What the plugin writes from your schema and operations: the schemas, the
-types, their names, and how defaults, recursion, `@oneOf` and custom scalars
-come out.
+types, their names, and how defaults, recursion, `@oneOf`, custom scalars,
+output types and operation results come out.
 
 ## The smallest example
 
@@ -44,8 +44,11 @@ export default config;
 ```
 
 The plugin writes, in this order: every enum, every input type, the
-arguments of every object or interface field that takes any, then the
-variables of every named operation. Each is a schema and its type.
+arguments of every object or interface field that takes any, every object
+type, then every interface and union (see [Output types](#output-types)),
+then the variables of every named operation. The results come last: every
+fragment's, then every named operation's (see
+[Operation results](#operation-results)). Each is a schema and its type.
 
 ```ts
 import { z } from "zod";
@@ -67,6 +70,12 @@ export const zMutationSignUpArgs = z.object({
 	},
 });
 export type MutationSignUpArgs = z.output<typeof zMutationSignUpArgs>;
+
+export const zMutation = z.object({
+	__typename: z.literal("Mutation").optional(),
+	signUp: z.boolean().nullish(),
+});
+export type Mutation = z.output<typeof zMutation>;
 
 export const zSignUpMutationVariables = z.object({
 	get input() {
@@ -102,6 +111,9 @@ export const zQueryUserArgs = z.object({
 | `z<Input>` | an `input` | `z.output` | the value a resolver receives |
 | `z<Parent><Field>Args` | an object or interface field with arguments | `z.output` | typing the resolver's arguments |
 | `z<Operation><Kind>Variables` | a named operation in `documents` | `z.input` | checking a form before sending it |
+| `z<Type>` | an object type, interface or union | `z.output` | typing what a resolver returns; `z.encode` checks it |
+| `z<Operation><Kind>` | a named operation in `documents` | `z.output` | parsing the response on the client |
+| `z<Fragment>Fragment` | a fragment in `documents` | `z.output` | parsing the part of a response a fragment selects |
 
 `z.output` is what a resolver receives after `withValidation` parsed the
 arguments; `z.input` is what a client sends. They differ where a default
@@ -142,6 +154,9 @@ and `typescript-operations` give them.
 | enum | `zRole` | `Role` |
 | field arguments | `zMutationSignUpArgs` | `MutationSignUpArgs` |
 | operation variables | `zSignUpMutationVariables` | `SignUpMutationVariables` |
+| object type, interface, union | `zUser` | `User` |
+| operation result | `zSearchQuery` | `SearchQuery` |
+| fragment | `zUserFieldsFragment` | `UserFieldsFragment` |
 
 | Option | Type | Default | Effect |
 | --- | --- | --- | --- |
@@ -150,8 +165,8 @@ and `typescript-operations` give them.
 | `typesPrefix` | `string` | `''` | before each type's name: `ISignUpInput`; the schema's name follows: `zISignUpInput` |
 | `typesSuffix` | `string` | `''` | after each type's name |
 | `addUnderscoreToArgsType` | `boolean` | `false` | `Query_FindUserArgs` instead of `QueryFindUserArgs` |
-| `dedupeOperationSuffix` | `boolean` | `false` | `findUserQuery` gives `FindUserQueryVariables`, not `FindUserQueryQueryVariables` |
-| `omitOperationSuffix` | `boolean` | `false` | `FindUserVariables`: no `Query`, `Mutation` or `Subscription` |
+| `dedupeOperationSuffix` | `boolean` | `false` | `findUserQuery` gives `FindUserQueryVariables` and `FindUserQuery`, not `FindUserQueryQueryVariables` and `FindUserQueryQuery`; a fragment `UFFragment` gives `UfFragment` |
+| `omitOperationSuffix` | `boolean` | `false` | `FindUserVariables`, `FindUser`: no `Query`, `Mutation`, `Subscription` or `Fragment` |
 
 ```ts
 config: {
@@ -184,7 +199,9 @@ Any other module string (`'my-module#myCase'`) throws, see
 
 Generate into a file the typescript plugins do not write to: the names would
 collide. This plugin's types can replace the typescript plugin's `*Args` and
-`*Variables`, so the other plugins can be limited to the output types.
+`*Variables`, and typescript-operations' `*Query`, `*Mutation` and `*Fragment`,
+so the other plugins can be limited to the output types. Or set
+`operations: false`, and keep those from typescript-operations.
 
 ## Defaults
 
@@ -432,6 +449,258 @@ price: moneySchema,
   generated file then fails to typecheck on a missing key.
 - A rule on a custom scalar (`@constraint` on a `DateTime` field) is refused,
   as `withValidation` refuses it; check the value in the scalar's own schema.
+
+## Output types
+
+Every object type gets a schema and a type, typed `z.output`: what a
+resolver returns. The root types are written too: a field may return
+`Query` (a mutation payload's `query: Query!`). Then every interface and union, as a `z.union` of its
+object types. `objects: false` writes none of them.
+
+```graphql
+"""Someone with an account."""
+type User implements Node {
+  id: ID!
+  name: String!
+  role: Role
+  "Who they follow."
+  friends: [User!]
+  pinned: SearchResult
+  joined: DateTime!
+}
+union SearchResult = User | Post
+```
+
+A type outside any cycle is a `z.object`, its type inferred:
+
+```ts
+export const zMutation = z.object({
+	__typename: z.literal("Mutation").optional(),
+	signUp: z.boolean().nullish(),
+});
+export type Mutation = z.output<typeof zMutation>;
+
+export const zSearchResult = z.union([zUser, zPost]);
+export type SearchResult = z.output<typeof zSearchResult>;
+```
+
+An interface no object type implements is `z.never()`; a union of one
+member is that member's schema.
+
+A type in a cycle (`User.friends: [User!]`, or `User` → `Org` → `User`) has
+its types written out, as an input type in a cycle has: TypeScript infers a
+looping schema only so deep, and fails with TS2589 on a loop of ten types.
+`User` is what a resolver returns, `UserWire` the wire value (not
+`UserInput`, which an SDL `input UserInput` often already takes), and `zUser`
+is typed by both:
+
+```ts
+/** Someone with an account. */
+export type User = {
+	__typename?: "User" | undefined;
+	id: string;
+	name: string;
+	role?: z.output<typeof zRole> | null | undefined;
+	/** Who they follow. */
+	friends?: Array<User> | null | undefined;
+	pinned?: z.output<typeof zSearchResult> | null | undefined;
+	joined: z.output<typeof scalarSchemas.DateTime>;
+};
+/** Someone with an account. */
+export type UserWire = {
+	/* the same, with z.input for scalars, UserWire, z.input<typeof zSearchResult> */
+};
+/** Someone with an account. */
+export const zUser: z.ZodType<User, UserWire> = z.object({
+	__typename: z.literal("User").optional(),
+	id: z.string(),
+	name: z.string(),
+	role: zRole.nullish(),
+	/** Who they follow. */
+	get friends() {
+		return z.array(zUser).nullish();
+	},
+	get pinned() {
+		return zSearchResult.nullish();
+	},
+	joined: scalarSchemas.DateTime,
+});
+```
+
+`zUser` is then a `z.ZodType`, not a `z.ZodObject`: `.shape`, `.pick` and
+`.extend` are not offered on a type in a cycle.
+
+- **`__typename` is optional:** a resolver rarely sets it. When it is set, it
+  must be the type's name.
+- **A field the type does not declare is dropped** (`z.object`): a newer
+  server's extra field does not fail a parse.
+- **Custom scalars are decoded:** `User['joined']` is a `Date` with
+  `@nxgt/graphql-scalars`; `z.input<typeof zUser>` has the wire `string`.
+- **Every field is written**, arguments ignored: `User` is the whole type, as
+  `@graphql-codegen/typescript` writes it.
+- **Nesting goes through getters**, so types refer to each other in any
+  order. Interfaces and unions are declared after every object type.
+- `Int` is `z.int32()` and `ID` a `z.string()`, as for inputs. A nullable
+  field is `.nullish()`.
+- **Every custom scalar needs a schema**, an output-only one included
+  (`createdAt: DateTime` on an object type): generation fails naming it,
+  as for inputs. 0.1.0 did not read output fields, and nor operations'
+  results; 0.1.0's output needs both `objects: false` and `operations: false`.
+- **A name the plugin already writes clashes:** an object type named
+  `QueryFindArgs`, or `FilterInput` beside a cyclic input `Filter`, fails
+  generation with "would declare … twice". Rename it, set `typesSuffix`, or
+  set `objects: false` (or `operations: false`, for a clash with a result
+  such as `SearchQuery`).
+
+## Operation results
+
+Each fragment and each named operation gets a schema and a type, typed
+`z.output`: the response as it arrives, under the aliases the document gave.
+`operations: false` writes none of them; the variables stay. An anonymous
+operation gets none, as for variables.
+
+```graphql
+query Search($text: String!, $id: ID!, $withTags: Boolean!) {
+  search(text: $text) {
+    __typename
+    ... on User { id who: name joined role }
+    ... on Post { id title tags @include(if: $withTags) author { ...UserFields } }
+  }
+  node(id: $id) { __typename id kind: __typename }
+}
+fragment UserFields on User { id name }
+```
+
+```ts
+export const zSearchQuery = z.object({
+	search: z.array(z.discriminatedUnion("__typename", [
+		z.object({
+			__typename: z.literal("User"),
+			id: z.string(),
+			who: z.string(),
+			joined: scalarSchemas.DateTime,
+			role: zRole.nullable(),
+		}),
+		z.object({
+			__typename: z.literal("Post"),
+			id: z.string(),
+			title: z.string(),
+			tags: z.array(z.array(z.string().nullable()).nullable()).nullable().optional(),
+			author: z.object({
+				id: z.string(),
+				name: z.string(),
+			}),
+		}),
+	])),
+	node: z.object({
+		__typename: z.enum(["User", "Post"]),
+		id: z.string(),
+		kind: z.enum(["User", "Post"]),
+	}).nullable(),
+});
+export type SearchQuery = z.output<typeof zSearchQuery>;
+
+export const zUserFieldsFragment = z.object({
+	id: z.string(),
+	name: z.string(),
+});
+export type UserFieldsFragment = z.output<typeof zUserFieldsFragment>;
+```
+
+- **Custom scalars are decoded:** `joined` is a `Date` with
+  `@nxgt/graphql-scalars`.
+- **`z.object`:** a field the selection does not name is dropped, so a newer
+  server's extra field does not fail a parse.
+- **A fragment spread is inlined** into the operation: `author` holds
+  `UserFields`' `id` and `name`. A fragment has its own schema too, and the
+  inlined one is not a reference to it.
+- **An abstract type's selection is a `z.discriminatedUnion` on
+  `__typename`** when its possible types select different fields, and then
+  `__typename` must be selected for every member. Without it generation
+  fails, see [Troubleshooting](../troubleshooting.md). A `__typename` under
+  `@skip` or `@include` does not count.
+- **Possible types that select the same fields share one member**, with
+  `__typename: z.enum([...])`: `node` selects only `id` and `kind`, the same
+  for `User` and `Post`. A single group is a plain object, not a union.
+- **When every possible type selects the same fields, `__typename` is not
+  needed:** the result is one plain object. `plain: node(id: $id) { id }`
+  gives `plain: z.object({ id: z.string() }).nullable()`. Selected there,
+  `__typename` is `z.enum([...])`.
+- **An aliased `__typename` is the discriminator under its alias:** the
+  union is discriminated on `kind` if the document selects only
+  `kind: __typename`. The members must select it under one key; when several
+  keys select it, `__typename` is preferred. Otherwise generation fails.
+- **A field under `@skip`, `@include` or `@defer` is `.optional()`:** `tags`
+  may be absent. A field selected both with and without the directive is
+  required, but a sub-field that only the conditional node selects stays
+  optional: with `friends { id } friends @include(if: $v) { name }`, `name`
+  is optional. A field selected only under the directive is optional, and
+  its own fields are not: `maybe: user(id: $id) @include(if: $v) { id }`
+  gives `{ id: string } | null | undefined`.
+- **A nullable field is `.nullable()`**, not `.nullish()`: a response holds
+  null, not undefined.
+- `Int` is `z.int32()` and `ID` a `z.string()`, as elsewhere. An enum is its
+  schema (`zRole`).
+- **An introspection field** (`__schema`, `__type`) is `z.unknown()`.
+
+**Deep selections.** Past five nested levels, a selection is declared apart,
+so TypeScript infers an operation of any depth (it failed with TS2589 at
+fourteen levels). The helpers are not exported; identical deep selections
+share one:
+
+```ts
+const zDeepQuery$1$ = z.object({ /* the selection */ });
+const zDeepQuery$1: z.ZodType<z.output<typeof zDeepQuery$1$>, z.input<typeof zDeepQuery$1$>> = zDeepQuery$1$;
+// zDeepQuery$2 and zDeepQuery$3 the same way, each using the one before.
+export const zDeepQuery = z.object({
+	user: z.object({
+		friends: z.array(z.object({
+			friends: z.array(z.object({
+				friends: z.array(z.object({
+					friends: z.array(zDeepQuery$3).nullable(),
+				})).nullable(),
+			})).nullable(),
+		})).nullable(),
+	}).nullable(),
+});
+```
+
+A fragment's name follows `omitOperationSuffix` and `dedupeOperationSuffix`,
+as typescript-operations names it: `fragment UserFields` is
+`UserFieldsFragment`, and `UserFields` under `omitOperationSuffix`;
+`fragment UFFragment` is `UfFragmentFragment`, and `UfFragment` under either
+option.
+
+A fragment on an abstract type, or one that spreads into several places,
+follows the same rules. Here `Pinned` selects `pinned`, a union, whose `User`
+member holds only `__typename`:
+
+```ts
+export const zPinnedFragment = z.object({
+	pinned: z.discriminatedUnion("__typename", [
+		z.object({
+			__typename: z.literal("User"),
+		}),
+		z.object({
+			__typename: z.literal("Post"),
+			title: z.string(),
+		}),
+	]).nullable(),
+});
+```
+
+On the client, parse the response, then narrow on the discriminator:
+
+```ts
+import { zSearchQuery, type SearchQuery } from './generated/zod';
+
+export function names(data: unknown): string[] {
+	const { search }: SearchQuery = zSearchQuery.parse(data);
+	return search.map((hit) =>
+		hit.__typename === 'User' ? hit.who : hit.title,
+	);
+}
+```
 
 ## Errors
 
