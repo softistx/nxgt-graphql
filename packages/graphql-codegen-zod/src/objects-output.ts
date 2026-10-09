@@ -25,7 +25,8 @@ import { declareCyclicObject, type OutputTypeContext } from './output-types';
 import { declare, objectMembers } from './source';
 import type { ValueCode, Writer } from './writer';
 
-const builtIns: Readonly<Record<string, string>> = {
+/** The built-in scalars' schemas on the way out. */
+export const builtIns: Readonly<Record<string, string>> = {
 	[GraphQLString.name]: 'z.string()',
 	[GraphQLID.name]: 'z.string()',
 	[GraphQLInt.name]: 'z.int32()',

@@ -140,6 +140,25 @@ export const documents = [
 			query Log($at: [DateTime]!, $groups: [Group]!, $nested: [[Group]!]) {
 				log(at: $at, groups: $groups, nested: $nested)
 			}
+			query Search($text: String!, $id: ID!, $withTags: Boolean!) {
+				search(text: $text) {
+					__typename
+					... on User { id who: name joined role }
+					... on Post { id title tags @include(if: $withTags) author { ...UserFields } }
+				}
+				node(id: $id) { __typename id kind: __typename }
+			}
+			fragment Pinned on User { pinned { __typename ... on Post { title } } }
+			query PinnedUser($id: ID!) { user(id: $id) { id ...Pinned } }
+			query Friends($id: ID!, $v: Boolean!) {
+				user(id: $id) { friends { id } friends @include(if: $v) { name } }
+				node(id: $id) { id ...UserName @include(if: $v) __typename }
+				plain: node(id: $id) { id }
+				maybe: user(id: $id) @include(if: $v) { id }
+			}
+			fragment UserName on User { name }
+			# Past what TypeScript infers in one z.object (TS2589 at 14).
+			query Deep($id: ID!) { user(id: $id) { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { friends { id } } } } } } } } } } } } } } } } } }
 		`),
 	},
 	// No name, so no schema: it is skipped, not an error.

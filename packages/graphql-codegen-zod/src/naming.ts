@@ -31,15 +31,34 @@ export class Naming {
 
 	/** An operation's variables type name: `SignUpMutationVariables`. */
 	variables(operation: string, kind: OperationTypeNode): string {
+		return this.#wrap(
+			this.#convert(`${operation}${this.#suffix(operation, kind)}Variables`),
+		);
+	}
+
+	/** An operation's result type name: `SignUpMutation`. */
+	result(operation: string, kind: OperationTypeNode): string {
+		return this.#wrap(
+			this.#convert(`${operation}${this.#suffix(operation, kind)}`),
+		);
+	}
+
+	/** A fragment's type name: `UserFieldsFragment`. */
+	fragment(name: string): string {
+		return this.#wrap(
+			this.#convert(`${name}${this.#suffix(name, 'fragment')}`),
+		);
+	}
+
+	/** As visitor-plugin-common's `getOperationSuffix`, fragments included. */
+	#suffix(operation: string, kind: OperationTypeNode | 'fragment'): string {
 		const type = changeCase.pascalCase(kind);
 		const { omitOperationSuffix, dedupeOperationSuffix } = this.#config;
-		const suffix =
-			omitOperationSuffix ||
+		return omitOperationSuffix ||
 			(dedupeOperationSuffix &&
 				operation.toLowerCase().endsWith(type.toLowerCase()))
-				? ''
-				: type;
-		return this.#wrap(this.#convert(`${operation}${suffix}Variables`));
+			? ''
+			: type;
 	}
 
 	/** The schema of the type named `type`: `zSignUpInput`. */

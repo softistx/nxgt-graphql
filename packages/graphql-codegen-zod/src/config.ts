@@ -42,6 +42,11 @@ export interface CodegenZodConfig {
 	 * returns: `zUser`, `User`. Default `true`.
 	 */
 	readonly objects?: boolean;
+	/**
+	 * Each named operation's result and each fragment, as the response
+	 * holds them: `zUserQuery`, `UserFieldsFragment`. Default `true`.
+	 */
+	readonly operations?: boolean;
 }
 
 /** A file of `documents`, as graphql-codegen hands it to a plugin. */

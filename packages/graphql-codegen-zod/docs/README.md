@@ -4,7 +4,7 @@
 
 | Page | Read it when |
 | --- | --- |
-| [Output](guide/output.md) | you want to know what the plugin writes: the schemas and types, their names and options, defaults, recursion, `@oneOf`, variables, output types, and how custom scalars are mapped |
+| [Output](guide/output.md) | you want to know what the plugin writes: the schemas and types, their names and options, defaults, recursion, `@oneOf`, variables, output types, operation results, and how custom scalars are mapped |
 
 ## Reference
 
