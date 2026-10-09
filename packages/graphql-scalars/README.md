@@ -22,6 +22,9 @@ the Zod schemas' `z.input` and `z.output`, inferred by the compiler):
 | `zod` | `>=4.6.5 <5` |
 | `typescript` | `^6.0.3` |
 
+Its one dependency is [`@nxgt/zod`](https://www.npmjs.com/package/@nxgt/zod),
+which holds the schemas; it peers the same `zod`, so your tree keeps one.
+
 Your `tsconfig.json` needs:
 
 ```jsonc
@@ -227,6 +230,10 @@ const signUp = z.object({
 
 type SignUp = z.output<typeof signUp>; // { email: string; birthday: string }
 ```
+
+The schemas come from [`@nxgt/zod`](https://www.npmjs.com/package/@nxgt/zod):
+`import { uuidSchema } from '@nxgt/zod'` gives the very same schema, without
+`graphql`, for code that has no GraphQL in it.
 
 `scalarSchemas` holds the same schemas keyed by GraphQL name, for code
 generated from a GraphQL schema (`@nxgt/graphql-codegen-zod` reads it), and

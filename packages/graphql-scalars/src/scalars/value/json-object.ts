@@ -1,15 +1,7 @@
-import { z } from 'zod';
-import { isJsonObject } from '../../rules/json';
+import { jsonObjectSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * A JSON object, kept as it is: a plain object whose every field is a JSON
- * value. An array, `null` or a scalar value is refused, and so is anything
- * `JSON` refuses.
- */
-export const jsonObjectSchema = z
-	.unknown()
-	.refine(isJsonObject, { error: 'Invalid JSON object' });
+export { jsonObjectSchema };
 
 export const JSONObjectScalar = zodScalar(jsonObjectSchema, {
 	name: 'JSONObject',

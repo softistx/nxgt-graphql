@@ -1,9 +1,7 @@
-import { z } from 'zod';
-import { noNegativeZero } from '../../rules/integer';
+import { nonPositiveIntSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/** −2³¹ to 0: 32 bits, as GraphQL's `Int`. */
-export const nonPositiveIntSchema = noNegativeZero(z.int32().nonpositive());
+export { nonPositiveIntSchema };
 
 export const NonPositiveIntScalar = zodScalar(nonPositiveIntSchema, {
 	name: 'NonPositiveInt',

@@ -53,6 +53,9 @@
 			"src/cli.ts"
 		]
 	},
+	"dependencies": {
+		"@nxgt/zod": "^0.1.2"
+	},
 	"devDependencies": {
 		"@types/bun": "^1.4.0",
 		"graphql": "16.11.0",

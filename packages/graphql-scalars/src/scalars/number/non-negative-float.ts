@@ -1,8 +1,7 @@
-import { z } from 'zod';
+import { nonNegativeFloatSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/** A finite number, 0 or above. */
-export const nonNegativeFloatSchema = z.number().nonnegative();
+export { nonNegativeFloatSchema };
 
 export const NonNegativeFloatScalar = zodScalar(nonNegativeFloatSchema, {
 	name: 'NonNegativeFloat',

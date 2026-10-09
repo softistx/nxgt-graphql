@@ -1,10 +1,7 @@
-import { z } from 'zod';
+import { nanoIdSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * A Nano ID of the default shape: 21 characters of `A-Za-z0-9_-`.
- */
-export const nanoIdSchema = z.nanoid();
+export { nanoIdSchema };
 
 export const NanoIDScalar = zodScalar(nanoIdSchema, {
 	name: 'NanoID',

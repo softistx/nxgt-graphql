@@ -1,6 +1,7 @@
 // `scalarSchemas` is a public contract read by code generators: keyed by
-// GraphQL name, the very schema each scalar checks.
+// GraphQL name, the very schema each scalar checks, which is @nxgt/zod's.
 import { expect, test } from 'bun:test';
+import * as nxgtZod from '@nxgt/zod';
 import { z } from 'zod';
 import {
 	DateTimeScalar,
@@ -28,6 +29,23 @@ test('holds the schema each scalar checks, the same as schemas', () => {
 	);
 	expect(scalarSchemas.UUID).toBe(uuidSchema);
 	expect(DateTimeScalar.schema).toBe(dateTimeSchema);
+});
+
+// The rules live in @nxgt/zod: a schema it adds that no scalar here wraps,
+// or a scalar here whose schema is not its, fails.
+test("holds @nxgt/zod's very schemas, under the same keys in the same order", () => {
+	expect(Object.keys(scalarSchemas)).toEqual(
+		Object.keys(nxgtZod.scalarSchemas),
+	);
+	for (const name of Object.keys(nxgtZod.scalarSchemas)) {
+		expect(scalarSchemas[name as ScalarName]).toBe(
+			nxgtZod.scalarSchemas[name as nxgtZod.ScalarName],
+		);
+	}
+	expect(Object.keys(schemas)).toEqual(Object.keys(nxgtZod.schemas));
+	for (const [key, schema] of Object.entries(nxgtZod.schemas)) {
+		expect(schemas[key as keyof typeof schemas]).toBe(schema);
+	}
 });
 
 test('decodes a wire value to what the resolver receives, codecs included', () => {

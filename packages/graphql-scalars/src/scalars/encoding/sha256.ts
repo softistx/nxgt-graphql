@@ -1,12 +1,7 @@
-import { z } from 'zod';
+import { sha256Schema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * A SHA-256 digest as 64 hexadecimal digits, in either case, kept as sent.
- */
-export const sha256Schema = z.hash('sha256', {
-	error: 'Invalid SHA-256 digest: expected 64 hexadecimal digits',
-});
+export { sha256Schema };
 
 export const SHA256Scalar = zodScalar(sha256Schema, {
 	name: 'SHA256',

@@ -41,3 +41,11 @@ export const generated = z.object({
 });
 
 export const ownSchema = Cents.schema;
+
+// A schema whose type came out `any` (a dependency's `.d.ts` that does not
+// resolve under the consumer's settings) would be taken as a number: these
+// must stay errors.
+// @ts-expect-error a schema is never a number
+export const notAnyRecord: number = scalarSchemas.UUID;
+// @ts-expect-error a schema is never a number
+export const notAnySchemas: number = schemas.emailAddress;

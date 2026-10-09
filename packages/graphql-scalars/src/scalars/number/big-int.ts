@@ -1,12 +1,7 @@
-import { z } from 'zod';
-import { bigIntegerCodec } from '../../rules/big-integer';
+import { bigIntSchema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * An integer of any size: a `bigint` in the resolvers, a decimal string on
- * the wire (a safe-integer number is accepted on the way in).
- */
-export const bigIntSchema = bigIntegerCodec(z.bigint());
+export { bigIntSchema };
 
 export const BigIntScalar = zodScalar(bigIntSchema, {
 	name: 'BigInt',

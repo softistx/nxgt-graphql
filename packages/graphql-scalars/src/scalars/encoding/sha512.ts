@@ -1,12 +1,7 @@
-import { z } from 'zod';
+import { sha512Schema } from '@nxgt/zod/scalars';
 import { zodScalar } from '../../zod-scalar';
 
-/**
- * A SHA-512 digest as 128 hexadecimal digits, in either case, kept as sent.
- */
-export const sha512Schema = z.hash('sha512', {
-	error: 'Invalid SHA-512 digest: expected 128 hexadecimal digits',
-});
+export { sha512Schema };
 
 export const SHA512Scalar = zodScalar(sha512Schema, {
 	name: 'SHA512',
