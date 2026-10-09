@@ -9,6 +9,7 @@ import type { CodegenZodConfig, DocumentFile } from './config';
 import { Imports } from './imports';
 import { Naming } from './naming';
 import { objectBlocks } from './objects-output';
+import { resultsBlocks } from './results-output';
 import { ScalarSources } from './scalars';
 import { schemaBlocks } from './schema-output';
 import { variablesBlocks } from './variables-output';
@@ -39,12 +40,15 @@ export async function plugin(
 			...schemaBlocks(schema, writer, naming),
 			...(config.objects === false ? [] : objectBlocks(schema, writer, naming)),
 			...variablesBlocks(schema, documents, writer, naming),
+			...(config.operations === false
+				? []
+				: resultsBlocks(schema, documents, writer, naming)),
 		];
 	};
 	// Written twice: the first pass names what the file declares, so the
 	// second gives no import one of those names.
 	const declarations = (await write(new Imports())).flatMap((block) =>
-		[...block.matchAll(/^export (const|type) (\w+)/gm)].map(
+		[...block.matchAll(/^(?:export )?(const|type) ([\w$]+)/gm)].map(
 			(m) => `${m[1]} ${m[2]}`,
 		),
 	);
@@ -54,7 +58,7 @@ export async function plugin(
 	);
 	if (twice)
 		throw new Error(
-			`@nxgt/graphql-codegen-zod: the file would declare ${twice.split(' ')[1]} twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types, set typesSuffix, or set objects: false.`,
+			`@nxgt/graphql-codegen-zod: the file would declare ${twice.split(' ')[1]} twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types or operations, set typesSuffix, or set objects: false or operations: false.`,
 		);
 	const declared = declarations.map(
 		(declaration) => declaration.split(' ')[1] ?? '',

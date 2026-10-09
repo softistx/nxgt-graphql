@@ -520,3 +520,214 @@ export const zLogQueryVariables = z.object({
 	},
 });
 export type LogQueryVariables = z.input<typeof zLogQueryVariables>;
+
+export const zSearchQueryVariables = z.object({
+	text: z.string(),
+	id: z.string(),
+	withTags: z.boolean(),
+});
+export type SearchQueryVariables = z.input<typeof zSearchQueryVariables>;
+
+export const zPinnedUserQueryVariables = z.object({
+	id: z.string().min(3),
+});
+export type PinnedUserQueryVariables = z.input<typeof zPinnedUserQueryVariables>;
+
+export const zFriendsQueryVariables = z.object({
+	id: z.string().min(3),
+	v: z.boolean(),
+});
+export type FriendsQueryVariables = z.input<typeof zFriendsQueryVariables>;
+
+export const zDeepQueryVariables = z.object({
+	id: z.string().min(3),
+});
+export type DeepQueryVariables = z.input<typeof zDeepQueryVariables>;
+
+export const zUserFieldsFragment = z.object({
+	id: z.string(),
+	name: z.string(),
+});
+export type UserFieldsFragment = z.output<typeof zUserFieldsFragment>;
+
+export const zPinnedFragment = z.object({
+	pinned: z.discriminatedUnion("__typename", [
+		z.object({
+			__typename: z.literal("User"),
+		}),
+		z.object({
+			__typename: z.literal("Post"),
+			title: z.string(),
+		}),
+	]).nullable(),
+});
+export type PinnedFragment = z.output<typeof zPinnedFragment>;
+
+export const zUserNameFragment = z.object({
+	name: z.string(),
+});
+export type UserNameFragment = z.output<typeof zUserNameFragment>;
+
+export const zSignUpMutation = z.object({
+	signUp: z.object({
+		id: z.string(),
+		name: z.string(),
+	}).nullable(),
+});
+export type SignUpMutation = z.output<typeof zSignUpMutation>;
+
+export const zUserQuery = z.object({
+	user: z.object({
+		id: z.string(),
+		name: z.string(),
+	}).nullable(),
+});
+export type UserQuery = z.output<typeof zUserQuery>;
+
+export const zUsersQuery = z.object({
+	users: z.array(z.object({
+		id: z.string(),
+	})),
+});
+export type UsersQuery = z.output<typeof zUsersQuery>;
+
+export const zRateMutation = z.object({
+	rate: z.boolean().nullable(),
+});
+export type RateMutation = z.output<typeof zRateMutation>;
+
+export const zReachQuery = z.object({
+	reach: z.boolean().nullable(),
+});
+export type ReachQuery = z.output<typeof zReachQuery>;
+
+export const zReachEmailQuery = z.object({
+	reach: z.boolean().nullable(),
+});
+export type ReachEmailQuery = z.output<typeof zReachEmailQuery>;
+
+export const zGroupsQuery = z.object({
+	groups: z.boolean().nullable(),
+});
+export type GroupsQuery = z.output<typeof zGroupsQuery>;
+
+export const zLogQuery = z.object({
+	log: z.boolean().nullable(),
+});
+export type LogQuery = z.output<typeof zLogQuery>;
+
+export const zSearchQuery = z.object({
+	search: z.array(z.discriminatedUnion("__typename", [
+		z.object({
+			__typename: z.literal("User"),
+			id: z.string(),
+			who: z.string(),
+			joined: scalarSchemas.DateTime,
+			role: zRole.nullable(),
+		}),
+		z.object({
+			__typename: z.literal("Post"),
+			id: z.string(),
+			title: z.string(),
+			tags: z.array(z.array(z.string().nullable()).nullable()).nullable().optional(),
+			author: z.object({
+				id: z.string(),
+				name: z.string(),
+			}),
+		}),
+	])),
+	node: z.object({
+		__typename: z.enum(["User", "Post"]),
+		id: z.string(),
+		kind: z.enum(["User", "Post"]),
+	}).nullable(),
+});
+export type SearchQuery = z.output<typeof zSearchQuery>;
+
+export const zPinnedUserQuery = z.object({
+	user: z.object({
+		id: z.string(),
+		pinned: z.discriminatedUnion("__typename", [
+			z.object({
+				__typename: z.literal("User"),
+			}),
+			z.object({
+				__typename: z.literal("Post"),
+				title: z.string(),
+			}),
+		]).nullable(),
+	}).nullable(),
+});
+export type PinnedUserQuery = z.output<typeof zPinnedUserQuery>;
+
+export const zFriendsQuery = z.object({
+	user: z.object({
+		friends: z.array(z.object({
+			id: z.string(),
+			name: z.string().optional(),
+		})).nullable(),
+	}).nullable(),
+	node: z.discriminatedUnion("__typename", [
+		z.object({
+			id: z.string(),
+			name: z.string().optional(),
+			__typename: z.literal("User"),
+		}),
+		z.object({
+			id: z.string(),
+			__typename: z.literal("Post"),
+		}),
+	]).nullable(),
+	plain: z.object({
+		id: z.string(),
+	}).nullable(),
+	maybe: z.object({
+		id: z.string(),
+	}).nullable().optional(),
+});
+export type FriendsQuery = z.output<typeof zFriendsQuery>;
+
+const zDeepQuery$1$ = z.object({
+	friends: z.array(z.object({
+		friends: z.array(z.object({
+			id: z.string(),
+		})).nullable(),
+	})).nullable(),
+});
+const zDeepQuery$1: z.ZodType<z.output<typeof zDeepQuery$1$>, z.input<typeof zDeepQuery$1$>> = zDeepQuery$1$;
+const zDeepQuery$2$ = z.object({
+	friends: z.array(z.object({
+		friends: z.array(z.object({
+			friends: z.array(z.object({
+				friends: z.array(z.object({
+					friends: z.array(zDeepQuery$1).nullable(),
+				})).nullable(),
+			})).nullable(),
+		})).nullable(),
+	})).nullable(),
+});
+const zDeepQuery$2: z.ZodType<z.output<typeof zDeepQuery$2$>, z.input<typeof zDeepQuery$2$>> = zDeepQuery$2$;
+const zDeepQuery$3$ = z.object({
+	friends: z.array(z.object({
+		friends: z.array(z.object({
+			friends: z.array(z.object({
+				friends: z.array(z.object({
+					friends: z.array(zDeepQuery$2).nullable(),
+				})).nullable(),
+			})).nullable(),
+		})).nullable(),
+	})).nullable(),
+});
+const zDeepQuery$3: z.ZodType<z.output<typeof zDeepQuery$3$>, z.input<typeof zDeepQuery$3$>> = zDeepQuery$3$;
+export const zDeepQuery = z.object({
+	user: z.object({
+		friends: z.array(z.object({
+			friends: z.array(z.object({
+				friends: z.array(z.object({
+					friends: z.array(zDeepQuery$3).nullable(),
+				})).nullable(),
+			})).nullable(),
+		})).nullable(),
+	}).nullable(),
+});
+export type DeepQuery = z.output<typeof zDeepQuery>;

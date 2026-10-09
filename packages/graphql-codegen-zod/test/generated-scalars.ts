@@ -154,3 +154,8 @@ export const zAllQueryVariables = z.object({
 	},
 });
 export type AllQueryVariables = z.input<typeof zAllQueryVariables>;
+
+export const zAllQuery = z.object({
+	all: z.boolean().nullable(),
+});
+export type AllQuery = z.output<typeof zAllQuery>;

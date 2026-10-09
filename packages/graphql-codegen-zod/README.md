@@ -3,7 +3,8 @@
 A [graphql-codegen](https://the-guild.dev/graphql/codegen) plugin that writes
 Zod 4 schemas, and their TypeScript types, from your SDL: one per enum and per
 input type, one per field that takes arguments, one per named operation's
-variables, and one per object type, interface and union. It carries every `@constraint` of
+variables, one per object type, interface and union, and one per named
+operation's result and per fragment. It carries every `@constraint` of
 [`@nxgt/graphql-validation`](https://www.npmjs.com/package/@nxgt/graphql-validation),
 through that package's own rules, so the server (`withValidation`) and the
 generated code accept and refuse the same values. For graphql-codegen 5 to 7
@@ -75,7 +76,9 @@ The plugin writes types named as `@graphql-codegen/typescript` names them
 (`SignUpInput`, `MutationSignUpArgs`), which would collide with that plugin's
 in one file. Its `*Args` and `*Variables` types can replace the typescript
 plugin's; so can its object types, interfaces and unions (`User`), or
-`objects: false` leaves them to that plugin.
+`objects: false` leaves them to that plugin. Its `*Query`, `*Mutation` and
+`*Fragment` types can replace typescript-operations' (`SearchQuery`,
+`UserFieldsFragment`), or `operations: false` leaves them to it.
 
 `scalarSchemas` supplies a Zod schema for each custom scalar of the schema;
 see [Scalars](docs/guide/output.md#scalars).
@@ -137,6 +140,32 @@ if (!result.success) {
 }
 ```
 
+### On the client: parse the response
+
+An operation's result is typed `z.output`: what the response holds, custom
+scalars decoded. An abstract type's selection is a union on `__typename` when
+its members select different fields, so checking it narrows.
+
+```graphql
+query Search($text: String!) {
+  search(text: $text) {
+    __typename
+    ... on User { id joined }
+    ... on Post { id title }
+  }
+}
+```
+
+```ts
+import { zSearchQuery } from './generated/zod';
+
+const search = zSearchQuery.parse(response.data).search;
+for (const hit of search) {
+	if (hit.__typename === 'User') hit.joined.getFullYear(); // a Date
+	else hit.title; // Post
+}
+```
+
 What is generated, how it is named, defaults, recursion, `@oneOf` and scalars
 are in [Output](docs/guide/output.md).
 
@@ -152,6 +181,7 @@ are in [Output](docs/guide/output.md).
 | `addUnderscoreToArgsType` | `boolean` | `false` | `Query_FindUserArgs` |
 | `dedupeOperationSuffix`, `omitOperationSuffix` | `boolean` | `false` | as in `typescript-operations` |
 | `objects` | `boolean` | `true` | write the object types, interfaces and unions; `false` writes the input side only |
+| `operations` | `boolean` | `true` | write each named operation's result and each fragment; `false` writes none, the variables stay |
 
 Each is detailed in [Output](docs/guide/output.md).
 
@@ -176,6 +206,13 @@ Each is detailed in [Output](docs/guide/output.md).
   becoming an unchecked `z.unknown()`.
 - Generate into a file of its own: the type names collide with the typescript
   plugins'.
+- An abstract type whose possible types select different fields is a union on
+  `__typename`: select it, under one key for every member, or generation
+  fails. When they all select the same fields, no `__typename` is needed.
+- A field under `@skip`, `@include` or `@defer` may be absent: it is
+  `.optional()`.
+- Generate into a file of its own: a `*Query` or `*Fragment` type collides with
+  typescript-operations'. Take them from this plugin, or set `operations: false`.
 - An input type in a cycle also declares `<Type>Input`: a GraphQL type of
   that name fails generation. Rename it, or set `typesSuffix`.
 

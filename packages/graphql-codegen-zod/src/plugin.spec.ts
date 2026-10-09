@@ -480,6 +480,32 @@ describe('plugin', () => {
 		expect(custom).toContain('export type IfindUserQueryVariables = ');
 	});
 
+	test('names results and fragments as typescript-operations does', async () => {
+		const schema = tiny('type Query { a: Int }');
+		const documents = [
+			{
+				document: parse(
+					'query AQuery { a } fragment UFFragment on Query { a }',
+				),
+			},
+		];
+		const names = async (config: CodegenZodConfig) =>
+			[
+				...(await plugin(schema, documents, config)).matchAll(
+					/^export type (\w+) /gm,
+				),
+			].map((m) => m[1]);
+		expect(await names({})).toEqual(
+			expect.arrayContaining(['UfFragmentFragment', 'AQueryQuery']),
+		);
+		expect(await names({ dedupeOperationSuffix: true })).toEqual(
+			expect.arrayContaining(['UfFragment', 'AQuery']),
+		);
+		expect(await names({ omitOperationSuffix: true })).toEqual(
+			expect.arrayContaining(['UfFragment', 'AQuery']),
+		);
+	});
+
 	test('writes nothing for an anonymous operation', async () => {
 		const out = await plugin(tiny('type Query { a: Int }'), [
 			{ document: parse('{ a }') },
@@ -576,6 +602,176 @@ describe('the generated file, output types', () => {
 	});
 });
 
+describe('the generated file, operation results', () => {
+	const zSearchQuery = schemas['zSearchQuery'];
+	const author = { id: 'u_1', name: 'Al' };
+	const response = {
+		search: [
+			{
+				__typename: 'User',
+				id: 'u_1',
+				who: 'Al',
+				joined: '2020-01-01T00:00:00Z',
+				role: null,
+			},
+			{ __typename: 'Post', id: 'p_1', title: 'T', author },
+		],
+		node: { __typename: 'Post', id: 'p_1', kind: 'Post' },
+	};
+
+	test('parses a response: aliases, decoded scalars, members told apart by __typename', () => {
+		expect(zSearchQuery?.parse(response)).toEqual({
+			search: [
+				{
+					__typename: 'User',
+					id: 'u_1',
+					who: 'Al',
+					joined: new Date('2020-01-01T00:00:00Z'),
+					role: null,
+				},
+				{ __typename: 'Post', id: 'p_1', title: 'T', author },
+			],
+			node: { __typename: 'Post', id: 'p_1', kind: 'Post' },
+		});
+	});
+
+	test('refuses a member it cannot tell apart, or a field the selection requires', () => {
+		const typename = { ...response, search: [{ id: 'u_1', who: 'Al' }] };
+		expect(zSearchQuery?.safeParse(typename).success).toBe(false);
+		const missing = {
+			...response,
+			search: [{ __typename: 'Post', id: 'p_1', author }],
+		};
+		expect(zSearchQuery?.safeParse(missing).success).toBe(false);
+		expect(
+			zSearchQuery?.safeParse({
+				...response,
+				node: { __typename: 'Tag', id: 'x' },
+			}).success,
+		).toBe(false);
+	});
+
+	test('a field under @include may be absent', () => {
+		const tagged = {
+			__typename: 'Post',
+			id: 'p_1',
+			title: 'T',
+			author,
+			tags: [['a', null]],
+		};
+		expect(
+			zSearchQuery?.safeParse({ ...response, search: [tagged] }).success,
+		).toBe(true);
+	});
+
+	test('writes each fragment, its spreads inlined in the operations', () => {
+		expect(
+			schemas['zUserFieldsFragment']?.parse({ ...author, extra: 1 }),
+		).toEqual(author);
+		expect(schemas['zUserQuery']?.parse({ user: author })).toEqual({
+			user: author,
+		});
+		expect(
+			schemas['zPinnedFragment']?.parse({ pinned: { __typename: 'User' } }),
+		).toEqual({ pinned: { __typename: 'User' } });
+	});
+
+	test('keeps a sub-field optional when only a conditional node selects it', () => {
+		const zFriends = schemas['zFriendsQuery'];
+		const response = {
+			user: { friends: [{ id: 'u_2' }] },
+			node: { __typename: 'Post', id: 'p_1' },
+			plain: { id: 'p_1' },
+		};
+		expect(zFriends?.safeParse({ ...response, maybe: {} }).success).toBe(false);
+		expect(zFriends?.safeParse(response).success).toBe(true);
+		const named = {
+			...response,
+			node: { __typename: 'User', id: 'u_1', name: 'Al' },
+		};
+		expect(zFriends?.parse(named)).toEqual(named);
+	});
+
+	test('needs no __typename where every possible type selects the same', () => {
+		expect(
+			schemas['zFriendsQuery']?.parse({
+				user: null,
+				node: null,
+				plain: { id: 'x', extra: 1 },
+			}),
+		).toEqual({ user: null, node: null, plain: { id: 'x' } });
+	});
+
+	test('declares a deep selection apart, so TypeScript infers it', async () => {
+		const out = await plugin(schema, documents, config);
+		expect(out).toMatch(/^const zDeepQuery\$1: z\.ZodType</m);
+		let user: unknown = { id: 'u_0' };
+		for (let i = 0; i < 16; i++) user = { friends: [user] };
+		expect(schemas['zDeepQuery']?.safeParse({ user }).success).toBe(true);
+	});
+
+	test('fails on __typename under a different key for each member', async () => {
+		const keys = [
+			{
+				document: parse(
+					'query Keys { search(text: "a") { ... on User { t: __typename id } ... on Post { k: __typename title } } }',
+				),
+			},
+		];
+		await expect(plugin(schema, keys, config)).rejects.toThrow(
+			'@nxgt/graphql-codegen-zod: Keys.search selects __typename under a different key for each member of SearchResult (t, k). Select it under one key for every member, so the result tells its members apart.',
+		);
+		const conditional = [
+			{
+				document: parse(
+					'query Maybe($v: Boolean!) { search(text: "a") { __typename @include(if: $v) ... on Post { title } } }',
+				),
+			},
+		];
+		await expect(plugin(schema, conditional, config)).rejects.toThrow(
+			'without __typename for User',
+		);
+	});
+
+	test('takes any alias, an interface nothing implements, an introspection field', async () => {
+		const odd = [
+			{
+				document: parse(
+					'query Odd { __TYPENAME__: search(text: "a") { __typename } info: __type(name: "User") { name } } fragment L on Lonely { id }',
+				),
+			},
+		];
+		const out = await plugin(schema, odd, config);
+		expect(out).toContain('__TYPENAME__: z.array(');
+		expect(out).toContain(
+			'info: z.unknown().optional()'.replace('.optional()', ''),
+		);
+		expect(out).toContain('export const zLFragment = z.never();');
+	});
+
+	test('fails on an abstract selection without __typename', async () => {
+		const bare = [
+			{
+				document: parse(
+					'query Bare { search(text: "a") { ... on Post { title } } }',
+				),
+			},
+		];
+		await expect(plugin(schema, bare, config)).rejects.toThrow(
+			'@nxgt/graphql-codegen-zod: Bare.search selects the abstract type SearchResult without __typename for User. Select __typename there, so the result tells its members apart.',
+		);
+	});
+
+	test('writes none with operations: false', async () => {
+		const out = await plugin(schema, documents, {
+			...config,
+			operations: false,
+		});
+		expect(out).not.toContain('export const zUserQuery =');
+		expect(out).toContain('export const zUserQueryVariables =');
+	});
+});
+
 describe('plugin, naming', () => {
 	const schema = tiny(
 		'input sign_upInput { a: Int }\ntype Query { find_user(x: Int): Int }',
@@ -649,7 +845,7 @@ describe('plugin, naming', () => {
 				[],
 			),
 		).rejects.toThrow(
-			'@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types, set typesSuffix, or set objects: false.',
+			'@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types or operations, set typesSuffix, or set objects: false or operations: false.',
 		);
 	});
 
