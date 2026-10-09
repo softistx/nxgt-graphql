@@ -17,11 +17,23 @@ For the built-in scalars, the scalar's own message never contains the value.
 
 **When:** type-checking an import of the package.
 **Why:** the package is ESM with an `exports` map, which `moduleResolution`
-`node`/`node10` ignores, and `nodenext` is not supported.
-**Fix:**
+`node`/`node10` ignores.
+**Fix:** use `bundler`, or `nodenext` / `node16` (from 0.4.1).
 
 ```jsonc
 { "compilerOptions": { "moduleResolution": "bundler" } }
+```
+
+### `TS2305: Module '"@nxgt/graphql-scalars"' has no exported member 'scalarSchemas'`
+
+**When:** type-checking an import of the package under `moduleResolution`
+`nodenext` or `node16`, with a version before 0.4.1.
+**Why:** the declarations of those versions imported each other without an
+extension, which `nodenext` does not resolve, so no export was found.
+**Fix:** upgrade, or use `bundler` until you can.
+
+```bash
+bun add @nxgt/graphql-scalars@latest
 ```
 
 ## Input

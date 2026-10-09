@@ -147,6 +147,18 @@ query Both($e: String, $u: String) { e(v: $e) u(v: $u) }
 
 ## The generated file
 
+### `TS2305: Module '"@nxgt/graphql-scalars"' has no exported member 'scalarSchemas'`
+
+**When:** type-checking the generated file under `moduleResolution`
+`nodenext` or `node16`, with `scalarSchemas: '@nxgt/graphql-scalars'`.
+**Why:** `@nxgt/graphql-scalars` before 0.4.1 ships declarations that
+`nodenext` does not resolve.
+**Fix:** upgrade it to 0.4.1 or later.
+
+```bash
+bun add @nxgt/graphql-scalars@latest
+```
+
 ### `Property 'Money' does not exist on type '{ DateTime: ... }'` (or `TS2339`)
 
 **When:** type-checking the generated file, with `scalarSchemas` set.
