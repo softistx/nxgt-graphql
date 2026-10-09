@@ -25,6 +25,8 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Shipped
 
+- **Declarations resolve under `nodenext`** — 0.2.1. `moduleResolution`
+  `nodenext` and `node16` find every export, as `bundler` does.
 - **A Zod codegen plugin**, [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod):
   it writes the same schemas as source, from the same rules, so the types your
   resolvers receive and the variables a client sends come from your SDL. This

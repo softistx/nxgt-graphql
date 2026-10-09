@@ -428,9 +428,11 @@ it, do not make it a required check.
 - **graphql 17 types `parseLiteral` with two parameters.** A spec that calls
   `scalar.parseLiteral(node)` typechecks on 16 and fails `tsc` on 17; pass
   `undefined` for the variables. Only the "Newest peers" job sees it.
-- **Imports carry no extension** (`'./scalars'`, never `'./scalars.js'`), and
-  consumers resolve as a bundler does. A failure only under `nodenext` is not a
-  bug.
+- **Source imports carry no extension** (`'./scalars'`, never
+  `'./scalars.js'`). `build.ts` adds the `.js` to the emitted `.d.ts`, so a
+  consumer under `bundler` and one under `nodenext` both resolve them; a
+  failure only under `nodenext` (TS2305) is a bug, which `verify:artifacts`
+  catches.
 - **Every package is public.** No package carries `"private": true`, not
   even before its first release; see the divergences below. What publishes
   is the merge of a "Version packages" pull request on `develop`, and a
@@ -447,7 +449,11 @@ it, do not make it a required check.
   (`scalars.ts`, `validation.ts`) is what `emit.ts` emits under a consumer's
   strict settings: an exported value whose
   inferred type names something the entry does not export fails there with
-  TS2883.
+  TS2883. Each fixture is checked twice, under `bundler` and under
+  `nodenext`: `build.ts` gives every relative import of an emitted `.d.ts`
+  its `.js` (or `/index.js`), since tsc keeps the sources' extensionless
+  `./scalars`, and a consumer resolving as Node does then loses every name
+  re-exported through it (TS2305), while `bundler` sees nothing wrong.
 
 - **A source folder named `build`, `dist`, `coverage` or `node_modules` is out
   of `bun run typecheck`.** `tsconfig.base.json` excludes `**/build` and the

@@ -6,12 +6,7 @@ and Later are candidates, not promises.
 
 ## Now
 
-Release 0.4.0, in progress (a minor):
-
-- **`scalarSchemas`** — the schema behind each scalar, keyed by its GraphQL
-  name and typed exactly, for code generated from a GraphQL schema
-  (`@nxgt/graphql-codegen-zod`); each scalar carries its own as `.schema`.
-  See [the guide](guide/scalars.md#keyed-by-graphql-name).
+Nothing in progress.
 
 ## Next
 
@@ -45,10 +40,20 @@ Release 0.4.0, in progress (a minor):
 - **`DID`, `GeoJSON` (and its geometries), `CountryName`, `Byte`, `Cuid` v1** —
   out of scope; write them with `zodScalar`.
 - **Aliases** (`UnsignedInt`, `LocalDate`, …) — one name per rule.
-- **Support for `moduleResolution: "nodenext"`** — the supported setting is
-  `bundler`.
 
 ## Shipped
+
+Release 0.4.1:
+
+- **Declarations resolve under `nodenext`** — `moduleResolution` `nodenext` and
+  `node16` find every export, as `bundler` does.
+
+Release 0.4.0:
+
+- **`scalarSchemas`** — the schema behind each scalar, keyed by its GraphQL
+  name and typed exactly, for code generated from a GraphQL schema
+  (`@nxgt/graphql-codegen-zod`); each scalar carries its own as `.schema`.
+  See [the guide](guide/scalars.md#keyed-by-graphql-name).
 
 Release 0.3.0:
 

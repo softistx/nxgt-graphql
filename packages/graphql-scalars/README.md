@@ -27,7 +27,7 @@ Your `tsconfig.json` needs:
 ```jsonc
 {
   "compilerOptions": {
-    "moduleResolution": "bundler" // `nodenext` is not supported
+    "moduleResolution": "bundler" // or "nodenext" / "node16", from 0.4.1; "node" / "node10" ignore `exports`
   }
 }
 ```
