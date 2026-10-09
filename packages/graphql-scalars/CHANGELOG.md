@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.4.1
+
+### Patch Changes
+
+- [#53](https://github.com/softistx/nxgt-graphql/pull/53) [`bdbdb9a`](https://github.com/softistx/nxgt-graphql/commit/bdbdb9a90eb041915315f962b5021beaaca51131) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The declaration files now import each other with a `.js` extension, so a project with `moduleResolution: "nodenext"` (or `node16`) sees every export: `import { scalarSchemas } from '@nxgt/graphql-scalars'` failed there with TS2305, and so did the file `@nxgt/graphql-codegen-zod` generates.
+
 ## 0.4.0
 
 ### Minor Changes
