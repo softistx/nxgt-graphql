@@ -1,6 +1,6 @@
 {
 	"name": "@nxgt/graphql-scalars",
-	"version": "0.4.1",
+	"version": "0.5.0",
 	"description": "GraphQL scalars checked both ways by Zod schemas, by category, for graphql 16 and 17 — and zodScalar for your own",
 	"license": "MIT",
 	"type": "module",
