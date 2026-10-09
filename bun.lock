@@ -14,7 +14,7 @@
     },
     "packages/graphql-codegen-zod": {
       "name": "@nxgt/graphql-codegen-zod",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@nxgt/graphql-validation": "workspace:^",
         "change-case": "^5.4.4",
