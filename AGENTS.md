@@ -393,6 +393,12 @@ packages/graphql-codegen-zod/test/
   its scalars, alone and in a list; `real-scalars.spec.ts` checks every key
   is mapped and that the client takes, refuses and decodes what a server with
   `scalarResolvers` does (codecs to `Date` and `bigint` included).
+- **`@nxgt/zod` is the client's record, at parity.** A devDependency only,
+  never a dependency. `nxgt-zod.spec.ts` checks its `scalarSchemas` has the
+  keys of `@nxgt/graphql-scalars`', in order; that each scalar takes, refuses
+  and decodes every probe as the scalars package does (each scalar takes at
+  least one probe, so none is only refused); and that `scalarSchemas:
+  '@nxgt/zod'` generates the same file with only the import changed.
 - **A default is `.prefault(v)` then `.nullable()`:** optional on the way in
   (`z.input`), present on the way out (`z.output`); `test/types.ts` pins it.
   `.default` would not run a nested input's own defaults, and `.nullish()`

@@ -413,7 +413,7 @@ A custom scalar needs a Zod schema from you, mapped in one of two ways:
 
 | Option | Type | Effect |
 | --- | --- | --- |
-| `scalarSchemas` | `string` | a module exporting a `scalarSchemas` record keyed by GraphQL name; `@nxgt/graphql-scalars` exports one from 0.4.0 |
+| `scalarSchemas` | `string` | a module exporting a `scalarSchemas` record keyed by GraphQL name; `@nxgt/graphql-scalars` exports one from 0.4.0, `@nxgt/zod` from 0.1.0 |
 | `zodScalars` | `Record<string, string>` | `'<module>#<export>'` for one scalar; wins over the record |
 
 ```ts
@@ -434,6 +434,39 @@ import { moneySchema } from "./money";
 birth: scalarSchemas.DateTime.nullish(),
 price: moneySchema,
 ```
+
+### On a client: `@nxgt/zod`
+
+`@nxgt/zod` exports the same `scalarSchemas` record, with the rules of
+`@nxgt/graphql-scalars`, and does not depend on `graphql`. A client that only
+runs the generated file imports it instead, and keeps `graphql` out of its
+bundle:
+
+```ts
+config: { scalarSchemas: '@nxgt/zod' },
+```
+
+```ts
+// what the generated file imports
+import { z } from "zod";
+import { scalarSchemas } from "@nxgt/zod";
+```
+
+The generated schemas are the same either way; only the import changes. The
+SDL codegen reads still comes from `@nxgt/graphql-scalars`
+(`bunx nxgt-graphql-scalars typedefs --out`), so a client installs it as a
+devDependency and `@nxgt/zod` as a dependency. Everything codegen needs is a
+devDependency too, so `graphql` never reaches the bundle: the generated file
+imports only `zod` and `@nxgt/zod`.
+
+```sh
+bun add @nxgt/zod zod
+bun add -d @nxgt/graphql-codegen-zod @nxgt/graphql-validation @nxgt/graphql-scalars
+bun add -d graphql @graphql-codegen/cli typescript
+```
+
+Under `moduleResolution` `nodenext` or `node16`, use `@nxgt/zod` 0.1.2 or
+later.
 
 - Two exports with the same name from different modules are aliased:
   `import { schema } from "./money"; import { schema as schema2 } from "./cost";`.
