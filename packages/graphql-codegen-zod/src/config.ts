@@ -37,6 +37,11 @@ export interface CodegenZodConfig {
 	readonly addUnderscoreToArgsType?: boolean;
 	readonly dedupeOperationSuffix?: boolean;
 	readonly omitOperationSuffix?: boolean;
+	/**
+	 * The SDL's object types, interfaces and unions, as what a resolver
+	 * returns: `zUser`, `User`. Default `true`.
+	 */
+	readonly objects?: boolean;
 }
 
 /** A file of `documents`, as graphql-codegen hands it to a plugin. */

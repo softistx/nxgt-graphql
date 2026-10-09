@@ -4,13 +4,20 @@ import type {
 	GroupInput,
 	GroupsQueryVariables,
 	LogQueryVariables,
+	Lonely,
 	Member,
 	MemberInput,
 	MutationSignUpArgs,
+	Post,
 	QueryUsersArgs,
+	Ring0,
+	Ring11,
 	Role,
+	SearchResult,
 	SignUpInput,
 	SignUpMutationVariables,
+	Solo,
+	User,
 	UsersQueryVariables,
 } from './generated';
 
@@ -85,4 +92,19 @@ holds<
 	>
 >();
 
-export { group, none, sent };
+// An output type is what a resolver returns: decoded scalars, no
+// __typename needed, nullable fields optional.
+const returned: User = { id: 'u_1', name: 'Al', joined: new Date() };
+holds<Equal<User['joined'], Date>>();
+holds<Equal<User['friends'], User[] | null | undefined>>();
+holds<Equal<SearchResult, User | Post>>();
+holds<Equal<Solo, User>>();
+holds<Equal<Lonely, never>>();
+holds<
+	Equal<
+		Ring0['next']['next']['next']['next']['next']['next']['next']['next']['next']['next']['next'],
+		Ring11
+	>
+>();
+
+export { group, none, returned, sent };
