@@ -1,5 +1,11 @@
 # @nxgt/graphql-codegen-zod
 
+## 0.2.2
+
+### Patch Changes
+
+- [#56](https://github.com/softistx/nxgt-graphql/pull/56) [`a7dc63e`](https://github.com/softistx/nxgt-graphql/commit/a7dc63e267543f540215a846a57baa78575a54a5) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The docs show `scalarSchemas: '@nxgt/zod'` for a client: the same scalar schemas as `@nxgt/graphql-scalars`, without `graphql` in the bundle.
+
 ## 0.2.1
 
 ### Patch Changes

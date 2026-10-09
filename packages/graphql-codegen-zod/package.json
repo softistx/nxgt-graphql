@@ -1,6 +1,6 @@
 {
 	"name": "@nxgt/graphql-codegen-zod",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "A graphql-codegen plugin that writes Zod schemas from your SDL — inputs, enums, field arguments, operation variables, operation results and output types — with the @constraint rules of @nxgt/graphql-validation",
 	"license": "MIT",
 	"type": "module",
