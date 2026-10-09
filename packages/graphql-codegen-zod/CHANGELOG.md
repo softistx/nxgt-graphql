@@ -1,5 +1,21 @@
 # @nxgt/graphql-codegen-zod
 
+## 0.2.0
+
+### Minor Changes
+
+- [#49](https://github.com/softistx/nxgt-graphql/pull/49) [`00ed376`](https://github.com/softistx/nxgt-graphql/commit/00ed376de95d8f6aca8e5d8070c87ac65bd19e57) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The plugin now writes the SDL's object types, interfaces and unions: `zUser` and `User`, typed as what a resolver returns (custom scalars decoded, `__typename` optional, unknown fields dropped), and each interface or union as a `z.union` of its object types. An object type in a cycle has its types written out (`User`, and `UserWire` for the wire value), so a long loop of types does not hit TS2589.
+  
+  On by default, which can break a config that generated with 0.1.0: a custom scalar used only on output fields now needs a schema (`scalarSchemas` or `zodScalars`), and an object type named like a type the plugin already writes (`QueryFindArgs`, `FilterInput`) now clashes. `objects: false` skips the object types; with `operations: false` too, it gives 0.1.0's output back.
+
+- [#50](https://github.com/softistx/nxgt-graphql/pull/50) [`70d6044`](https://github.com/softistx/nxgt-graphql/commit/70d6044c2499b015fc90a20490a0ce3dfedd3e95) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The plugin now writes each named operation's result and each fragment: `zSearchQuery` and `SearchQuery`, `zUserFieldsFragment` and `UserFieldsFragment`, typed as what the response holds (custom scalars decoded, unknown fields dropped, a fragment spread inlined). A selection on an interface or union is a `z.discriminatedUnion` on `__typename`; a field under `@skip`, `@include` or `@defer` is optional. A deep selection is declared apart, so TypeScript infers an operation of any depth.
+  
+  On by default, which can break a config that generated with the last release: an abstract type whose possible types select different fields, selected without `__typename` (or with it under different keys), now fails generation, a custom scalar an operation selects now needs a schema (`scalarSchemas` or `zodScalars`), and a `*Query` or `*Fragment` type now clashes with typescript-operations' in one file. `operations: false` stops the results; 0.1.0's output needs `objects: false` and `operations: false` together.
+
+### Patch Changes
+
+- [#47](https://github.com/softistx/nxgt-graphql/pull/47) [`aad922c`](https://github.com/softistx/nxgt-graphql/commit/aad922c54ff091aca15dcfb45fe1693fab044588) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The README's setup shows how to write the SDL files codegen reads (`nxgt-graphql-validation typedefs --out`, `nxgt-graphql-scalars typedefs --out`), the `schema` list that includes them, and how to run codegen.
+
 ## 0.1.0
 
 ### Minor Changes
