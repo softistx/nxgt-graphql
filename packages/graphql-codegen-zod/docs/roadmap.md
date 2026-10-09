@@ -4,7 +4,9 @@ What `@nxgt/graphql-codegen-zod` is heading for, phrased as what you get.
 
 ## Now
 
-Nothing in progress.
+- **Output types.** Zod schemas and types for the SDL's object types,
+  interfaces and unions (written), then for each named operation's result
+  and each fragment, with `__typename` discriminating abstract types.
 
 ## Next
 

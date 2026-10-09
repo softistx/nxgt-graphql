@@ -3,7 +3,7 @@
 A [graphql-codegen](https://the-guild.dev/graphql/codegen) plugin that writes
 Zod 4 schemas, and their TypeScript types, from your SDL: one per enum and per
 input type, one per field that takes arguments, one per named operation's
-variables. It carries every `@constraint` of
+variables, and one per object type, interface and union. It carries every `@constraint` of
 [`@nxgt/graphql-validation`](https://www.npmjs.com/package/@nxgt/graphql-validation),
 through that package's own rules, so the server (`withValidation`) and the
 generated code accept and refuse the same values. For graphql-codegen 5 to 7
@@ -74,7 +74,8 @@ export default config;
 The plugin writes types named as `@graphql-codegen/typescript` names them
 (`SignUpInput`, `MutationSignUpArgs`), which would collide with that plugin's
 in one file. Its `*Args` and `*Variables` types can replace the typescript
-plugin's.
+plugin's; so can its object types, interfaces and unions (`User`), or
+`objects: false` leaves them to that plugin.
 
 `scalarSchemas` supplies a Zod schema for each custom scalar of the schema;
 see [Scalars](docs/guide/output.md#scalars).
@@ -104,6 +105,21 @@ export const signUp = (_: unknown, { input }: MutationSignUpArgs) => {
 	return { id: 'u_1', email: input.email };
 };
 ```
+
+### On the server: type what a resolver returns
+
+Object types, interfaces and unions are typed
+`z.output`: custom scalars decoded, `__typename` optional, nullable fields
+optional.
+
+```ts
+import type { User } from './generated/zod';
+
+export const me = (): User => ({ id: 'u_1', name: 'Al', joined: new Date() });
+```
+
+`zUser.parse(value)` checks a whole object: it decodes custom scalars and
+drops a field the schema does not declare.
 
 ### On the client: check before sending
 
@@ -135,6 +151,7 @@ are in [Output](docs/guide/output.md).
 | `typesPrefix`, `typesSuffix` | `string` | none | around each type's name |
 | `addUnderscoreToArgsType` | `boolean` | `false` | `Query_FindUserArgs` |
 | `dedupeOperationSuffix`, `omitOperationSuffix` | `boolean` | `false` | as in `typescript-operations` |
+| `objects` | `boolean` | `true` | write the object types, interfaces and unions; `false` writes the input side only |
 
 Each is detailed in [Output](docs/guide/output.md).
 

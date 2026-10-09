@@ -8,6 +8,7 @@ import {
 import type { CodegenZodConfig, DocumentFile } from './config';
 import { Imports } from './imports';
 import { Naming } from './naming';
+import { objectBlocks } from './objects-output';
 import { ScalarSources } from './scalars';
 import { schemaBlocks } from './schema-output';
 import { variablesBlocks } from './variables-output';
@@ -17,8 +18,8 @@ export type { CodegenZodConfig, DocumentFile } from './config';
 
 /**
  * The graphql-codegen plugin: Zod schemas, and their types, for the
- * schema's enums, input types and field arguments, and for the variables of
- * each operation in `documents`, with every `@constraint` of
+ * schema's enums, input types, field arguments, object types, interfaces and
+ * unions, and for the variables of each operation in `documents`, with every `@constraint` of
  * `@nxgt/graphql-validation`. It refuses a schema `withValidation` would
  * refuse, with the same message.
  */
@@ -36,6 +37,7 @@ export async function plugin(
 		const writer = new Writer(directive, naming, scalars);
 		return [
 			...schemaBlocks(schema, writer, naming),
+			...(config.objects === false ? [] : objectBlocks(schema, writer, naming)),
 			...variablesBlocks(schema, documents, writer, naming),
 		];
 	};
@@ -52,7 +54,7 @@ export async function plugin(
 	);
 	if (twice)
 		throw new Error(
-			`@nxgt/graphql-codegen-zod: the file would declare ${twice.split(' ')[1]} twice: two GraphQL names, or an input type in a cycle and its Input type, give the same name. Rename one of the GraphQL types, or set typesSuffix.`,
+			`@nxgt/graphql-codegen-zod: the file would declare ${twice.split(' ')[1]} twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types, set typesSuffix, or set objects: false.`,
 		);
 	const declared = declarations.map(
 		(declaration) => declaration.split(' ')[1] ?? '',

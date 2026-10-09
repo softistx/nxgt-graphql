@@ -10,10 +10,10 @@ import {
 	parse,
 } from 'graphql';
 import type { z } from 'zod';
-import { documents, sdl } from '../test/fixture';
+import { documents, schema, sdl } from '../test/fixture';
 import * as generatedModule from '../test/generated';
 import { scalarSchemas } from '../test/scalars';
-import { generated } from '../test/write-generated';
+import { config, generated } from '../test/write-generated';
 import { type CodegenZodConfig, plugin } from './index';
 
 const GENERATED = new URL('../test/generated.ts', import.meta.url);
@@ -534,6 +534,48 @@ describe('plugin, refusing what it cannot write faithfully', () => {
 	});
 });
 
+describe('the generated file, output types', () => {
+	const zUser = schemas['zUser'];
+	const zSearchResult = schemas['zSearchResult'];
+	const user = { id: 'u_1', name: 'Al', joined: '2020-01-01T00:00:00Z' };
+
+	test('parses what a resolver returns: scalars decoded, unknown fields dropped, no __typename needed', () => {
+		expect(zUser?.parse({ ...user, extra: 1 })).toEqual({
+			id: 'u_1',
+			name: 'Al',
+			joined: new Date('2020-01-01T00:00:00Z'),
+		});
+		expect(zUser?.safeParse({ ...user, __typename: 'Post' }).success).toBe(
+			false,
+		);
+		expect(zUser?.safeParse({ ...user, joined: 'nope' }).success).toBe(false);
+	});
+
+	test('nests through getters, and reads an abstract type as a union of its objects', () => {
+		const post = { id: 'p_1', title: 'T', author: user, tags: [['a', null]] };
+		expect(
+			zUser?.parse({ ...user, friends: [user], pinned: post }),
+		).toMatchObject({ friends: [{ id: 'u_1' }], pinned: { title: 'T' } });
+		expect(zSearchResult?.safeParse(post).success).toBe(true);
+		expect(zSearchResult?.safeParse({ id: 'x' }).success).toBe(false);
+		expect(schemas['zNode']?.safeParse(user).success).toBe(true);
+		expect(schemas['zSolo']?.safeParse(user).success).toBe(true);
+		expect(schemas['zLonely']?.safeParse(user).success).toBe(false);
+		// A root type is written: a field may return it.
+		expect(schemas['zSignUpPayload']).toBeDefined();
+		expect(schemas['zQuery']).toBeDefined();
+	});
+
+	test('writes none with objects: false', async () => {
+		const out = await plugin(schema, documents, {
+			...config,
+			objects: false,
+		});
+		expect(out).not.toContain('export const zUser =');
+		expect(out).toContain('export const zSignUpInput =');
+	});
+});
+
 describe('plugin, naming', () => {
 	const schema = tiny(
 		'input sign_upInput { a: Int }\ntype Query { find_user(x: Int): Int }',
@@ -607,7 +649,7 @@ describe('plugin, naming', () => {
 				[],
 			),
 		).rejects.toThrow(
-			'@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or an input type in a cycle and its Input type, give the same name. Rename one of the GraphQL types, or set typesSuffix.',
+			'@nxgt/graphql-codegen-zod: the file would declare FilterInput twice: two GraphQL names, or a type in a cycle and its Input or Wire type, give the same name. Rename one of the GraphQL types, set typesSuffix, or set objects: false.',
 		);
 	});
 
