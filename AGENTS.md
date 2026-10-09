@@ -478,6 +478,10 @@ it, do not make it a required check.
   its `.js` (or `/index.js`), since tsc keeps the sources' extensionless
   `./scalars`, and a consumer resolving as Node does then loses every name
   re-exported through it (TS2305), while `bundler` sees nothing wrong.
+  `dts-imports.ts` skips an import written in a comment (a JSDoc example),
+  and `build.ts` then checks each declaration with `declarationSpecifiers`,
+  failing on a relative import still without an extension. Both came back
+  from nxgt-data (softistx/nxgt-data#197), which holds the same three files.
 
 - **A source folder named `build`, `dist`, `coverage` or `node_modules` is out
   of `bun run typecheck`.** `tsconfig.base.json` excludes `**/build` and the

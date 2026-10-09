@@ -40,6 +40,27 @@ describe('withExtensions', () => {
 		);
 	});
 
+	test('leaves an import in a comment, and reads one after it', () => {
+		const text = [
+			'/**',
+			" * `import * as caches from './caches'` brings what that file exports.",
+			' */',
+			"// export * from './gone';",
+			"export * from './zod-scalar'; // from './gone'",
+		].join('\n');
+		const fixed = fix(text);
+		expect(fixed.unmatched).toEqual([]);
+		expect(fixed.text).toBe(
+			text.replace("from './zod-scalar';", "from './zod-scalar.js';"),
+		);
+	});
+
+	test('reads a string holding // or /* as a string, not a comment', () => {
+		expect(
+			fix("type U = 'http://x' | '/*';\nexport * from './zod-scalar';").text,
+		).toBe("type U = 'http://x' | '/*';\nexport * from './zod-scalar.js';");
+	});
+
 	test('leaves an extension, a package and a name it cannot match', () => {
 		expect(fix("export * from './zod-scalar.js';").text).toBe(
 			"export * from './zod-scalar.js';",
