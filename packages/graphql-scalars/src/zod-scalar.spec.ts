@@ -196,16 +196,37 @@ describe('serialize, given the wire form of a custom codec', () => {
 	});
 
 	test('keeps the encoding issue when neither way takes the value', () => {
-		const encodeIssue = (() => {
-			try {
-				Cents.serialize('x');
-			} catch (error) {
-				return (error as Error).message;
-			}
-		})();
-		expect(encodeIssue).toBe(
-			'Cents cannot serialize this value: Invalid input: expected bigint, received string',
+		expect(() => Cents.serialize('x')).toThrow(
+			/^Cents cannot serialize this value: Invalid input: expected bigint, received string$/,
 		);
 		expect(() => Cents.serialize(-1)).toThrow(GraphQLError);
+	});
+});
+
+describe('serialize, when the way back in throws', () => {
+	test('a codec whose decode throws keeps the encoding issue', () => {
+		const Json = zodScalar(
+			z.codec(z.string(), z.object({ a: z.number() }), {
+				decode: (text) => JSON.parse(text),
+				encode: (value) => JSON.stringify(value),
+			}),
+			{ name: 'Json' },
+		);
+		expect(() => Json.serialize('not json')).toThrow(
+			/^Json cannot serialize this value: Invalid input: expected object, received string$/,
+		);
+	});
+
+	test('an async decode keeps the encoding issue', () => {
+		const Later = zodScalar(
+			z.codec(z.string(), z.number(), {
+				decode: async (text) => Number(text),
+				encode: (n) => String(n),
+			}),
+			{ name: 'Later' },
+		);
+		expect(() => Later.serialize('5')).toThrow(
+			/^Later cannot serialize this value: Invalid input: expected number, received string$/,
+		);
 	});
 });

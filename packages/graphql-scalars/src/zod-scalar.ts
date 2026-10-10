@@ -121,7 +121,14 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 		run('serialize this value', () => {
 			const encoded = z.safeEncode(schema, value as z.output<S>);
 			if (encoded.success) return encoded;
-			const decoded = z.safeDecode(schema, value as z.input<S>);
+			// A decode that throws (a codec's own error, an async step) is no
+			// way in either: the encoding's issue stands.
+			let decoded: z.ZodSafeParseResult<z.output<S>>;
+			try {
+				decoded = z.safeDecode(schema, value as z.input<S>);
+			} catch {
+				return encoded;
+			}
 			return decoded.success ? z.safeEncode(schema, decoded.data) : encoded;
 		});
 	const literals = options.literals ?? 'leaf';
