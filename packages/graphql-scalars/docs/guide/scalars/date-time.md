@@ -48,16 +48,23 @@ DateTimeScalar.parseValue('0000-01-01T00:00:00+01:00');
 // throws: DateTime cannot represent this input: Invalid DateTime: outside 0000-01-01 to 9999-12-31 in UTC
 ```
 
-It serializes a `Date` **only**. A resolver that returns the string it read
-from a database, without parsing it, is refused:
+It serializes a `Date` or the wire form, a valid RFC 3339 string with an
+offset. Both are written canonically, in UTC to the millisecond. A resolver can
+return the string it read from a database as it is:
 
 ```ts
 import { DateTimeScalar } from '@nxgt/graphql-scalars';
 
-DateTimeScalar.serialize('2024-03-10T10:00:00.000Z');
-// throws: DateTime cannot serialize this value: Invalid input: expected date, received string
+DateTimeScalar.serialize(new Date('2024-03-10T10:00:00.000Z')); // '2024-03-10T10:00:00.000Z'
+DateTimeScalar.serialize('2024-03-10T12:00:00+02:00'); // '2024-03-10T10:00:00.000Z'
+```
 
-DateTimeScalar.serialize(new Date('2024-03-10T10:00:00.000Z')); // fine
+A value neither form takes is refused with the encoding's message. The string
+is read as a client's would be, so `2024-03-10` has no time and no offset:
+
+```ts
+DateTimeScalar.serialize('2024-03-10');
+// throws: DateTime cannot serialize this value: Invalid input: expected date, received string
 ```
 
 An invalid `Date` (`new Date(Number.NaN)`) is refused too.
@@ -223,19 +230,23 @@ past ±8.64e15 and `true`.
 
 It is past 2^31, so it is not GraphQL's `Int`: a query writes it as an integer
 literal (`at: 1710065730000`), and a float literal (`1.5`, `1e3`) is refused.
-An invalid `Date` (`new Date(Number.NaN)`) is refused on the way out, and so is
-anything but a `Date`.
+It serializes a `Date` or the milliseconds as an integer. An invalid `Date`
+(`new Date(Number.NaN)`) is refused on the way out, and so are a non-integer
+number, a string and anything else.
 
 ```ts
 import { TimestampScalar } from '@nxgt/graphql-scalars';
 
 const date = TimestampScalar.parseValue(1710065730000); // Date
 TimestampScalar.serialize(date); // 1710065730000
+TimestampScalar.serialize(1710065730000); // 1710065730000, the wire form
 
 TimestampScalar.parseValue(1.5);
 // throws: Timestamp cannot represent this input: Invalid input: expected int, received number
 TimestampScalar.parseValue(8640000000000001);
 // throws: Timestamp cannot represent this input: Too big: expected number to be <=8640000000000000
+TimestampScalar.serialize(1.5);
+// throws: Timestamp cannot serialize this value: Invalid input: expected date, received number
 TimestampScalar.serialize(new Date(Number.NaN));
 // throws: Timestamp cannot serialize this value: Invalid Date
 ```

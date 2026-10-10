@@ -34,8 +34,13 @@ describe('BigInt', () => {
 		);
 	});
 
-	test('a number resolver result is refused: the resolver returns a bigint', () => {
-		expect(() => BigIntScalar.serialize(42)).toThrow(
+	test('a resolver may return the wire form, a safe number or a string', () => {
+		expect(BigIntScalar.serialize(42)).toBe('42');
+		expect(BigIntScalar.serialize('42')).toBe('42');
+		expect(() => BigIntScalar.serialize(1.5)).toThrow(
+			'BigInt cannot serialize this value',
+		);
+		expect(() => BigIntScalar.serialize(2 ** 60)).toThrow(
 			'BigInt cannot serialize this value',
 		);
 	});

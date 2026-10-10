@@ -77,6 +77,12 @@ const scalarResolvers: ScalarResolvers;
 const schemas: Schemas;
 const scalarSchemas: ScalarSchemas;
 const scalarTypeDefs: string; // one `scalar X @specifiedBy(...)` line per scalar
+
+// graphql-codegen's `scalars` config, keyed and ordered as `scalarResolvers`
+type CodegenScalar = { readonly input: string; readonly output: string };
+type CodegenScalars = { readonly [N in ScalarName]: CodegenScalar };
+const codegenScalars: CodegenScalars; // server: input z.output, output z.output | z.input
+const clientCodegenScalars: CodegenScalars; // client: output z.input, input z.input plus Date
 ```
 
 `scalarTypeDefs`, `scalarResolvers`, `scalarSchemas` and `schemas` list the
@@ -280,6 +286,95 @@ const Event = z.object({
 
 z.decode(Event, { id: crypto.randomUUID(), at: '2024-03-10T12:00:00Z' });
 // { id: '…', at: Date }
+```
+
+## Types for graphql-codegen
+
+graphql-codegen types an unknown scalar as `any`. `codegenScalars` and
+`clientCodegenScalars` give its `scalars` config for every scalar here, so
+the generated types are the real ones.
+
+```ts
+// codegen.ts
+import type { CodegenConfig } from '@graphql-codegen/cli';
+import { clientCodegenScalars, codegenScalars } from '@nxgt/graphql-scalars';
+
+const config: CodegenConfig = {
+  schema: 'src/schema.graphqls',
+  generates: {
+    'src/generated/resolvers.ts': {
+      plugins: ['typescript', 'typescript-resolvers'],
+      config: { scalars: codegenScalars },
+    },
+    'src/generated/operations.ts': {
+      documents: 'src/**/*.graphql',
+      plugins: ['typescript', 'typescript-operations'],
+      config: { scalars: clientCodegenScalars },
+    },
+  },
+};
+
+export default config;
+```
+
+Each entry is `{ input: string; output: string }`: the TypeScript type as
+text, read from the scalar's schema. A spec holds every entry to the type tsc
+gives `z.input` and `z.output`, so the maps cannot drift. Only some entries
+are not `string`:
+
+| Scalars | Server input | Server output | Client input | Client output |
+| --- | --- | --- | --- | --- |
+| `DateTime` | `Date` | `Date \| string` | `string \| Date` | `string` |
+| `Timestamp` | `Date` | `Date \| number` | `number` | `number` |
+| `Long`, `BigInt` | `bigint` | `bigint \| string \| number` | `string \| number` | `string \| number` |
+| the number scalars, `Latitude`, `Longitude` | `number` | `number` | `number` | `number` |
+| `JSON`, `JSONObject` | `unknown` | `unknown` | `unknown` | `unknown` |
+| `Void` | `null` | `null` | `null` | `null` |
+| the others | `string` | `string` | `string` | `string` |
+
+### On a server
+
+`codegenScalars` is for `typescript-resolvers`. `input` is what a resolver
+receives, the decoded `z.output`. `output` is what it may return: the decoded
+value or the wire form, each once (`serialize` takes both, see
+[`DateTime`](scalars/date-time.md#datetime)).
+
+### On a client
+
+`clientCodegenScalars` is for `typescript-operations`. `output` is a result as
+it crosses the wire, the `z.input`. `input` is a variable: the `z.input`, plus
+`Date` where the scalar takes a `Date`'s JSON form. A `Date` variable
+serializes to an ISO string, so `DateTime` takes `string | Date`.
+
+A client that decodes with `@nxgt/graphql-codegen-zod` gets its `Date` from
+the Zod schemas. The plain `typescript-operations` types stay wire types.
+
+`codegen.ts` runs on Node or Bun and imports the package root. That loads
+`graphql`, `zod` and `@nxgt/zod` (a dependency of this package). A client
+project that does not otherwise use `@nxgt/graphql-scalars` installs it and
+`zod` as dev dependencies:
+
+```sh
+bun add -d @nxgt/graphql-scalars zod
+```
+
+A codegen project already has `graphql` and `typescript`, which are peers too
+(see [the README](../../README.md#install) for the ranges).
+
+### With scalars of your own
+
+Spread the map and add yours. A scalar you leave out is `any` in the output,
+as graphql-codegen does for any unknown scalar.
+
+```ts
+import { codegenScalars } from '@nxgt/graphql-scalars';
+
+const scalars = {
+  ...codegenScalars,
+  Money: { input: 'number', output: 'number' },
+};
+
+// config: { scalars }
 ```
 
 Next: [Custom scalars](custom-scalars.md), or [Migrating from

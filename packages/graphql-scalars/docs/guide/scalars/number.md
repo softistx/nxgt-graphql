@@ -166,8 +166,23 @@ LongScalar.parseValue('9223372036854775808');
 // throws: Long cannot represent this input: Too big: expected bigint to be <=9223372036854775807
 ```
 
-A resolver must return a `bigint`; a `number` is refused
-(`BigInt(row.count)` fixes it, see [Troubleshooting](../../troubleshooting.md)).
+A resolver may return a `bigint`, a safe-integer `number` or a decimal string,
+and the scalar writes the string. A non-integer, or a `number` past 2^53 that
+may already have lost digits, is refused, never rounded:
+
+```ts
+import { LongScalar } from '@nxgt/graphql-scalars';
+
+LongScalar.serialize(42); // '42'
+LongScalar.serialize('42'); // '42'
+LongScalar.serialize(1.5);
+// throws: Long cannot serialize this value: Invalid input: expected bigint, received number
+LongScalar.serialize(2 ** 60);
+// throws: Long cannot serialize this value: Invalid input: expected bigint, received number
+```
+
+For a count that may pass 2^53, return `BigInt(row.count)` (see
+[Troubleshooting](../../troubleshooting.md)).
 In a query, a literal past 2^53 written as a number is refused, not rounded:
 write it as a string, `"9223372036854775807"`, or pass a variable.
 
@@ -195,4 +210,5 @@ import { BigIntScalar } from '@nxgt/graphql-scalars';
 
 BigIntScalar.parseValue('123456789012345678901234567890'); // a bigint
 BigIntScalar.serialize(2n ** 80n); // '1208925819614629174706176'
+BigIntScalar.serialize(42); // '42', a safe number is taken too
 ```

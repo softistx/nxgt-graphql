@@ -4,6 +4,8 @@ import { expect, test } from 'bun:test';
 import * as entry from './index';
 
 const HELPERS = [
+	'clientCodegenScalars',
+	'codegenScalars',
 	'pickScalars',
 	'scalarResolvers',
 	'scalarTypeDefs',

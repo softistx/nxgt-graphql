@@ -34,8 +34,13 @@ describe('Long', () => {
 		);
 	});
 
-	test('a number resolver result is refused: the resolver returns a bigint', () => {
-		expect(() => LongScalar.serialize(42)).toThrow(
+	test('a resolver may return the wire form, a safe number or a string', () => {
+		expect(LongScalar.serialize(42)).toBe('42');
+		expect(LongScalar.serialize('42')).toBe('42');
+		expect(() => LongScalar.serialize(1.5)).toThrow(
+			'Long cannot serialize this value',
+		);
+		expect(() => LongScalar.serialize(2 ** 60)).toThrow(
 			'Long cannot serialize this value',
 		);
 	});
