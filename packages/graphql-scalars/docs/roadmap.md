@@ -6,15 +6,7 @@ and Later are candidates, not promises.
 
 ## Now
 
-Release 0.6.0, in progress (a minor):
-
-- **Types for graphql-codegen** — `codegenScalars` and `clientCodegenScalars`
-  give the `scalars` config of every scalar, for a server (decoded in,
-  decoded or wire out) and for a client (wire types, and a `Date` variable); see
-  [the guide](guide/scalars.md#types-for-graphql-codegen).
-- **`serialize` takes the wire form** — a resolver may return an ISO string for
-  `DateTime`, the milliseconds for `Timestamp`, a safe number or a decimal
-  string for `Long` and `BigInt`; the scalar writes it canonically.
+Nothing in progress.
 
 ## Next
 
@@ -50,6 +42,16 @@ Release 0.6.0, in progress (a minor):
 - **Aliases** (`UnsignedInt`, `LocalDate`, …) — one name per rule.
 
 ## Shipped
+
+Release 0.6.0:
+
+- **Types for graphql-codegen** — `codegenScalars` and `clientCodegenScalars`
+  give the `scalars` config of every scalar, for a server (decoded in,
+  decoded or wire out) and for a client (wire types, and a `Date` variable); see
+  [the guide](guide/scalars.md#types-for-graphql-codegen).
+- **`serialize` takes the wire form** — a resolver may return an ISO string for
+  `DateTime`, the milliseconds for `Timestamp`, a safe number or a decimal
+  string for `Long` and `BigInt`; the scalar writes it canonically.
 
 Release 0.5.0:
 
