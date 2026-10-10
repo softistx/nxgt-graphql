@@ -2,6 +2,10 @@
 
 Instructions for any coding agent working in `nxgt-graphql`.
 
+Worktrees, integration branches, merges and releases, and questions to the
+owner follow the owner's global rules in `~/.claude/CLAUDE.md`; this file
+states only what is this repository's own.
+
 ## What this repository is
 
 GraphQL building blocks for applications built on the nxgt packages,
