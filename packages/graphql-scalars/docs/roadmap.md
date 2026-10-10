@@ -6,9 +6,15 @@ and Later are candidates, not promises.
 
 ## Now
 
-- **The schemas come from `@nxgt/zod`** — the same exports and behaviour; each
-  schema is `@nxgt/zod`'s own instance, so an application importing both
-  holds one copy of each rule.
+Release 0.6.0, in progress (a minor):
+
+- **Types for graphql-codegen** — `codegenScalars` and `clientCodegenScalars`
+  give the `scalars` config of every scalar, for a server (decoded in,
+  decoded or wire out) and for a client (wire types, and a `Date` variable); see
+  [the guide](guide/scalars.md#types-for-graphql-codegen).
+- **`serialize` takes the wire form** — a resolver may return an ISO string for
+  `DateTime`, the milliseconds for `Timestamp`, a safe number or a decimal
+  string for `Long` and `BigInt`; the scalar writes it canonically.
 
 ## Next
 
@@ -44,6 +50,12 @@ and Later are candidates, not promises.
 - **Aliases** (`UnsignedInt`, `LocalDate`, …) — one name per rule.
 
 ## Shipped
+
+Release 0.5.0:
+
+- **The schemas come from `@nxgt/zod`** — the same exports and behaviour; each
+  schema is `@nxgt/zod`'s own instance, so an application importing both
+  holds one copy of each rule.
 
 Release 0.4.1:
 

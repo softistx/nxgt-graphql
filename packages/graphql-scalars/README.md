@@ -249,6 +249,55 @@ z.decode(scalarSchemas.DateTime, '2024-03-10T12:00:00Z'); // a Date, as the reso
 DateTimeScalar.schema === scalarSchemas.DateTime; // true
 ```
 
+### Types for graphql-codegen
+
+`codegenScalars` and `clientCodegenScalars` are graphql-codegen's `scalars`
+config for every scalar here. Use the first with `typescript-resolvers`, the
+second with `typescript-operations`.
+
+| Scalars | Server input | Server output | Client input | Client output |
+| --- | --- | --- | --- | --- |
+| `DateTime` | `Date` | `Date \| string` | `string \| Date` | `string` |
+| `Timestamp` | `Date` | `Date \| number` | `number` | `number` |
+| `Long`, `BigInt` | `bigint` | `bigint \| string \| number` | `string \| number` | `string \| number` |
+| the number scalars, `Latitude`, `Longitude` | `number` | `number` | `number` | `number` |
+| `JSON`, `JSONObject` | `unknown` | `unknown` | `unknown` | `unknown` |
+| `Void` | `null` | `null` | `null` | `null` |
+| the others | `string` | `string` | `string` | `string` |
+
+```ts
+// codegen.ts
+import type { CodegenConfig } from '@graphql-codegen/cli';
+import { clientCodegenScalars, codegenScalars } from '@nxgt/graphql-scalars';
+
+const config: CodegenConfig = {
+  schema: 'src/schema.graphqls',
+  generates: {
+    'src/generated/resolvers.ts': {
+      plugins: ['typescript', 'typescript-resolvers'],
+      config: { scalars: codegenScalars },
+    },
+    'src/generated/operations.ts': {
+      documents: 'src/**/*.graphql',
+      plugins: ['typescript', 'typescript-operations'],
+      config: { scalars: clientCodegenScalars },
+    },
+  },
+};
+
+export default config;
+```
+
+`codegen.ts` imports the package root, which loads `graphql`, `zod` and
+`@nxgt/zod`. A client that does not otherwise use the package installs it and
+`zod` as dev dependencies (it already has `graphql` and `typescript`):
+
+```sh
+bun add -d @nxgt/graphql-scalars zod
+```
+
+See [the guide](docs/guide/scalars.md#types-for-graphql-codegen).
+
 ## Errors
 
 A refusal is a `GraphQLError`:
@@ -272,13 +321,14 @@ Every message is in [Troubleshooting](docs/troubleshooting.md).
 
 - A scalar with a plain `.transform()` decodes fine and then fails when a
   result is encoded; use `z.codec`.
-- `DateTime` serializes a `Date` only: parse a stored string before returning it.
+- `DateTime` and `Timestamp` serialize a `Date` or their wire form (an ISO string with an offset, integer milliseconds); `2024-03-10` is refused.
 - `Date` is a string on both sides, never a `Date` object.
 - `URL` takes `http:` and `https:` only and refuses white space, user info and
   a Unicode host rather than rewriting them: send `https://xn--bcher-kva.example`,
   not `https://bücher.example`.
 - `Long` and `BigInt` are a `bigint` in resolvers and always a string on the
-  wire: return `BigInt(row.count)`, not a `number`.
+  wire. A resolver may return a `bigint`, a safe-integer `number` or a decimal
+  string; a `number` past 2^53 is refused, so return `BigInt(row.count)`.
 
 ## Documentation
 

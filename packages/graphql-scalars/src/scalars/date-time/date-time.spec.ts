@@ -91,9 +91,21 @@ describe('DateTime', () => {
 		);
 	});
 
-	test('serializes a Date only, not a string a resolver forgot to parse', () => {
-		expect(() => DateTimeScalar.serialize('2024-03-10T10:00:00.000Z')).toThrow(
-			'DateTime cannot serialize this value',
+	test('serializes a string a resolver did not parse, in UTC, and refuses a bad one', () => {
+		expect(DateTimeScalar.serialize('2024-03-10T12:00:00+02:00')).toBe(
+			'2024-03-10T10:00:00.000Z',
 		);
+		expect(() => DateTimeScalar.serialize('2024-03-10')).toThrow(
+			'DateTime cannot serialize this value: Invalid input: expected date',
+		);
+		for (const bad of [
+			'2024-03-10T12:00:00-00:00',
+			'0000-01-01T00:00:00+01:00',
+			'10000-01-01T00:00:00Z',
+		]) {
+			expect(() => DateTimeScalar.serialize(bad)).toThrow(
+				'DateTime cannot serialize this value',
+			);
+		}
 	});
 });

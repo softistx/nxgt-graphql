@@ -155,3 +155,78 @@ describe('zodScalar', () => {
 		).toStartWith('Settings cannot represent this input:');
 	});
 });
+
+describe('serialize, given what already crosses the wire', () => {
+	const When = zodScalar(
+		z.codec(z.iso.datetime({ offset: true }), z.date(), {
+			decode: (text) => new Date(text),
+			encode: (date) => date.toISOString(),
+		}),
+		{ name: 'When' },
+	);
+
+	test('takes the decoded value and the wire one, and writes both canonically', () => {
+		expect(When.serialize(new Date('2020-01-01T00:00:00Z'))).toBe(
+			'2020-01-01T00:00:00.000Z',
+		);
+		expect(When.serialize('2020-01-01T02:00:00+02:00')).toBe(
+			'2020-01-01T00:00:00.000Z',
+		);
+	});
+
+	test('refuses what neither way takes, with the encoding issue', () => {
+		expect(() => When.serialize('nope')).toThrow(
+			'When cannot serialize this value: ',
+		);
+		expect(() => When.serialize(5)).toThrow(GraphQLError);
+	});
+});
+
+describe('serialize, given the wire form of a custom codec', () => {
+	const Cents = zodScalar(
+		z.codec(z.int().nonnegative(), z.bigint(), {
+			decode: (n) => BigInt(n),
+			encode: (b) => Number(b),
+		}),
+		{ name: 'Cents' },
+	);
+
+	test('reads it as a client value, then writes it again', () => {
+		expect(Cents.serialize(120)).toBe(120);
+	});
+
+	test('keeps the encoding issue when neither way takes the value', () => {
+		expect(() => Cents.serialize('x')).toThrow(
+			/^Cents cannot serialize this value: Invalid input: expected bigint, received string$/,
+		);
+		expect(() => Cents.serialize(-1)).toThrow(GraphQLError);
+	});
+});
+
+describe('serialize, when the way back in throws', () => {
+	test('a codec whose decode throws keeps the encoding issue', () => {
+		const Json = zodScalar(
+			z.codec(z.string(), z.object({ a: z.number() }), {
+				decode: (text) => JSON.parse(text),
+				encode: (value) => JSON.stringify(value),
+			}),
+			{ name: 'Json' },
+		);
+		expect(() => Json.serialize('not json')).toThrow(
+			/^Json cannot serialize this value: Invalid input: expected object, received string$/,
+		);
+	});
+
+	test('an async decode keeps the encoding issue', () => {
+		const Later = zodScalar(
+			z.codec(z.string(), z.number(), {
+				decode: async (text) => Number(text),
+				encode: (n) => String(n),
+			}),
+			{ name: 'Later' },
+		);
+		expect(() => Later.serialize('5')).toThrow(
+			/^Later cannot serialize this value: Invalid input: expected number, received string$/,
+		);
+	});
+});

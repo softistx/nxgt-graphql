@@ -238,19 +238,25 @@ query ($at: DateTime) {
 **When:** a resolver returns a value the scalar refuses. It is a field error:
 the field is `null` (or its nearest nullable parent) and the message does not
 name the value.
-**Why:** a result is checked as strictly as an input.
+**Why:** a result is checked as strictly as an input. The scalar also takes
+the wire form (an ISO string for `DateTime`, a safe number for `Long`): it
+decodes the value as a client's would be, then encodes it. A value neither the
+decoded nor the wire form accepts is refused.
 **Fix:** return what the scalar's wire schema accepts after encoding; see the
 entries below.
 
 ### `DateTime cannot serialize this value: Invalid input: expected date, received string`
 
-**When:** a resolver returns an ISO string for a `DateTime` field, such as one
-read straight from a database or an HTTP body.
-**Why:** `DateTime` serializes a `Date` only.
-**Fix:**
+**When:** a resolver returns a string for a `DateTime` field that is not a
+valid RFC 3339 date-time with an offset: `2024-03-10` (no time),
+`2024-03-10T12:00:00` (no offset), or free text.
+**Why:** `DateTime` serializes a `Date` or a valid date-time string. The string
+is decoded as a client's would be, so what an input refuses, a result refuses
+too (the string's own issue is not shown; this message is the encoding's).
+**Fix:** return a `Date`, or a string with an offset.
 
 ```ts
-resolve: (row) => new Date(row.createdAt), // not row.createdAt
+resolve: (row) => new Date(row.createdAt), // or a full '2024-03-10T12:00:00Z'
 ```
 
 ### `DateTime cannot serialize this value: Invalid Date`
@@ -271,20 +277,24 @@ instant to write.
 **When:** a resolver returns an invalid `Date` for a `Timestamp` field, such as
 `new Date('nonsense')`.
 **Why:** an invalid `Date` has no milliseconds to write (`getTime()` is `NaN`).
-Returning a number or a string instead says `Invalid input: expected date,
-received number` (or `string`): `Timestamp` serializes a `Date` only.
-**Fix:** validate the source, and wrap a number: `new Date(row.createdAtMs)`.
+Returning a non-integer number (`1.5`) or a string instead says `Invalid
+input: expected date, received number` (or `string`): `Timestamp` serializes a
+`Date` or the milliseconds as an integer.
+**Fix:** validate the source. Return a `Date`, or an integer number of
+milliseconds.
 
 ### `Long cannot serialize this value: Invalid input: expected bigint, received number`
 
-**When:** a resolver returns a `number` for a `Long` or `BigInt` field, such as
-a count read from a database driver. `BigInt` says the same with its own name.
-**Why:** both are a `bigint` in resolvers; a `number` past 2^53 may already have
-lost digits, so it is not guessed at.
+**When:** a resolver returns a `number` for a `Long` or `BigInt` field that is
+not an integer (`1.5`) or is past 2^53 (`2 ** 60`), or a string that is not a
+canonical decimal integer (or, for `Long`, is out of range). `BigInt` says the
+same with its own name. A safe-integer `number` and a decimal string are taken.
+**Why:** a `number` past 2^53 may already have lost digits, so it is not
+guessed at, never rounded.
 **Fix:**
 
 ```ts
-resolve: (row) => BigInt(row.count), // not row.count
+resolve: (row) => BigInt(row.count), // not a count that may pass 2^53
 ```
 
 ### `URL cannot serialize this value: Invalid URL`

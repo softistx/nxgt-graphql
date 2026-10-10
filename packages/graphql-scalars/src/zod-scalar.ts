@@ -56,7 +56,9 @@ export type ZodScalar<
  *   (`parseLiteral`) — is **decoded**: what a resolver receives is
  *   `z.output<S>`.
  * - A resolver's return value is **encoded**: what goes on the wire is
- *   `z.input<S>`, checked on the way out as strictly as on the way in.
+ *   `z.input<S>`, checked on the way out as strictly as on the way in. A
+ *   resolver may return `z.output<S>` (a `Date`) or a wire value already
+ *   (an ISO string), which is decoded first, so both come out canonical.
  *
  * A schema that changes the value on the way in must be a `z.codec`, so the
  * way out exists: a plain `.transform()` has no inverse, and Zod refuses to
@@ -111,10 +113,24 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 			() => z.safeDecode(schema, value as z.input<S>),
 			node,
 		);
+	// A resolver may also return what already crosses the wire (an ISO
+	// string for a `DateTime`): that is read as a client's would be, then
+	// encoded, so what goes out is the canonical form either way. A value
+	// neither way takes is refused with the encoding's issue.
 	const encode = (value: unknown): z.input<S> =>
-		run('serialize this value', () =>
-			z.safeEncode(schema, value as z.output<S>),
-		);
+		run('serialize this value', () => {
+			const encoded = z.safeEncode(schema, value as z.output<S>);
+			if (encoded.success) return encoded;
+			// A decode that throws (a codec's own error, an async step) is no
+			// way in either: the encoding's issue stands.
+			let decoded: z.ZodSafeParseResult<z.output<S>>;
+			try {
+				decoded = z.safeDecode(schema, value as z.input<S>);
+			} catch {
+				return encoded;
+			}
+			return decoded.success ? z.safeEncode(schema, decoded.data) : encoded;
+		});
 	const literals = options.literals ?? 'leaf';
 	// graphql 16 passes the operation's variables, for a variable inside an
 	// object or a list literal; graphql 17 substitutes them first.

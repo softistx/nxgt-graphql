@@ -10,7 +10,7 @@ are public.
 
 | package | what it is |
 | --- | --- |
-| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, and each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL. Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
@@ -28,6 +28,7 @@ one category and nothing else.
 ```
 packages/graphql-scalars/src/
   zod-scalar.ts            the factory
+  codegen-scalars.ts       graphql-codegen's `scalars` config, read from the schemas
   type-defs.ts             the SDL of a set of scalars
   pick-scalars.ts          pickScalars(...names)
   cli.ts                   the `nxgt-graphql-scalars` bin (shebang kept by the build)
@@ -59,7 +60,8 @@ json, ...), live in `@nxgt/zod` (softistx/nxgt-zod, `packages/zod`).
 - **A new scalar is a file, its spec, and one line** in its category's
   `index.ts`, once its schema is published in `@nxgt/zod`. A new category is a
   folder and one line in `all.ts`. Nothing is listed by hand anywhere else:
-  `scalarResolvers`, `scalarSchemas`, `schemas` and `scalarTypeDefs` are derived
+  `scalarResolvers`, `scalarSchemas`, `schemas`, `scalarTypeDefs`,
+  `codegenScalars` and `clientCodegenScalars` are derived
   from what `all.ts` exports, in the code-unit order of a module namespace
   (`IBAN` before `IP`, `HSLA` before `HSL`; `schemas` by the `…Schema` names,
   `hsl` before `hsla`).
@@ -78,8 +80,15 @@ json, ...), live in `@nxgt/zod` (softistx/nxgt-zod, `packages/zod`).
   the guard does not see it. A file whose options say `literals: 'integer'`
   fails unless its spec calls `integerCases`; `src/index.spec.ts` fails when
   the package root exports anything but a `*Scalar`, a `*Schema`,
-  `zodScalar`, `pickScalars`, `scalarResolvers`, `scalarSchemas`, `schemas`
-  or `scalarTypeDefs`.
+  `zodScalar`, `pickScalars`, `scalarResolvers`, `scalarSchemas`, `schemas`,
+  `scalarTypeDefs`, `codegenScalars` or `clientCodegenScalars`. Those two are
+  derived from `scalarSchemas` (`src/codegen-scalars.ts` reads each schema's
+  Zod definition), never written per scalar: on a server `z.output` in and
+  `z.output | z.input` out (serialize takes both), on a client `z.input` out
+  and in, plus `Date` where the scalar takes a `Date`'s JSON form.
+  `codegen-scalars.spec.ts` asks tsc for `z.input`/`z.output` of every
+  `ScalarName` and holds each entry to that text, so a scalar whose type the
+  reader cannot name fails there.
 - **The schema export ends in `Schema`.** `export *` lifts it to the package
   root, where a bare `url` or `date` would read as something else.
 
@@ -120,8 +129,11 @@ that weakens one is a breaking change, even when every spec stays green.
   literal, so graphql 16's config type does not refuse the names it lacks.
   The main CI job proves 16 (the lockfile), the "Newest peers" job 17.
 - **One schema checks both ways.** An input is decoded (`z.safeDecode`), a
-  resolver's result is encoded (`z.safeEncode`) and refused when it does not
-  fit, rather than written to the wire as it is. A schema that changes a value
+  resolver's result is encoded (`z.safeEncode`). A result the encoding refuses
+  is decoded first, as a client's value would be, then encoded: a resolver may
+  return the wire form (an ISO string for `DateTime`, a safe number for
+  `Long`), and what goes out is canonical either way. A value neither way takes
+  is refused with the encoding's issue, never written to the wire as it is. A schema that changes a value
   must be a `z.codec`; a `.transform()` has no way back.
 - **A refusal never names the value.** `<Name> cannot represent this input:
   <issue>` and `<Name> cannot serialize this value: <issue>`, with Zod's first
@@ -149,7 +161,8 @@ that weakens one is a breaking change, even when every spec stays green.
   only (rs/xid's `XID`), the scalar takes that case only.
 - **`DateTime` is an instant, `Date` is not.** `DateTime` requires an offset,
   not `-00:00` (`@nxgt/zod`'s `src/rules/offset.ts`, shared with `Time` and
-  `UtcOffset`), resolves to a `Date` and serializes a `Date` only, in UTC. The
+  `UtcOffset`), resolves to a `Date` and serializes a `Date` (or a valid RFC 3339 string),
+  in UTC. The
   fraction is cut to three digits before `new Date` reads it, so no engine's own
   parser is involved, and an instant outside 0000-01-01 to 9999-12-31 UTC (what
   `toISOString()` writes as RFC 3339) is refused both ways. `Date` stays a
@@ -174,8 +187,8 @@ that weakens one is a breaking change, even when every spec stays green.
   (64 bits) and `BigInt` (unbounded) are not, and say so in their name.
 - **`Long` and `BigInt` are a string on the wire, always.** A `bigint` in the
   resolvers; as input a canonical decimal string or a safe-integer number. A
-  number past 2⁵³ is refused, never rounded, and a resolver's `number` is
-  refused rather than converted (`@nxgt/zod`'s `src/rules/big-integer.ts`).
+  number past 2⁵³ is refused, never rounded, from a client or a resolver
+  (`@nxgt/zod`'s `src/rules/big-integer.ts`).
 - **An integer scalar reads literals as GraphQL's `Int` does**: a float
   literal (`1.0`, `1e3`) is refused, through `zodScalar`'s
   `literals: 'integer'`, and so is `-0`: by the bound for `PositiveInt` and

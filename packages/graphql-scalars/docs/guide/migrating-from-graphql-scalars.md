@@ -69,7 +69,8 @@ A scalar `X` here is exported as `XScalar`, and the rules are Zod schemas
   `"5"` is accepted there; here a string for a number is refused
   (`Invalid input: expected number, received string`).
 - **`Long` and `BigInt`** are a `bigint` in resolvers and always a decimal
-  string on the wire. A resolver returning a `number` is refused. Input accepts
+  string on the wire. A resolver may return a `bigint`, a safe-integer `number`
+  or a decimal string; a `number` past 2^53 or a non-integer is refused. Input accepts
   a canonical decimal string or a safe-integer number; a literal past 2^53
   written as a number is refused, so write it as a string. graphql-scalars
   serializes a safe value as a JSON number; here the result is always a string,

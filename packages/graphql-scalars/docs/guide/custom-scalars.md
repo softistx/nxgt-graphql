@@ -102,9 +102,17 @@ export const Cents = zodScalar(
 Cents.parseValue(120); // 120n
 Cents.serialize(120n); // 120
 Cents.serialize(-1n); // throws: Cents cannot serialize this value: ...
+Cents.serialize(120); // 120: the wire form, read then written again
 ```
 
 The encode side is checked against the wire schema too, so `-1n` is refused.
+
+A resolver may also return the wire form. When encoding refuses a value, the
+scalar decodes it as it would a client's, then encodes the result, so what goes
+out is canonical either way. A value neither way takes is refused with the
+encoding's message. This holds for every `zodScalar`, yours included. A codec
+that normalises what it reads normalises a resolver's wire form too: with a
+lowercasing decode, a resolver's `'ABC'` goes out as `'abc'`.
 
 A plain `.transform()` has no inverse. It decodes fine, then fails when a
 result is encoded. Zod throws rather than fails there, and `zodScalar` turns

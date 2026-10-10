@@ -24,7 +24,11 @@ describe('Timestamp', () => {
 		expect(() => TimestampScalar.serialize(new Date(Number.NaN))).toThrow(
 			'Timestamp cannot serialize this value: Invalid Date',
 		);
-		expect(() => TimestampScalar.serialize(1710065730000)).toThrow(
+	});
+
+	test('a resolver may return the milliseconds already', () => {
+		expect(TimestampScalar.serialize(1710065730000)).toBe(1710065730000);
+		expect(() => TimestampScalar.serialize(1.5)).toThrow(
 			'Timestamp cannot serialize this value',
 		);
 	});
