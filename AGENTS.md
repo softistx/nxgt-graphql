@@ -17,6 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Published on npm. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -110,7 +111,8 @@ exactly as a devDependency at the oldest end of its range
 (`graphql` `16.11.0`, `zod` `4.6.5`). `zod`'s range, `>=4.6.5 <5`, is
 nxgt-data's (`@nxgt/mongo`, `@nxgt/redis`): one range is one zod in an
 application's tree. Siblings, when there are some, depend on each other by
-`workspace:^`.
+`workspace:^`. `@nxgt/graphql-client` sits on `@nxgt/httpyz` and depends on no
+sibling package.
 
 ## Invariants
 
@@ -540,6 +542,287 @@ packages/graphql-codegen-zod/test/
   fragment suffix)`, the suffix following
   `omitOperationSuffix`/`dedupeOperationSuffix`. Read that code before changing
   a name.
+
+## @nxgt/graphql-client
+
+A typed GraphQL client over `@nxgt/httpyz`: the documents' types set the
+variables and the data, and every failure is a typed error.
+
+### Layout
+
+```
+packages/graphql-client/src/
+  index.ts       the public barrel
+  client.ts      createGraphQLClient: the ClientContext built once, query, mutate and
+                 subscribe over it, the hook, the transport choice
+  run.ts         run (a query through the cache, a mutation then its write, the hook on
+                 failure), sendQuery (dedupe, then batch) and operationFor (the kind check):
+                 plain functions over the data-only ClientContext
+  report.ts      logError (the default onError: console.error) and writeToCache (a
+                 result written, a throw to the cache's onError, never the caller's)
+  options.ts     the option and client types (url or http shape, QueryRetry, NoInfer variables)
+  send.ts        one operation sent (APQ's register resend included), and post: one POST of a
+                 body or a batch's array, its headers, signal, timeout, retry; errors mapped
+  response.ts    dataOf (errors, status, data), replyError (a whole reply), refusedError (a
+                 non-2xx stream reply, its body read), transportError (timeout, network,
+                 unparsable body) and isHttpyzError (httpyz's errors by name, any copy)
+  persisted.ts   the body for each persisted mode, the documentId check, the APQ hash (SHA-256,
+                 cached per Operation) and the PersistedQueryNotFound test
+  subscribe.ts   EventSubscription: one subscription over SSE (graphql-sse distinct
+                 connections mode), each `next`'s data yielded, closed on every exit
+  batch.ts       the Batcher: queries with the same call options posted as one array
+  dedupe.ts      the Deduplicator: identical queries in flight share one request
+  share.ts       Party: callers on one request, each with its own signal (dedupe and batch)
+  keys.ts        callKey (headers, timeout, retry) and dedupeKey (text, variables as
+                 stableJson, callKey)
+  document.ts    operationOf: a TypedDocumentNode or TypedDocumentString read once, cached,
+                 with the preset's __meta__.hash and the parsed node; fragmentNodeOf: a
+                 fragment document's node (no operation needed); the only place that
+                 reads the preset's documents (the cache walks the DocumentNode they return)
+  errors.ts      ApiError, ApiStatusError, ApiUnavailableError, isApiError, CacheMissError
+  fetch-policy.ts  FetchPolicy and queryThrough: a query through the cache as its policy says,
+                 an aborted signal checked before the cache is read
+  cache/
+    types.ts            the public cache types: GraphQLCache, NormalizedCacheOptions,
+                        PossibleTypes, CacheKeys, EntityRef, FieldModifier, FragmentOptions,
+                        VariablesThen
+    normalized-cache.ts class NormalizedCache implements GraphQLCache over one store and its
+                        watchers; each public method is one batch, flushed to the watchers at
+                        its end; a watch keeps a copy of its last result to compare with
+    typename.ts         withTypename (a copy with __typename, cached per DocumentNode) and
+                        cachedOperation (what a client with a cache sends; documentId check)
+    selection.ts        cacheDocumentOf (operation, fragments, root key), fragmentDocumentOf
+                        (the fragment named, else the first), variablesOf (defaults),
+                        collectFields (@skip/@include, fragments, response keys)
+    type-match.ts       typeMatcher: a type condition against a __typename, by possibleTypes
+    identity.ts         identify: `<__typename>:<id | _id | keys[type]()>`, or none
+    field-key.ts        fieldKey: the name and its sorted arguments; stableJson
+    write.ts            writeResult: normalizes a result into the store
+    read.ts             readResult and readEntity (an operation's root, a fragment's entity):
+                        denormalize a result and record its dependencies
+    store.ts            EntityStore: entities by key, merge, evict, modify (every next computed
+                        and checked, then applied), clear, takeChanges; StagedWrites: a write
+                        held aside, then committed whole
+    changes.ts          Changes (what a batch changed) and Dependencies (what a read used)
+    watchers.ts         Watchers: each watch refreshed once per batch that touched it, a throw
+                        to onError and the next watch still run; a batch made by a callback
+                        queued until the current one is over
+    values.ts           Reference, StoreObject, isPlainObject (prototype Object.prototype or
+                        null), assertJson, equal, deepMerge
+  react/                the `./react` subpath (entry point `react/index.ts`, in `nxgt.entrypoints`)
+    index.ts            its barrel
+    context.ts          GraphQLProvider, useClient (throws `noProvider` outside one)
+    stable.ts           useStable (useMemo on the key: no ref written in a render), variablesKey,
+                        headersKey
+    watched.ts          useWatched: a cache read and its watch through useSyncExternalStore,
+                        the snapshot the object the watch last delivered
+    query-run.ts        startQuery (the effect: clear `disposed`, run; the cleanup sets it
+                        and aborts), refetchQuery, stateFor: plain functions over one
+                        QueryRequest
+    use-query.ts        useQuery: the QueryRequest memoized by value, the cache read, the state
+    use-mutation.ts     useMutation: the last call recorded, nothing after unmount or reset
+    use-subscription.ts useSubscription: one connection per effect, closed in its cleanup
+    use-fragment.ts     useFragment: readFragment and watchFragment through useWatched
+packages/graphql-client/test/
+  declarations/         client.ts and react.ts: the consumer fixtures verify:artifacts emits
+  dom.ts                happy-dom for the React specs only: registered while one runs, the
+                        runtime's fetch, Request, AbortSignal, streams and timers kept
+  react.ts              the React specs' fetch doubles (a held answer, an event stream) and wrapper
+```
+
+- **A React spec imports `../../test/dom` first, as a side-effect import**
+  (Biome does not move those), then calls `useDom(cleanup)` with
+  `@testing-library/react/pure`'s `cleanup`. react-dom reads `window` as it
+  loads, and `useDom` unregisters happy-dom after the file, so every other
+  spec keeps the bare runtime. Nothing goes in `bunfig.toml`: it is
+  nxgt-data's byte copy, and a preload would give every spec a DOM.
+- **`react-dom` and `@types/react-dom` are devDependencies by range
+  (`^19.0.0`)**, not pinned as `react` is: the lockfile holds 19.0.0, and
+  the "Newest peers" job, which raises `react` to its newest, resolves
+  `react-dom` to the same version (react-dom refuses another `react`).
+
+### Invariants
+
+- **A mutation is never retried, deduplicated or batched, and never sent
+  twice, except APQ's register resend**: in `apq` mode, after the server
+  answered `PersistedQueryNotFound` (nothing ran), it is posted once more with
+  its text. Exactly once.
+- **Deduplication sits above batching**: identical queries share one batch
+  entry. A batch holds only calls with the same `callKey` (headers, timeout,
+  retry); a batch of one is posted as a plain body. Each entry keeps its own
+  signal through `Party`: aborted before the batch leaves, it is dropped; a sent
+  batch is aborted only when every entry has left.
+- **A batch reply that is not an array of the batch's length** rejects every
+  entry with `replyError`: its `ApiError` (any status) when the body carries
+  errors, `ApiStatusError` on a non-2xx, else
+  `ApiUnavailableError('invalid-response')`. Each array entry goes
+  through `dataOf` with the reply's HTTP status.
+- **A subscription is never retried, reconnected, deduplicated or batched**:
+  `retry: false` and `reconnect: false` on httpyz's `events()`, whatever the
+  client's `retry`. Its one second connection is APQ's register resend, after
+  `PersistedQueryNotFound` in a refused connection's JSON body or as the first
+  event (nothing ran). Exactly once.
+- **An error status's event stream is an `ApiStatusError(status)` whose `body`
+  is the stream's raw text**, never parsed (httpyz exports no SSE parser:
+  Temporary, until nxgt-http#131). Do not hand-parse SSE here. So graphql-yoga's default
+  APQ answer, a 404 event stream, is not resent: APQ subscriptions on yoga
+  need `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`, and the docs
+  say so until the roadmap's Next entry lands.
+- **A failure is mapped before the stream closes**: `#results` catches and
+  throws `failureOf(error)` before its `finally` closes the stream, since
+  closing aborts the request and a refused connection's body is read after.
+  The fetch doubles in `subscribe.spec.ts` error their body on abort as real
+  fetch does, and `subscribe.server.spec.ts` runs the same paths over
+  `Bun.serve`.
+- **A subscription always asks for `accept: text/event-stream`**, over a
+  client-level `accept`; only its own `headers` can change it.
+- **A subscription's connection is closed on every exit path**: `complete`,
+  the stream's end, `close()`, `break`/`return`, an error (a `next` carrying
+  errors throws its `ApiError` and ends it, as a query does), and an abort,
+  which rejects with the signal's reason. `subscribe()` checks the kind and the
+  persisted hash at once; it connects only on the first iteration.
+- **`documentId` mode refuses a document with no hash before anything is
+  sent** (`checkPersistable` in `run`), so one bad document never fails a batch.
+- **`retry.delay`, a function, is not part of a key**: calls differing only in
+  it share a request (a comment on `callKey` says so).
+- **`onUnauthenticated` runs after httpyz's `auth.refresh` for an HTTP 401,
+  and directly for a GraphQL error carrying `extensions.http.status` 401 on any
+  HTTP status** (httpyz replays only on an HTTP 401). It runs once per caller,
+  deduplicated callers included, and is awaited; what it throws is what the
+  caller gets.
+- **Errors surface, never swallowed**: without a hook, the error reaches the
+  caller unchanged. A reply labelled JSON that does not parse is an
+  `ApiStatusError` (its `cause` the parse error) on a non-2xx and an
+  `ApiUnavailableError('invalid-response')` on a 2xx.
+- **The cache never changes what the network returns to a caller**: with
+  `network-only`, `no-cache`, a `cache-first` miss and a mutation, the caller
+  gets the very object parsed from the response, and the cache keeps its own
+  copy (`fetch-policy.spec.ts`: the object written is the one returned, and
+  changing it leaves the cache as it was). A failed call writes nothing.
+- **Documents are never mutated.** With a cache, `__typename` is added to a
+  copy (`withTypename`, cached per `DocumentNode`, `typename.spec.ts` freezes
+  the document); without one, the operation is sent exactly as before. The
+  operation's own selection set and a subscription are left as they are.
+- **`documentId` mode with a cache refuses a document missing `__typename`
+  before anything is sent**: its hash names the server's text, which the client
+  cannot change. The client preset adds `__typename` only through
+  `addTypenameSelectionDocumentTransform`; the docs say so. `apq` hashes the
+  text sent, `__typename` included.
+- **A watch is called back once per batch, never per field, and only when its
+  result changed**: each public cache method, and each result the client
+  writes, is one batch; a write that leaves a value equal records no change,
+  and a refresh whose result is `equal` to the last one calls nothing. A
+  subscription's `next` is not written.
+- **A call that succeeded on the network never rejects because of the cache,
+  and a cache error never ends the process**: a watch callback that throws
+  goes to the cache's `onError` (`normalizedCache({ onError })`, default
+  `console.error`), never thrown into the write, and the other watches still
+  run; a write the client makes that throws (a `keys` function, a non-JSON
+  value) goes to `cache.onError` (`logError` for a cache without one) and the
+  caller gets the network's data. Never `globalThis.reportError` nor a
+  microtask's throw: Bun and Node end on those. Specs stub through the
+  `onError` option, never through globals. A `write` is atomic: staged in
+  `StagedWrites`, committed whole, so one that throws changes nothing and
+  notifies nobody. `modify` is atomic too: every modifier runs and every next
+  is checked before a field changes; what a modifier throws is thrown from
+  `modify` (a direct call), and the next is stored as a copy.
+- **The cache holds JSON only**: a value that is not null, a boolean, a
+  number, a string, a plain object or an array is refused at `write` and
+  `modify` with `The cache holds JSON: field <field> holds a <type>`.
+  A number must be finite (`holds NaN`, `holds Infinity`) and a cycle throws
+  `holds a cycle` (a `WeakSet` of the ancestors), never a `RangeError`. A
+  selected field given `undefined` is stored as `null` (`writeValue`), kept on
+  purpose; `undefined` inside a list or object is refused.
+  `equal` compares by content only arrays and objects whose prototype is
+  `Object.prototype` or `null`; anything else by `Object.is`.
+- **Watch callbacks never nest**: a batch made from a callback is queued by
+  `Watchers.notify` and run once the current one is over, so callbacks run
+  in order, each whole, and every watch ends on the newest data. One notify
+  runs at most 100 rounds: past that `#pending` (call-backs, not writes: the cache keeps every write) is
+  cleared and `onError` gets
+  `Watch callbacks kept writing: stopped after 100 rounds`. `onError` is
+  called guarded (`try`/`catch` to `logError`) in `Watchers` and `report.ts`.
+- **An aborted signal wins over a cache hit**: `queryThrough` calls
+  `signal.throwIfAborted()` before reading the cache, for `cache-first` and
+  `cache-only` (hit or miss), so the call rejects with the signal's reason.
+- **A mutation's root fields are not kept** (`ROOT_MUTATION` is never stored):
+  their arguments may hold secrets. Its entities are.
+- **A server-side client should not use a cache**: one client per request.
+  Documented, not enforced.
+- **`graphql` is a peer used at runtime** (`parse`, `print`, `Kind`, `visit`,
+  `valueFromASTUntyped`), not only for types. The cache takes no schema and no
+  other dependency.
+- **The root entry never imports `react`.** Only `src/react/` does, and
+  nothing outside it imports from it: `react/boundary.spec.ts` walks the
+  root's import graph and fails on `react`, `react-dom` or a module of
+  `src/react/`. `react` and `@types/react` are optional peers; the second is
+  declared so `verify:artifacts`' types check finds it (react ships no
+  types).
+- **A hook never sends during a render.** `useQuery` and `useSubscription`
+  start in `useEffect`, so a server render sends nothing; the cache is read
+  during a render through `useSyncExternalStore`, which sends nothing.
+  `server-render.spec.ts` renders with `renderToString` and counts zero
+  requests.
+- **The server snapshot is `undefined`** (`useWatched`): a server render and
+  hydration show nothing from the cache (`useQuery` `loading` with no data,
+  `useFragment` `undefined`), since the server's cache is not the browser's
+  and hydration must match the server's HTML; React renders again with
+  `getSnapshot` right after hydrating. Never return the cache's read there.
+  `server-render.spec.ts` pins it.
+- **A hook aborts what it started.** Each effect's cleanup aborts its
+  `AbortController` (a query, its refetches) or closes its subscription: an
+  unmount, new variables, and StrictMode's second effect leave no request
+  behind; the specs assert on the signal `fetch` received. An abort is never
+  recorded as `error`, and nothing is recorded after a cleanup.
+- **A stale `refetch` changes nothing.** Each `QueryRequest` carries
+  `disposed`, `false` when the request is created, set by the cleanup of a
+  `useLayoutEffect` placed before the query's `useEffect`, and cleared when
+  that layout effect runs. It is a layout effect because StrictMode's
+  development replay runs every layout effect again before any passive one:
+  `disposed` is clear again before a child's `useEffect` replays and calls
+  `refetch`; with the flag in the passive effect, that replayed refetch was
+  refused and its answer lost. `refetchQuery` on a disposed request rejects
+  at once with a `DOMException` `AbortError`, sends nothing and sets nothing;
+  `settle` records only while the request is not disposed. A refetch is
+  refused only once its query is no longer shown (unmounted or variables
+  changed), so a child's mount effect or a `useLayoutEffect` may call it
+  before the hook's effect runs: it is in `request.refetches`, and
+  `startQuery`'s cleanup aborts it. A `refetch` kept past new variables or an
+  unmount cannot overwrite what the current request shows. **Known limit:** a
+  child's `useLayoutEffect` calling the parent's `refetch` is refused on
+  StrictMode's replay (children's layout effects reappear before the
+  parent's), development only; the spec pins it.
+- **StrictMode specs pass RTL's `reactStrictMode: true`**, never a
+  `<StrictMode>` inside the `wrapper`: React double-invokes effects only from
+  a root that is strict, so a `<StrictMode>` below RTL's wrapper runs each
+  effect once and proves nothing.
+- **`refetch()` while `skip` is true rejects at once** with an `Error`
+  (`skipRefetch`, a troubleshooting entry headed by it) and sends nothing:
+  `skip` means no request.
+- **`useMutation` tracks unmount only**: a `disposed` flag set in its effect's
+  cleanup and cleared when the effect runs (StrictMode), never a "mounted"
+  flag, so a `mutate` from a child's mount effect, which runs before the
+  parent's, records `loading`.
+- **Variables and headers are compared by value** (`stableJson`, the
+  cache's own field-key JSON, and the headers' entries): a new object
+  literal each render sends nothing again. A document is compared by
+  identity, as the client preset's module constants allow.
+- **`stableJson` keys what goes on the wire**: it honours `toJSON` as
+  `JSON.stringify` does (a `Date` is its ISO string, a value JSON drops is
+  dropped), keys sorted. Two `Date` variables are two requests in `useQuery`
+  and two field keys in the cache; reading a `Date` as a plain object would
+  key every one as `{}`.
+- **Source imports carry no extension.**
+- **Temporary, until nxgt-http#130**: `response.ts` checks for the
+  `DOMException` named `TimeoutError`, which is what a deadline firing while the
+  body is read rejects with, and maps it to `ApiUnavailableError('timeout')`.
+- **httpyz's errors are matched by `name`, never `instanceof`**
+  (`isHttpyzError` in `response.ts`: `TimeoutError`, `NetworkError`,
+  `ValidationError`, `UndeclaredStatusError`), each field they need checked
+  before it is read, as `isApiError` is cross-copy: an application may pass
+  its own httpyz copy as `http`, whose classes are not this package's. A
+  `DOMException` never matches; the #130 body-read timeout is its own check.
+  `transport.spec.ts` throws look-alike plain errors from an httpyz middleware (`use`).
 
 ## The green bar
 
