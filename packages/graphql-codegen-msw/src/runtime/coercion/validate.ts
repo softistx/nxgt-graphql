@@ -1,6 +1,16 @@
-// graphql 17's `validateInputValue`, as @graphql-tools/executor 2 runs it
-// on each variable, walked over the generated input types: the same
-// problems, at the same paths, in the same order.
+/*!
+ * Ported from @graphql-tools/executor 2.0.3 (execution/validateInputValue),
+ * https://github.com/ardatan/graphql-tools
+ * Copyright (c) 2020 The Guild, Inc.
+ * itself a copy of graphql-js 17's validateInputValue,
+ * https://github.com/graphql/graphql-js
+ * Copyright (c) GraphQL Contributors
+ * @license MIT
+ */
+
+// @graphql-tools/executor 2.0.3's copy of graphql 17's `validateInputValue`,
+// the one it runs on each variable, walked over the generated input types:
+// the same problems, at the same paths, in the same order.
 import {
 	declared,
 	type InputType,
@@ -86,14 +96,34 @@ function validateNamed(walk: Walk, value: unknown, name: string, at: At): void {
 		validateObject(walk, value, name, named, at);
 		return;
 	}
-	const reason =
-		named.kind === 'builtin'
-			? builtinRefusal(name, value)
-			: named.kind === 'enum'
-				? enumRefusal(name, named.values, value)
-				: scalarRefusal(name, issueAt(walk.issues, at.zodPath));
+	const reason = leafRefusal(walk, value, name, named, at);
 	if (reason !== undefined) report(walk, at, value, reason);
 }
+
+function leafRefusal(
+	walk: Walk,
+	value: unknown,
+	name: string,
+	named: Exclude<InputType, InputObject>,
+	at: At,
+): string | undefined {
+	switch (named.kind) {
+		case 'builtin':
+			return builtinRefusal(name, value);
+		case 'enum':
+			return enumRefusal(name, named.values, value);
+		case 'scalar':
+			return scalarRefusal(name, issueAt(walk.issues, at.zodPath));
+		default:
+			// A kind this runtime does not know: the file was written by
+			// another version of the plugin.
+			throw new Error(STALE_FILE);
+	}
+}
+
+/** Thrown on an input type whose `kind` this runtime does not know. */
+export const STALE_FILE =
+	'@nxgt/graphql-codegen-msw: the generated file is older than the runtime; regenerate it';
 
 function validateObject(
 	walk: Walk,

@@ -1,7 +1,20 @@
+/*!
+ * Messages ported from graphql-js 17.0.2 (src/type/scalars.ts,
+ * src/type/definition.ts), https://github.com/graphql/graphql-js
+ * Copyright (c) GraphQL Contributors
+ * and from @graphql-tools/executor 2.0.3 (execution/validateInputValue,
+ * execution/values), https://github.com/ardatan/graphql-tools
+ * Copyright (c) 2020 The Guild, Inc.
+ * @license MIT
+ */
+
 // How graphql 17 words a value it refuses, as graphql-yoga 5 with
 // @graphql-tools/executor 2 answers it: the leaf scalars' and enums' own
-// messages, the input object's, and the variable's prefix.
+// messages, printed with graphql's `inspect`, and the input object's and
+// the variable's prefix, which the executor words and prints with
+// `cross-inspect`.
 import type { z } from 'zod';
+import { crossInspect } from './cross-inspect';
 import { inspect } from './inspect';
 import { didYouMean, suggestionList } from './suggestions';
 
@@ -80,9 +93,9 @@ export function scalarRefusal(
 /** The input object messages, by what is wrong with the object. */
 export const objectRefusal = {
 	notAnObject: (type: string, value: unknown) =>
-		`Expected value of type "${type}" to be an object, found: ${inspect(value)}.`,
+		`Expected value of type "${type}" to be an object, found: ${crossInspect(value)}.`,
 	missingField: (type: string, field: string, object: unknown) =>
-		`Expected value of type "${type}" to include required field "${field}", found: ${inspect(object)}.`,
+		`Expected value of type "${type}" to include required field "${field}", found: ${crossInspect(object)}.`,
 	unknownField: (
 		type: string,
 		field: string,
@@ -90,7 +103,7 @@ export const objectRefusal = {
 		object: unknown,
 	) => {
 		const suggestion = didYouMean(suggestionList(field, known));
-		return `Expected value of type "${type}" not to include unknown field "${field}"${suggestion ? `.${suggestion} Found` : ', found'}: ${inspect(object)}.`;
+		return `Expected value of type "${type}" not to include unknown field "${field}"${suggestion ? `.${suggestion} Found` : ', found'}: ${crossInspect(object)}.`;
 	},
 	oneOf: (type: string) =>
 		`Within OneOf Input Object type "${type}", exactly one field must be specified, and the value for that field must be non-null.`,
@@ -117,6 +130,6 @@ export const variableRefusal = {
 			path.length > 0
 				? ` at "${name}${path.map((key) => (typeof key === 'number' ? `[${key}]` : `.${key}`)).join('')}"`
 				: '';
-		return `Variable "$${name}" got invalid value ${inspect(value)}${at}; ${reason}`;
+		return `Variable "$${name}" got invalid value ${crossInspect(value)}${at}; ${reason}`;
 	},
 };

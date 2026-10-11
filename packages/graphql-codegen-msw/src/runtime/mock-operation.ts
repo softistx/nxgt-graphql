@@ -61,11 +61,15 @@ export interface MockedOperation {
 	/**
 	 * Each variable's GraphQL type, with its default: `{ first: "Int = 10" }`.
 	 * Internal: written by the plugin for the coercion answer, its form may
-	 * change in any version together with the generated file.
+	 * change in any version together with the generated file. Defaults to
+	 * `{}`: no variable is walked, and every refusal goes to `invalidInput`.
 	 */
-	readonly variableTypes: Readonly<Record<string, string>>;
-	/** The input types the variables reach, from the schema. Internal, as `variableTypes`. */
-	readonly inputTypes: InputTypes;
+	readonly variableTypes?: Readonly<Record<string, string>> | undefined;
+	/**
+	 * The input types the variables reach, from the schema. Internal, as
+	 * `variableTypes`; defaults to `{}`.
+	 */
+	readonly inputTypes?: InputTypes | undefined;
 	readonly endpoint: Path;
 	readonly invalidInput: InvalidInput;
 }

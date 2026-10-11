@@ -37,9 +37,10 @@ refusals, comes with it.
 The schema must declare `@constraint` (the first entry below) when it uses
 it, and `scalarSchemas` names the module holding a schema per custom scalar;
 drop either from the example when your schema has no `@constraint` or no
-custom scalar. Three files, generated side by side: the operations' types (the client
-preset's `graphql.ts`, or `typescript-operations`' file), the Zod schemas of
-`@nxgt/graphql-codegen-zod`, and the handlers.
+custom scalar. Three outputs go in one folder: the client preset's files (its
+`graphql.ts` holds each operation's result and variables types), the Zod
+schemas `@nxgt/graphql-codegen-zod` writes (`zod.ts`), and the handlers
+(`msw.ts`).
 
 ```ts
 // codegen.ts
@@ -132,10 +133,10 @@ the variables as sent, not parsed.
 
 ### An invalid input
 
-By default, an invalid input is answered as an API that answers invalid input
-as one 400 error with a list of fields:
-[`invalidInputError`](https://www.npmjs.com/package/@nxgt/graphql-validation)'s
-shape, one field per Zod issue.
+By default, the handler answers an invalid input with one 400 error that
+lists the refused fields, one per Zod issue: the shape of
+[`invalidInputError`](https://www.npmjs.com/package/@nxgt/graphql-validation),
+for an API that answers invalid input that way.
 
 ```json
 {
@@ -171,7 +172,7 @@ for it. The few cases where the mock still differs are listed in
 { "errors": [{ "message": "Variable \"$id\" of required type \"ID!\" was not provided.", "locations": [{ "line": 1, "column": 12 }] }] }
 ```
 
-Two other answers to an invalid input:
+Any other invalid input, a constraint, gets the answer `invalidInput` picks:
 
 | `invalidInput` | Answer |
 | --- | --- |

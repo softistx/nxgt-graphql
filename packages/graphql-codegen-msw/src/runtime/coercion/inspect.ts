@@ -1,28 +1,114 @@
-/**
- * A value as graphql-js prints it in an error message (`inspect`, as
- * `@graphql-tools/executor` takes it from `cross-inspect`): a string
- * quoted, `{ a: 1, b: "x" }`, `[1, 2]`, `{}` and `[]`, and `[Object]` or
- * `[Array]` beyond three levels. The variables come from JSON, so no
- * function, error or cycle reaches it.
+/*!
+ * Ported from graphql-js 17.0.2 (src/jsutils/inspect.ts),
+ * https://github.com/graphql/graphql-js
+ * Copyright (c) GraphQL Contributors
+ * @license MIT
  */
+
+// graphql-js's own `inspect`, ported line for line: what graphql prints in
+// the messages it words itself (the built-in scalars', an enum's, and the
+// value an enum suggestion is read from). Two levels deep, then `[Object]`
+// or `[Array]`; ten items of a list, then `... N more items`. The executor's
+// messages print with `cross-inspect` instead (`cross-inspect.ts`).
+
+const MAX_ARRAY_LENGTH = 10;
+const MAX_RECURSIVE_DEPTH = 2;
+
+/** A value as graphql-js prints it in an error message. */
 export function inspect(value: unknown): string {
-	return formatValue(value, 0);
+	return formatValue(value, []);
 }
 
-const MAX_DEPTH = 3;
-
-function formatValue(value: unknown, depth: number): string {
-	if (typeof value === 'string') return JSON.stringify(value);
-	if (typeof value !== 'object' || value === null) return String(value);
-	if (Array.isArray(value)) {
-		if (value.length === 0) return '[]';
-		if (depth >= MAX_DEPTH) return '[Array]';
-		return `[${value.map((item) => formatValue(item, depth + 1)).join(', ')}]`;
+function formatValue(value: unknown, seenValues: readonly unknown[]): string {
+	switch (typeof value) {
+		case 'string':
+			return JSON.stringify(value);
+		case 'function':
+			return value.name ? `[function ${value.name}]` : '[function]';
+		case 'object':
+			return formatObjectValue(value, seenValues);
+		default:
+			return String(value);
 	}
-	const entries = Object.entries(value);
-	if (entries.length === 0) return '{}';
-	if (depth >= MAX_DEPTH) return '[Object]';
-	return `{ ${entries
-		.map(([key, item]) => `${key}: ${formatValue(item, depth + 1)}`)
-		.join(', ')} }`;
+}
+
+function formatObjectValue(
+	value: object | null,
+	previouslySeenValues: readonly unknown[],
+): string {
+	if (value === null) {
+		return 'null';
+	}
+	if (previouslySeenValues.includes(value)) {
+		return '[Circular]';
+	}
+	const seenValues = [...previouslySeenValues, value];
+	if (isJSONable(value)) {
+		const jsonValue = value.toJSON();
+		// check for infinite recursion
+		if (jsonValue !== value) {
+			return typeof jsonValue === 'string'
+				? jsonValue
+				: formatValue(jsonValue, seenValues);
+		}
+	} else if (Array.isArray(value)) {
+		return formatArray(value, seenValues);
+	}
+	return formatObject(value, seenValues);
+}
+
+function isJSONable(value: object): value is { toJSON: () => unknown } {
+	return typeof (value as { toJSON?: unknown }).toJSON === 'function';
+}
+
+function formatObject(object: object, seenValues: readonly unknown[]): string {
+	const entries = Object.entries(object);
+	if (entries.length === 0) {
+		return '{}';
+	}
+	if (seenValues.length > MAX_RECURSIVE_DEPTH) {
+		return `[${getObjectTag(object)}]`;
+	}
+	const properties = entries.map(
+		([key, value]) => `${key}: ${formatValue(value, seenValues)}`,
+	);
+	return `{ ${properties.join(', ')} }`;
+}
+
+function formatArray(
+	array: readonly unknown[],
+	seenValues: readonly unknown[],
+): string {
+	if (array.length === 0) {
+		return '[]';
+	}
+	if (seenValues.length > MAX_RECURSIVE_DEPTH) {
+		return '[Array]';
+	}
+	const len = Math.min(MAX_ARRAY_LENGTH, array.length);
+	const remaining = array.length - len;
+	const items: string[] = [];
+	for (let i = 0; i < len; ++i) {
+		items.push(formatValue(array[i], seenValues));
+	}
+	if (remaining === 1) {
+		items.push('... 1 more item');
+	} else if (remaining > 1) {
+		items.push(`... ${remaining} more items`);
+	}
+	return `[${items.join(', ')}]`;
+}
+
+function getObjectTag(object: object): string {
+	const tag = Object.prototype.toString
+		.call(object)
+		.replace(/^\[object /, '')
+		.replace(/]$/, '');
+	if (tag === 'Object' && typeof object.constructor === 'function') {
+		const name = object.constructor.name;
+		if (typeof name === 'string' && name !== '') {
+			return name;
+		}
+	}
+	return tag;
 }

@@ -264,6 +264,35 @@ describe('a status invalidInput returns', () => {
 	});
 });
 
+describe('a hand-written handler, without variableTypes or inputTypes', () => {
+	test('answers every refusal with invalidInput, the coercion ones included', async () => {
+		const { calls, resolver } = answering({ users: [] });
+		const seen: unknown[] = [];
+		server.use(
+			mockOperation(
+				{
+					type: 'query',
+					name: 'Users',
+					variables: zUsersQueryVariables,
+					endpoint: ENDPOINT,
+					invalidInput: (issues) => {
+						seen.push(issues.map((issue) => issue.path));
+						return { error: { message: 'refused' }, status: 422 };
+					},
+				},
+				resolver,
+			),
+		);
+		// graphql would refuse both while coercing them.
+		expect(await post(USERS, { first: 'a', role: 'NOPE' })).toEqual({
+			status: 422,
+			body: { errors: [{ message: 'refused' }] },
+		});
+		expect(seen).toEqual([[['first'], ['role']]]);
+		expect(calls).toEqual([]);
+	});
+});
+
 describe('what the API refuses before validation', () => {
 	// graphql-yoga 5.24 refuses these while coercing the variables: one
 	// error per problem, no extensions, status 400 under either Accept.

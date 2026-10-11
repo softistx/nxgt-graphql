@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { z } from 'zod';
-import { coercionErrors, type InputTypes } from './index';
+import { crossInspect } from './cross-inspect';
+import { coercionErrors, type InputTypes, STALE_FILE } from './index';
 import { inspect } from './inspect';
 
 const issuesOf = (schema: z.ZodType, value: unknown) => {
@@ -139,6 +140,33 @@ describe('coercionErrors', () => {
 		]);
 	});
 
+	test("prints graphql's own messages with graphql's inspect, the executor's with cross-inspect", () => {
+		const twelve = Array.from({ length: 12 }, (_, i) => i);
+		expect(
+			messagesOf(z.object({ s: z.string() }), { s: 'String' }, { s: twelve }),
+		).toEqual([
+			'Variable "$s" got invalid value [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; String cannot represent a non string value: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ... 2 more items]',
+		]);
+		expect(
+			messagesOf(
+				z.object({ r: z.enum(['ADMIN', 'MEMBER']) }),
+				{ r: 'Role' },
+				{ r: { a: { b: { c: 1 } } } },
+			),
+		).toEqual([
+			'Variable "$r" got invalid value { a: { b: { c: 1 } } }; Enum "Role" cannot represent non-string value: { a: { b: [Object] } }.',
+		]);
+		expect(
+			messagesOf(
+				z.object({ items: z.array(z.int32().nullable()) }),
+				{ items: '[Int]' },
+				{ items: [[[[1]]]] },
+			),
+		).toEqual([
+			'Variable "$items" got invalid value [[[1]]] at "items[0]"; Int cannot represent non-integer value: [[[Array]]]',
+		]);
+	});
+
 	test('a OneOf input object takes exactly one non-null field', () => {
 		const variables = z.object({
 			by: z
@@ -198,15 +226,85 @@ describe('coercionErrors', () => {
 	});
 });
 
-describe('inspect', () => {
-	test("prints a value as graphql-js's error messages do", () => {
+describe('without types: a hand-written handler', () => {
+	test('walks no variable, so every refusal goes to invalidInput', () => {
+		const sent = { id: true };
+		const issues = issuesOf(z.object({ id: z.string() }), sent);
+		const request = {
+			query: 'not graphql',
+			operationName: 'Q',
+			variables: sent,
+		};
+		expect(coercionErrors(issues, request, {})).toEqual([]);
+		expect(
+			coercionErrors(issues, request, {
+				variableTypes: undefined,
+				inputTypes: undefined,
+			}),
+		).toEqual([]);
+	});
+
+	test('an input type of a kind this runtime does not know: regenerate', () => {
+		const sent = { id: true };
+		expect(() =>
+			coercionErrors(
+				issuesOf(z.object({ id: z.string() }), sent),
+				{ query: 'not graphql', operationName: 'Q', variables: sent },
+				{
+					variableTypes: { id: 'ID!' },
+					inputTypes: { ID: { kind: 'identifier' } as never },
+				},
+			),
+		).toThrow(STALE_FILE);
+	});
+});
+
+describe('inspect, graphql-js 17', () => {
+	test("prints a value as graphql's own error messages do", () => {
 		expect(inspect('a')).toBe('"a"');
 		expect(inspect({ a: [1, 'b'], c: null, d: {}, e: [] })).toBe(
 			'{ a: [1, "b"], c: null, d: {}, e: [] }',
 		);
-		expect(inspect({ a: { b: { c: { d: 1 } } } })).toBe(
+		expect(inspect({ a: { b: { c: 1 } } })).toBe('{ a: { b: [Object] } }');
+		expect(inspect([[[[1]]]])).toBe('[[[Array]]]');
+	});
+
+	test('ten items of a list, then how many more', () => {
+		const list = (length: number) => Array.from({ length }, (_, i) => i);
+		expect(inspect(list(10))).toBe('[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]');
+		expect(inspect(list(11))).toBe(
+			'[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ... 1 more item]',
+		);
+		expect(inspect(list(12))).toBe(
+			'[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ... 2 more items]',
+		);
+	});
+
+	test('a function, a symbol, toJSON and a cycle, as graphql-js prints them', () => {
+		function named() {}
+		expect(inspect(named)).toBe('[function named]');
+		expect(inspect(() => {})).toBe('[function]');
+		expect(inspect(Symbol('s'))).toBe('Symbol(s)');
+		expect(inspect({ toJSON: () => 'as json' })).toBe('as json');
+		expect(inspect({ toJSON: () => ({ a: 1 }) })).toBe('{ a: 1 }');
+		const cycle: { self?: unknown } = {};
+		cycle.self = cycle;
+		expect(inspect(cycle)).toBe('{ self: [Circular] }');
+	});
+});
+
+describe('crossInspect, cross-inspect 1', () => {
+	test("prints a value as the executor's error messages do", () => {
+		expect(crossInspect('a')).toBe('"a"');
+		expect(crossInspect({ a: [1, 'b'], c: null, d: {}, e: [] })).toBe(
+			'{ a: [1, "b"], c: null, d: {}, e: [] }',
+		);
+		expect(crossInspect({ a: { b: { c: { d: 1 } } } })).toBe(
 			'{ a: { b: { c: [Object] } } }',
 		);
-		expect(inspect([[[[1]]]])).toBe('[[[[Array]]]]');
+		expect(crossInspect([[[[1]]]])).toBe('[[[[Array]]]]');
+		expect(crossInspect(Array.from({ length: 12 }, (_, i) => i))).toBe(
+			'[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]',
+		);
 	});
 });

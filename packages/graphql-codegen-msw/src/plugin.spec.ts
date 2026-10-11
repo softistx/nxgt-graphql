@@ -129,7 +129,7 @@ describe('plugin', () => {
 		);
 	});
 
-	test('writes the input types the variables reach, sorted, and each variable type', () => {
+	test('writes the input types the variables reach, sorted, a field or an enum value per line, and each variable type', () => {
 		const sdl = buildSchema(`
 			input B { b: Int! = 1, a: A, self: B }
 			input A @oneOf { x: ID, y: String }
@@ -148,9 +148,29 @@ describe('plugin', () => {
 		expect(output).toContain(
 			[
 				'const inputTypes: InputTypes = {',
-				'\tA: { kind: "input", fields: { x: "ID", y: "String" }, oneOf: true },',
-				'\tB: { kind: "input", fields: { b: "Int! = 1", a: "A", self: "B" } },',
-				'\tE: { kind: "enum", values: ["Y", "X"] },',
+				'\tA: {',
+				'\t\tkind: "input",',
+				'\t\tfields: {',
+				'\t\t\tx: "ID",',
+				'\t\t\ty: "String",',
+				'\t\t},',
+				'\t\toneOf: true,',
+				'\t},',
+				'\tB: {',
+				'\t\tkind: "input",',
+				'\t\tfields: {',
+				'\t\t\tb: "Int! = 1",',
+				'\t\t\ta: "A",',
+				'\t\t\tself: "B",',
+				'\t\t},',
+				'\t},',
+				'\tE: {',
+				'\t\tkind: "enum",',
+				'\t\tvalues: [',
+				'\t\t\t"Y",',
+				'\t\t\t"X",',
+				'\t\t],',
+				'\t},',
 				'\tID: { kind: "builtin" },',
 				'\tInt: { kind: "builtin" },',
 				'\tS: { kind: "scalar" },',
@@ -177,7 +197,7 @@ describe('plugin', () => {
 			}),
 		});
 		expect(plugin(coded, of('query Q($c: C) { q(c: $c) }'), base)).toContain(
-			'\tC: { kind: "input", fields: { n: "Int! = …" } },',
+			'\t\tfields: {\n\t\t\tn: "Int! = …",\n\t\t},',
 		);
 	});
 

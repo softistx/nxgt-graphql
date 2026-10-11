@@ -1,3 +1,11 @@
+/*!
+ * Ported from graphql-js 17.0.2 (src/jsutils/suggestionList.ts,
+ * didYouMean.ts, formatList.ts, naturalCompare.ts),
+ * https://github.com/graphql/graphql-js
+ * Copyright (c) GraphQL Contributors
+ * @license MIT
+ */
+
 // graphql-js's "Did you mean …?" (graphql 17's `suggestionList`,
 // `didYouMean`, `orList` and `naturalCompare`, which
 // @graphql-tools/executor copies), ported line for line so the mock

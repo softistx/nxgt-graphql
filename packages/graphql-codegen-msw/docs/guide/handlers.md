@@ -57,8 +57,21 @@ export const invalidInput: InvalidInput = invalidInputRefusal();
 const inputTypes: InputTypes = {
 	DateTime: { kind: "scalar" },
 	ID: { kind: "builtin" },
-	PersonInput: { kind: "input", fields: { firstName: "String!", email: "String!" } },
-	SignUpInput: { kind: "input", fields: { person: "PersonInput!", tags: "[String!]", birth: "DateTime" } },
+	PersonInput: {
+		kind: "input",
+		fields: {
+			firstName: "String!",
+			email: "String!",
+		},
+	},
+	SignUpInput: {
+		kind: "input",
+		fields: {
+			person: "PersonInput!",
+			tags: "[String!]",
+			birth: "DateTime",
+		},
+	},
 	String: { kind: "builtin" },
 };
 
@@ -76,7 +89,9 @@ export function mockSignUpMutation(…): GraphQLHandler { … }
 
 One handler factory per **named query and mutation**, in document order. The
 schema gives `inputTypes`, every input type the variables reach (sorted by
-name), and each handler's `variableTypes`: the answer to a value graphql
+name, an input object's fields and an enum's values one per line, so a schema
+change shows as the lines it changes), and each handler's `variableTypes`: the
+answer to a value graphql
 refuses is worded from them (see
 [What the API refuses before your resolvers](#what-the-api-refuses-before-your-resolvers)).
 Their shape is internal to the generated file and the runtime, and may change
@@ -243,6 +258,10 @@ invalid-input answer never names them. The mock answers them as graphql-yoga
 - the message in graphql 17's wording, every type named as the schema names
   it and graphql's "Did you mean …?" included, located at the variable's
   definition in the query sent;
+- each value printed as the API prints it: two levels deep and ten items
+  (`{ a: { b: [Object] } }`, `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ... 2 more items]`) in graphql's
+  own messages (a scalar's, an enum's), three levels and every item in the
+  executor's (an input object's, the `got invalid value …` prefix);
 - the errors in graphql's order: variables as declared, an input object's
   fields as the schema declares them, its unknown fields last.
 
@@ -291,27 +310,30 @@ A list also takes a single value, as graphql coerces it: `"MEMBR"` for
 ### Known differences
 
 Checked against graphql-yoga 5.24.2, `@graphql-tools/executor` 2.0.3 and
-graphql 17.0.2 over 64 requests (missing, null and wrongly typed values at the
+graphql 17.0.2 over 75 requests (missing, null and wrongly typed values at the
 top level and nested, unknown enum values and fields, Int overflow, custom
-scalars, lists, single values for lists, `@oneOf`): 62 answers are identical,
-status and body. Where the mock still differs:
+scalars, lists and lists of lists, single values for lists, `@oneOf`, values
+printed deep or long: `[Object]`, `[Array]`, `... 2 more items`): 74 answers
+are identical, status and body. Where the mock differs:
 
-- **An `ID` given an integer.** graphql takes `5` for an `ID` (as `"5"`);
-  codegen-zod's schema for `ID` is a string, so the mock refuses it with
-  `invalidInput`'s answer (`validation.errors.invalid` by default).
-- **A custom scalar's message.** The mock words it as a scalar built with
-  `zodScalar` (`@nxgt/graphql-scalars`) does, `<Name> cannot represent this
-  input: <the schema's first issue>`, which holds when the client's schema is
-  the scalar's own. A scalar of another make words its refusal its own way
-  (graphql's `Expected value of type "X", found: …` when it returns nothing,
-  `…, but encountered error "…"; found: …` when it throws a plain `Error`).
-- **An application format.** A format of the application's own
+- **An `ID` given an integer**, the one difference of the 75. graphql takes
+  `5` for an `ID` (as `"5"`); codegen-zod's schema for `ID` is a string, so
+  the mock refuses it with `invalidInput`'s answer
+  (`validation.errors.invalid` by default).
+- **A custom scalar of another make.** The mock words a custom scalar's
+  refusal as a scalar built with `zodScalar` (`@nxgt/graphql-scalars`) does,
+  `<Name> cannot represent this input: <the schema's first issue>`, which
+  holds when the client's schema is the scalar's own. A scalar of another make
+  words its refusal its own way (graphql's `Expected value of type "X", found:
+  …` when it returns nothing, `…, but encountered error "…"; found: …` when it
+  throws a plain `Error`).
+- **An application format's code.** A format of the application's own
   (`withValidation`'s `formats`, a Zod string schema) is answered with the
   code its Zod issue gives: `validation.errors.invalid-format` only for a
   Zod format or a pattern, `validation.errors.invalid` for a refinement, a
   prefix, a suffix or a substring. The API may answer `invalid-format` for
   every format of its own.
-- **graphql 16.** An API on graphql 16 words some of these messages
+- **An API on graphql 16.** graphql 16 words some of these messages
   differently; the mock always words them as graphql 17 does.
 
 ### `'invalid-input'`, the default
@@ -543,8 +565,8 @@ interface MockedOperation {
 	readonly type: 'query' | 'mutation';
 	readonly name: string;
 	readonly variables: z.ZodType;
-	readonly variableTypes: Readonly<Record<string, string>>; // internal: { first: "Int = 10" }
-	readonly inputTypes: InputTypes; // internal: the input types the variables reach
+	readonly variableTypes?: Readonly<Record<string, string>>; // internal: { first: "Int = 10" }; default {}
+	readonly inputTypes?: InputTypes; // internal: the input types the variables reach; default {}
 	readonly endpoint: Path;
 	readonly invalidInput: InvalidInput;
 }
@@ -568,11 +590,35 @@ Types: `GraphQLMockResolver`, `GraphQLMockInfo`, `MockedOperation`,
 `AnyGraphQLError`, and `InputTypes` / `InputType`, internal: exported for the
 generated file's annotation, their shape may change in any version.
 
+### A handler written by hand
+
 `mockOperation` is the generated handlers' only call: you can write a handler
-the plugin does not, for an operation outside your documents, with it. Its
-`variableTypes` and `inputTypes` are best copied from a generated file; with
-`variableTypes: {}`, no variable is walked and every refusal goes to
-`invalidInput`.
+the plugin does not, for an operation outside your documents, with it.
+`variableTypes` and `inputTypes` are optional and default to `{}`: without
+them no variable is walked, so every refusal, a value graphql would refuse
+while coercing it included, goes to `invalidInput`.
+
+```ts
+import { HttpResponse } from 'msw';
+import { invalidInputRefusal, mockOperation } from '@nxgt/graphql-codegen-msw/runtime';
+import { z } from 'zod';
+
+export const mockPing = mockOperation<{ ping: string }, { times?: number | null }>(
+	{
+		type: 'query',
+		name: 'Ping',
+		variables: z.object({ times: z.int().nullish() }),
+		endpoint: '*/graphql',
+		invalidInput: invalidInputRefusal(),
+	},
+	() => HttpResponse.json({ data: { ping: 'pong' } }),
+);
+```
+
+To have the coercion answer as well, copy both from a generated file and
+regenerate that file after each upgrade: their shape is internal, and a
+`kind` the installed runtime does not know throws
+[`the generated file is older than the runtime; regenerate it`](../troubleshooting.md#at-run-time).
 
 ## The plugin function
 

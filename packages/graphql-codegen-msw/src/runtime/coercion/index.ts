@@ -28,15 +28,19 @@ import { variableRefusal } from './messages';
 import { type Problem, validateValue, type Walk } from './validate';
 
 export type { InputType, InputTypes } from './document';
+export { STALE_FILE } from './validate';
 
 /** The status graphql-yoga answers a variable coercion error with. */
 export const COERCION_STATUS = 400;
 
-/** What the generated file says of an operation's variables. */
+/**
+ * What the generated file says of an operation's variables. Without them
+ * (a hand-written handler), no variable is walked.
+ */
 export interface DeclaredVariables {
 	/** Each variable's type, with its default: `{ first: "Int = 10" }`. */
-	readonly variableTypes: Readonly<Record<string, string>>;
-	readonly inputTypes: InputTypes;
+	readonly variableTypes?: Readonly<Record<string, string>> | undefined;
+	readonly inputTypes?: InputTypes | undefined;
 }
 
 /** The request whose variables the operation's schema refused. */
@@ -63,9 +67,10 @@ export function coercionErrors(
 			? (request.variables as Record<string, unknown>)
 			: {};
 	const walked = placed(issues);
-	return Object.entries(operation.variableTypes).flatMap(([name, source]) =>
+	const { variableTypes = {}, inputTypes = {} } = operation;
+	return Object.entries(variableTypes).flatMap(([name, source]) =>
 		variableMessages(name, source, sent, {
-			types: operation.inputTypes,
+			types: inputTypes,
 			issues: walked,
 			problems: [],
 		}).map((message) => located(message, definitions.get(name))),

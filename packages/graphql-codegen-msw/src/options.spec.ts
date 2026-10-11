@@ -4,6 +4,7 @@ import { parse } from 'graphql';
 import { schema } from '../test/fixture';
 import { iteratorMessage } from '../test/iterator-message';
 import { type CodegenMswConfig, plugin } from './index';
+import { STALE_FILE } from './runtime/coercion';
 
 const base = {
 	endpoint: 'https://api.example.com/graphql',
@@ -70,10 +71,14 @@ const refusals: [string, CodegenMswConfig, string][] = [
 	],
 ];
 
-/** The messages raised elsewhere: the plugin's duplicate, the runtime's iterator. */
+/**
+ * The messages raised elsewhere: the plugin's duplicate, the runtime's
+ * iterator and its stale generated file.
+ */
 const elsewhere = [
 	'@nxgt/graphql-codegen-msw: the file would declare mockGetUserQuery twice: two operations give it the same name. Rename one of them.',
 	iteratorMessage('User'),
+	STALE_FILE,
 ];
 
 describe('the config', () => {

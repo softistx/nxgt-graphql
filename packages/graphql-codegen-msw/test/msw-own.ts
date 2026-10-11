@@ -18,9 +18,28 @@ const inputTypes: InputTypes = {
 	DateTime: { kind: "scalar" },
 	ID: { kind: "builtin" },
 	Int: { kind: "builtin" },
-	PersonInput: { kind: "input", fields: { firstName: "String!", email: "String!" } },
-	Role: { kind: "enum", values: ["ADMIN", "MEMBER"] },
-	SignUpInput: { kind: "input", fields: { person: "PersonInput!", tags: "[String!]", birth: "DateTime" } },
+	PersonInput: {
+		kind: "input",
+		fields: {
+			firstName: "String!",
+			email: "String!",
+		},
+	},
+	Role: {
+		kind: "enum",
+		values: [
+			"ADMIN",
+			"MEMBER",
+		],
+	},
+	SignUpInput: {
+		kind: "input",
+		fields: {
+			person: "PersonInput!",
+			tags: "[String!]",
+			birth: "DateTime",
+		},
+	},
 	String: { kind: "builtin" },
 };
 

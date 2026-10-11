@@ -56,4 +56,19 @@ export const handler = mockOperation<
 	{ once: true },
 );
 
+/** Written by hand: no types, so every refusal goes to invalidInput. */
+export const handWritten = mockOperation<
+	{ ping: string },
+	{ times?: number | null }
+>(
+	{
+		type: 'query',
+		name: 'Ping',
+		variables: z.object({ times: z.int().nullish() }),
+		endpoint: '*/graphql',
+		invalidInput: refusals.badUserInput,
+	},
+	() => HttpResponse.json({ data: { ping: 'pong' } }),
+);
+
 export const refused = errorResponse({ message: 'no' }, { status: 409 });
