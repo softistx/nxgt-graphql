@@ -13,7 +13,9 @@ import {
 	valueFromAST,
 } from 'graphql';
 import { z } from 'zod';
+import { type FormatRegistry, registryOf } from '../formats/registry';
 import { applyRule } from '../rules';
+import type { RuleContext } from '../rules/rule';
 import { type Constraint, constraintsOn } from './constraints';
 import { assertObjectTargets, leafSchema } from './leaf';
 
@@ -25,6 +27,7 @@ import { assertObjectTargets, leafSchema } from './leaf';
  */
 export class InputSchemas {
 	readonly directive: GraphQLDirective | undefined;
+	readonly #context: RuleContext;
 	readonly #objects = new Map<string, z.ZodType>();
 	readonly #defaults: {
 		schema: z.ZodType;
@@ -35,7 +38,9 @@ export class InputSchemas {
 	/** The input types a value can break a constraint inside. */
 	readonly #constrained = new Set<string>();
 
-	constructor(schema: GraphQLSchema) {
+	/** `formats`: the built-in ones by default, the application's added. */
+	constructor(schema: GraphQLSchema, formats: FormatRegistry = registryOf()) {
+		this.#context = { formats };
 		this.directive = schema.getDirective('constraint') ?? undefined;
 		const objects = Object.values(schema.getTypeMap()).filter(
 			isInputObjectType,
@@ -138,14 +143,15 @@ export class InputSchemas {
 			const own = constraints.filter(({ rule }) => rule.target === 'list');
 			const items = constraints.filter(({ rule }) => rule.target !== 'list');
 			let list: z.ZodType = z.array(this.#typed(type.ofType, items, where));
-			for (const { rule, value } of own) list = applyRule(rule, list, value);
+			for (const { rule, value } of own)
+				list = applyRule(rule, list, value, this.#context);
 			return list;
 		}
 		if (isInputObjectType(type)) {
 			assertObjectTargets(type.name, constraints, where);
 			return this.#object(type);
 		}
-		return leafSchema(type, constraints, where);
+		return leafSchema(type, constraints, where, this.#context);
 	}
 
 	#object(type: GraphQLInputObjectType): z.ZodType {

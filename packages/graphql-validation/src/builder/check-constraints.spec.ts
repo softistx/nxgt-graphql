@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildSchema } from 'graphql';
+import { z } from 'zod';
 import { constraintTypeDefs } from '../constraint-directive';
 import { checkConstraints } from './check-constraints';
 
@@ -35,5 +36,22 @@ describe('checkConstraints', () => {
 					type Query { a(n: Int = 0 @constraint(min: 1)): Int }`),
 			),
 		).toThrow('The default value of Query.a(n:) breaks its @constraint');
+	});
+
+	test("knows the application's formats it is given, as withValidation does", () => {
+		const schema = buildSchema(`${constraintTypeDefs}
+			type Query { a(siret: String @constraint(format: "siret")): Int }`);
+		expect(() => checkConstraints(schema)).toThrow(
+			'Unknown @constraint format "siret"',
+		);
+		let refused = false;
+		checkConstraints(
+			schema,
+			(_type, _field, args) => {
+				refused = !args.safeParse({ siret: '7328' }).success;
+			},
+			{ siret: z.string().regex(/^\d{14}$/) },
+		);
+		expect(refused).toBe(true);
 	});
 });

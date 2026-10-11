@@ -7,6 +7,11 @@ import {
 	isListType,
 	isNonNullType,
 } from 'graphql';
+import {
+	type FormatRegistry,
+	type FormatSchemas,
+	registryOf,
+} from '../formats/registry';
 import { applyRuleCode } from '../rules';
 import type { Constraint } from './constraints';
 import { assertLeafTargets, assertObjectTargets, baseCode } from './leaf';
@@ -21,6 +26,9 @@ import { assertLeafTargets, assertObjectTargets, baseCode } from './leaf';
  * object's or an enum's schema by name, a custom scalar's from a mapping.
  * The built-in scalars are written here, with their constraints. A
  * constraint that cannot apply fails as it does at startup.
+ *
+ * `formats` are the application's own, as `withValidation` takes them: a
+ * name among them is a known format, which a built-in one is not.
  */
 export function inputCode(
 	type: GraphQLInputType,
@@ -28,8 +36,14 @@ export function inputCode(
 	where: string,
 	named: (type: GraphQLNamedInputType) => string,
 	options: InputCodeOptions = {},
+	formats?: FormatSchemas,
 ): string {
-	const write: Write = { where, named, options };
+	const write: Write = {
+		where,
+		named,
+		options,
+		formats: registryOf(formats),
+	};
 	return typedCode(write, type, constraints);
 }
 
@@ -52,6 +66,7 @@ interface Write {
 	readonly where: string;
 	readonly named: (type: GraphQLNamedInputType) => string;
 	readonly options: InputCodeOptions;
+	readonly formats: FormatRegistry;
 }
 
 function typedCode(
@@ -74,6 +89,7 @@ function requiredCode(
 		const own = constraints.filter(({ rule }) => rule.target === 'list');
 		const items = constraints.filter(({ rule }) => rule.target !== 'list');
 		const code = applyCode(
+			write,
 			`z.array(${typedCode(write, type.ofType, items)})`,
 			own,
 		);
@@ -86,12 +102,17 @@ function requiredCode(
 		return write.named(type);
 	}
 	assertLeafTargets(type, constraints, write.where);
-	return applyCode(baseCode(type) ?? write.named(type), constraints);
+	return applyCode(write, baseCode(type) ?? write.named(type), constraints);
 }
 
-function applyCode(source: string, constraints: readonly Constraint[]): string {
+function applyCode(
+	write: Write,
+	source: string,
+	constraints: readonly Constraint[],
+): string {
+	const context = { formats: write.formats };
 	return constraints.reduce(
-		(code, { rule, value }) => applyRuleCode(rule, code, value),
+		(code, { rule, value }) => applyRuleCode(rule, code, value, context),
 		source,
 	);
 }

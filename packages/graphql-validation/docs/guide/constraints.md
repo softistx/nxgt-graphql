@@ -188,9 +188,10 @@ email: String! @constraint(maxLength: 12, format: "email")
 
 ## Formats
 
-`@constraint(format: "...")` takes one of these names. Anything else fails at
-startup with `Unknown @constraint format "siret". Known formats: byte, date,
-date-time, email, ipv4, ipv6, uri, uuid.`
+`@constraint(format: "...")` takes one of these names, or one of
+[your own formats](#your-own-formats). Anything else fails at startup with
+`Unknown @constraint format "siret". Known formats: byte, date, date-time,
+email, ipv4, ipv6, uri, uuid.`, your own formats listed after these.
 
 | Format | Zod schema | Accepts |
 | --- | --- | --- |
@@ -209,6 +210,82 @@ Where they differ from graphql-constraint-directive's (validator.js):
   present. A lowercase `t` or `z`, or a space for `T`, is refused.
 - `uri` requires the scheme (`example.com` is refused) and nothing but `http`,
   `https` and `ftp` gets in: no `javascript:`, no `mailto:`.
+
+## Your own formats
+
+When no built-in format says it, write the format as a Zod string schema and
+name it. Keep every format in one module, exported as one record:
+
+```ts
+// formats.ts
+import { z } from 'zod';
+
+export const formatSchemas = {
+  // A French company number: 14 digits.
+  siret: z.string().regex(/^\d{14}$/, 'Invalid SIRET: write its 14 digits'),
+  // An address at your company only.
+  'work-email': z.email().endsWith('@example.com', 'Use your work address'),
+  // Any check Zod can write, as long as it changes nothing.
+  'even-code': z
+    .string()
+    .refine((value) => value.length % 2 === 0, 'Invalid code: an even length'),
+};
+```
+
+Hand the record to `withValidation`:
+
+```ts
+import { constraintTypeDefs, withValidation } from '@nxgt/graphql-validation';
+import { buildSchema } from 'graphql';
+import { formatSchemas } from './formats';
+
+const schema = withValidation(
+  buildSchema(/* GraphQL */ `
+    ${constraintTypeDefs}
+    input Company {
+      siret: String! @constraint(format: "siret")
+      contact: String @constraint(format: "work-email", maxLength: 64)
+    }
+    type Query { company(input: Company!): String }
+  `),
+  { formats: formatSchemas },
+);
+```
+
+What a format of your own is:
+
+- **A Zod string schema**: `z.string()` or a string format (`z.email()`,
+  `z.uuid()`, …), narrowed with anything that keeps it a string schema
+  (`.regex()`, `.min()`, `.endsWith()`, `.refine()`). Never a `.transform()`,
+  a codec or `.optional()`: the resolver receives what the client sent, and a
+  null or absent value is the field's type's business (`String` or `String!`),
+  not the format's. A non-string schema is a type error, and refused at startup.
+- **Narrowed like a built-in one.** `format` comes first and the other rules
+  narrow it: `@constraint(format: "work-email", maxLength: 64)` is your schema,
+  then at most 64 characters.
+- **Its messages are yours.** A refusal reads as your schema writes it (the
+  package's own messages never name the value; yours may, so keep the input
+  out of them if your logs or clients should not see it). Every issue your
+  schema raises carries `constraint: "format"`, whatever its Zod `code` — a
+  `.regex()` inside your format is the format's refusal, not `pattern`'s:
+
+  ```json
+  { "path": ["input", "siret"], "message": "Invalid SIRET: write its 14 digits", "code": "invalid_format", "constraint": "format" }
+  ```
+
+- **Named in lowercase letters, digits and hyphens**, starting with a letter
+  (`siret`, `work-email`, `iso-6346`). A built-in name (`email`, `uuid`, …)
+  cannot be replaced: it is a type error, and refused at startup.
+- **An async check stays async.** `withValidation` parses asynchronously, so a
+  `.refine(async …)` works in a request; a default value is checked at startup
+  synchronously, so a field whose format is async cannot have a default.
+
+Call `withValidation` once, with every format: wrapping the same schema again
+with other formats throws, since its fields are already checked against the
+first ones. Without `formats`, nothing changes.
+
+`@nxgt/graphql-codegen-zod` does not write your formats yet: a schema that
+uses one fails generation (see the [roadmap](../roadmap.md)).
 
 ## In your IDE
 
