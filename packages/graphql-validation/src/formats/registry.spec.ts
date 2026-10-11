@@ -77,10 +77,35 @@ describe('FormatRegistry', () => {
 		],
 		['a string format with .toLowerCase()', z.email().toLowerCase()],
 		['.check(z.trim())', z.string().check(z.trim())],
+		['.slugify()', z.string().slugify()],
+		['z.url(), which trims', z.url()],
+		['z.httpUrl(), which trims', z.httpUrl()],
+		['z.url({ normalize: true })', z.url({ normalize: true })],
+		['.url() on a string', z.string().max(40).url()],
+		['.check(z.url())', z.string().check(z.url())],
+		// A type error already (its input is unknown); refused at startup too.
+		[
+			'z.coerce.string(), which turns 12345 into "12345"',
+			z.coerce.string() as unknown as z.ZodString,
+		],
 	])('refuses a format that rewrites the value: %s', (_, schema) => {
 		expect(() => new FormatRegistry({ slug: schema })).toThrow(
-			'The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.',
+			'The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.',
 		);
+	});
+
+	test.each([
+		['z.email()', z.email()],
+		['z.uuid()', z.uuid()],
+		['z.iso.datetime()', z.iso.datetime()],
+		['z.ipv6()', z.ipv6()],
+		['z.base64()', z.base64()],
+		['z.jwt()', z.jwt()],
+		['z.hostname()', z.hostname()],
+		['z.e164()', z.e164()],
+		['.lowercase(), which only checks', z.string().lowercase()],
+	])('takes %s, which checks and never rewrites', (_, schema) => {
+		expect(() => new FormatRegistry({ slug: schema })).not.toThrow();
 	});
 
 	test('names every known format, the application ones too, for an unknown one', () => {
@@ -124,6 +149,32 @@ describe("an application format's schema", () => {
 		expect(() => schema.safeParse('ok')).toThrow(
 			'Encountered Promise during synchronous parse',
 		);
+	});
+});
+
+describe('a format that rewrites the value as it runs', () => {
+	const rewriting = z.string().check((ctx) => {
+		ctx.value = ctx.value.trim();
+	});
+	const message =
+		'The format "padded" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().';
+
+	test('throws, naming the format, rather than pass a rewritten value', () => {
+		const schema = new FormatRegistry({ padded: rewriting })
+			.named('padded')
+			.toZod();
+		expect(schema.safeParse('kept').data).toBe('kept');
+		expect(() => schema.safeParse(' trimmed ')).toThrow(message);
+	});
+
+	test('throws from an async check too', async () => {
+		const schema = new FormatRegistry({
+			padded: rewriting.refine(async () => true),
+		})
+			.named('padded')
+			.toZod();
+		expect((await schema.safeParseAsync('kept')).data).toBe('kept');
+		await expect(schema.safeParseAsync(' trimmed ')).rejects.toThrow(message);
 	});
 });
 

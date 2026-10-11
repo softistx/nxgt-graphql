@@ -118,10 +118,13 @@ the option at a compiled `.js` file or a package.
 config: { formatSchemas: '../formats' }
 ```
 
-### `The format "sku" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
+### `The format "sku" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
 
 **When:** running codegen with `formatSchemas` or `zodFormats` naming a
-schema that rewrites the value (`z.string().trim().toUpperCase()`).
+schema that rewrites the value: `z.string().trim().toUpperCase()`, any of
+`.trim()`, `.toLowerCase()`, `.toUpperCase()`, `.normalize()`, `.slugify()`,
+`.overwrite()`, a URL format (`z.url()`, `z.httpUrl()`, `.url()`, which trim
+the value) or `z.coerce.string()` (which turns `12345` into `"12345"`).
 **Why:** the generated client chains the other rules on your schema, so it
 would check the rewritten value while the server checks the one sent: with
 `@constraint(format: "sku", maxLength: 8)`, the server refuses `" sku-1234 "`

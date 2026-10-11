@@ -560,9 +560,12 @@ email: z.email(),
   `graphql-codegen` under Node may not load one, and never reads
   `formats.js` as `formats.ts`), or point the option at JavaScript. A
   format that rewrites the value (`.trim()`, `.toLowerCase()`,
-  `.toUpperCase()`, `.normalize()`, `.overwrite()`) fails generation as it
-  fails `withValidation`: the client would check the rewritten value, the
-  server the one sent.
+  `.toUpperCase()`, `.normalize()`, `.slugify()`, `.overwrite()`, `z.url()`,
+  `z.httpUrl()`, `.url()`, `z.coerce.string()`) fails generation as it fails
+  `withValidation`: the client would check the rewritten value, the server
+  the one sent. A custom `.check()` that sets `ctx.value` shows nothing to
+  check: the server fails the request it rewrites, naming the format, so
+  fix the format rather than trust the client.
 - **The `.js` extension under `nodenext`.** The path is written into the
   generated import as given, so under `moduleResolution` `nodenext` or
   `node16` a relative one needs its extension, as any relative import there:

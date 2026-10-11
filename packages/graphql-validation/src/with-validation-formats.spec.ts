@@ -192,6 +192,36 @@ describe('withValidation with formats of the application', () => {
 				'The format "code" is not a Zod string schema',
 			);
 		});
+
+		test.each([
+			['z.url(), which trims " https://a.com "', z.url()],
+			[
+				'z.coerce.string(), which takes 12345 as "12345"',
+				z.coerce.string() as unknown as z.ZodString,
+			],
+		])('on %s', (_, x) => {
+			const schema = buildSchema(`${constraintTypeDefs}
+				type Query { a(link: String @constraint(format: "x", maxLength: 14)): Int }`);
+			expect(() => withValidation(schema, { formats: { x } })).toThrow(
+				'The format "x" rewrites the value',
+			);
+		});
+	});
+
+	test('fails the operation, naming the format, when a custom check rewrites the value', async () => {
+		const padded = z.string().check((ctx) => {
+			ctx.value = ctx.value.trim();
+		});
+		const { schema, seen } = server({ ...formatSchemas, siret: padded });
+		const result = await graphql({
+			schema,
+			source: '{ company(input: { siret: " 73282932000074 " }) }',
+		});
+		expect(seen).toEqual([]);
+		expect(result.errors?.[0]?.message).toStartWith(
+			'The format "siret" rewrote the value it checked',
+		);
+		expect(result.errors?.[0]?.extensions['code']).toBeUndefined();
 	});
 });
 
@@ -206,6 +236,8 @@ export function typeLevel(schema: ReturnType<typeof buildSchema>) {
 	withValidation(schema, { formats: { age: z.number() } });
 	// @ts-expect-error a transform is no string schema
 	withValidation(schema, { formats: { trim: z.string().transform(Number) } });
+	// @ts-expect-error z.coerce.string() takes unknown, no string schema
+	withValidation(schema, { formats: { code: z.coerce.string() } });
 	const formats = { uuid: z.uuid(), siret: z.string() };
 	// @ts-expect-error a built-in name in a record declared apart, too
 	withValidation(schema, { formats });

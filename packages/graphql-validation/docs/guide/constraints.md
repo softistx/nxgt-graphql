@@ -76,8 +76,12 @@ What `withValidation` does:
 
 ```ts
 import type { GraphQLSchema } from 'graphql';
+import type { FormatSchemas } from '@nxgt/graphql-validation';
 
-declare function withValidation<S extends GraphQLSchema>(schema: S): S;
+declare function withValidation<S extends GraphQLSchema>(
+  schema: S,
+  options?: { formats?: FormatSchemas }, // your own formats, below
+): S;
 declare const constraintTypeDefs: string;
 ```
 
@@ -260,17 +264,32 @@ What a format of your own is:
   a codec or `.optional()`: the resolver receives what the client sent, and a
   null or absent value is the field's type's business (`String` or `String!`),
   not the format's. A non-string schema is a type error, and refused at startup.
-- **It never rewrites the value.** `.trim()`, `.toLowerCase()`,
-  `.toUpperCase()`, `.normalize()` and `.overwrite()` keep a string schema but
-  change the value it passes on, and are refused at startup: the server checks
-  the value as sent, while a client chaining `maxLength` on your schema would
-  check the rewritten one, so the two would disagree on `" AB "`. Refuse what
-  is not canonical instead:
+- **It never rewrites the value.** These keep a string schema but change
+  the value it passes on, and are refused at startup:
+  - `.trim()`, `.toLowerCase()`, `.toUpperCase()`, `.normalize()`,
+    `.slugify()` and `.overwrite()`;
+  - `z.url()`, `z.httpUrl()` and `.url()`, which trim the value and drop its
+    tabs and newlines (`z.url({ normalize: true })` rewrites it whole);
+  - `z.coerce.string()`, which turns `12345` into `"12345"` (a type error
+    too: it takes `unknown`).
+
+  The server checks the value as sent, while a client chaining `maxLength` on
+  your schema would check the rewritten one, so the two would disagree on
+  `" AB "` or `" https://a.com "`. Every other string format (`z.email()`,
+  `z.uuid()`, `z.iso.datetime()`, …) only checks. Refuse what is not
+  canonical instead:
 
   ```ts
   // not z.string().trim().toLowerCase()
   const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug: lowercase words joined by hyphens');
+  // not z.url()
+  const link = z.string().refine((value) => value.trim() === value && URL.canParse(value), 'Invalid URL');
   ```
+
+  A custom `.check()` that sets `ctx.value` shows nothing in its definition,
+  so startup cannot see it: the request it rewrites fails, naming the format
+  (`The format "slug" rewrote the value it checked…`), as a bug in a resolver
+  would, and the resolver is not called.
 
 - **Narrowed like a built-in one.** `format` comes first and the other rules
   narrow it: `@constraint(format: "work-email", maxLength: 64)` is your schema,

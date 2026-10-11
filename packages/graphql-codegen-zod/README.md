@@ -26,7 +26,8 @@ Peers, all **required**:
 | `typescript` | `^6.0.3` |
 
 `@nxgt/graphql-validation` is a dependency; you install it yourself only to
-run `withValidation` on a server.
+run `withValidation` on a server, or to type your formats module with its
+`FormatSchemas` (see [Your own formats](#your-own-formats)).
 
 ## Setup
 
@@ -127,7 +128,8 @@ JavaScript, or TypeScript when codegen runs under Bun or tsx (plain
 `graphql-codegen` under Node is not one: depending on its version it does not
 load a `.ts` module, and it never reads `formats.js` as `formats.ts`). One it cannot load
 fails generation. A format that rewrites the value (`.trim()`,
-`.toLowerCase()`, …) fails it too, as it fails `withValidation`.
+`.toLowerCase()`, `z.url()`, `z.coerce.string()`, …) fails it too, as it
+fails `withValidation`.
 
 The path is written into the generated import as you give it. Under
 `moduleResolution: nodenext` (or `node16`), give it the `.js` extension, as
