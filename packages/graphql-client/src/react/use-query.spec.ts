@@ -1,8 +1,15 @@
 import '../../test/dom';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react/pure';
+import {
+	act,
+	cleanup,
+	render,
+	renderHook,
+	waitFor,
+} from '@testing-library/react/pure';
 import { parse } from 'graphql';
+import { createElement, useEffect, useLayoutEffect } from 'react';
 import { useDom } from '../../test/dom';
 import {
 	BookQuery,
@@ -404,4 +411,80 @@ describe('useQuery with a cache', () => {
 		expect(result.current.data).toBeUndefined();
 		expect(api.received).toHaveLength(0);
 	});
+});
+
+describe('useQuery refetch called by an effect', () => {
+	/** The first answer is `Dune 1`; any later one is `Refetched`. */
+	function counting() {
+		let calls = 0;
+		const api = server(() => ({
+			book: book(++calls === 1 ? 'Dune 1' : 'Refetched', '1'),
+		}));
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			dedupe: false,
+		});
+		return { api, client };
+	}
+
+	for (const strict of [false, true]) {
+		const label = strict ? 'with StrictMode' : 'without StrictMode';
+
+		test(`a child's mount effect refetches the parent's query ${label}`, async () => {
+			const { api, client } = counting();
+			const seen: { title?: string | undefined; settled: Promise<unknown>[] } =
+				{
+					settled: [],
+				};
+			function Child({ refetch }: { refetch: () => Promise<unknown> }) {
+				useEffect(() => {
+					seen.settled.push(refetch().catch(() => {}));
+				}, []);
+				return null;
+			}
+			function Parent() {
+				const { data, refetch } = useQuery(BookQuery, { id: '1' });
+				seen.title = (
+					data as { book: { title: string } } | undefined
+				)?.book.title;
+				return createElement(Child, { refetch });
+			}
+			const wrapper = withClient(client, { strict });
+			render(createElement(Parent), { wrapper });
+			await act(async () => {
+				await Promise.all(seen.settled);
+				await flush();
+			});
+			expect(api.received.some((r) => !r.signal.aborted)).toBe(true);
+			expect(seen.title).toBe('Refetched');
+		});
+
+		test(`a parent's layout effect refetches its own query ${label}`, async () => {
+			const { api, client } = counting();
+			const seen: { title?: string | undefined; settled: Promise<unknown>[] } =
+				{
+					settled: [],
+				};
+			function Parent() {
+				const { data, refetch } = useQuery(BookQuery, { id: '1' });
+				useLayoutEffect(() => {
+					seen.settled.push(refetch().catch(() => {}));
+				}, []);
+				seen.title = (
+					data as { book: { title: string } } | undefined
+				)?.book.title;
+				return null;
+			}
+			render(createElement(Parent), {
+				wrapper: withClient(client, { strict }),
+			});
+			await act(async () => {
+				await Promise.all(seen.settled);
+				await flush();
+			});
+			expect(api.received.some((r) => !r.signal.aborted)).toBe(true);
+			expect(seen.title).toBe('Refetched');
+		});
+	}
 });

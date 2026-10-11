@@ -14,16 +14,18 @@ export interface QueryRequest {
 	/** Each refetch in flight, aborted with the request. */
 	readonly refetches: Set<AbortController>;
 	/**
-	 * Set by the effect, cleared by its cleanup (StrictMode sets it again on
-	 * the same object): a request that is not live sends and records nothing.
+	 * False when the request is created, set by the effect's cleanup and
+	 * cleared when the effect runs (StrictMode runs it again on the same
+	 * object): a disposed request sends and records nothing. A refetch sent
+	 * before the effect runs (a child's mount effect) is not refused.
 	 */
-	live: boolean;
+	disposed: boolean;
 }
 
 export const skipRefetch =
 	'refetch() was called while skip is true: set skip to false to send the query';
 
-const notLive =
+const disposedMessage =
 	'refetch() was called for a query no longer shown: its component unmounted or its variables changed';
 
 /** What the network answered for a request. */
@@ -46,7 +48,7 @@ export function startQuery(
 	request: QueryRequest,
 	setState: SetQueryState,
 ): () => void {
-	request.live = true;
+	request.disposed = false;
 	const controller = new AbortController();
 	if (!request.skip) {
 		const { signal } = controller;
@@ -54,7 +56,7 @@ export function startQuery(
 		settle(request, call, signal, setState).catch(() => {});
 	}
 	return () => {
-		request.live = false;
+		request.disposed = true;
 		controller.abort();
 		for (const refetch of request.refetches) refetch.abort();
 		request.refetches.clear();
@@ -64,7 +66,7 @@ export function startQuery(
 /**
  * The request again, from the network: `no-cache` stays `no-cache`, any
  * other policy is `network-only`. It rejects as `client.query` does. On a
- * request that is not live (a `refetch` kept from an earlier render), it
+ * request that is disposed (a `refetch` kept from an earlier render), it
  * rejects at once with an `AbortError`; while `skip` is true, with an `Error`:
  * both send and set nothing.
  */
@@ -72,8 +74,8 @@ export function refetchQuery(
 	request: QueryRequest,
 	setState: SetQueryState,
 ): Promise<unknown> {
-	if (!request.live)
-		return Promise.reject(new DOMException(notLive, 'AbortError'));
+	if (request.disposed)
+		return Promise.reject(new DOMException(disposedMessage, 'AbortError'));
 	if (request.skip) return Promise.reject(new Error(skipRefetch));
 	const controller = new AbortController();
 	request.refetches.add(controller);
@@ -109,8 +111,8 @@ function queryOnce(
 }
 
 /**
- * The answer recorded, unless the call was aborted or the request is no longer
- * live; the promise settles as the call did.
+ * The answer recorded, unless the call was aborted or the request is not
+ * disposed; the promise settles as the call did.
  */
 async function settle(
 	request: QueryRequest,
@@ -120,11 +122,11 @@ async function settle(
 ): Promise<unknown> {
 	try {
 		const data = await call;
-		if (!signal.aborted && request.live)
+		if (!signal.aborted && !request.disposed)
 			setState({ request, data, error: undefined, loading: false });
 		return data;
 	} catch (error) {
-		if (!signal.aborted && request.live)
+		if (!signal.aborted && !request.disposed)
 			setState((state) => ({
 				...stateFor(state, request),
 				error,

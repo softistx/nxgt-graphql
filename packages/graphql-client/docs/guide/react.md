@@ -137,11 +137,13 @@ does, and records the error too: catch it, or the rejection is unhandled.
 - **A refetch in flight is aborted** on unmount and when the variables (or
   `skip`, `fetchPolicy`, `headers`) change, like the hook's own request; it
   then rejects with the signal's reason, and records nothing.
-- **A `refetch` kept from an earlier render does nothing.** Each `refetch`
-  belongs to one set of variables. Once they changed, or the component
-  unmounted, calling it rejects at once with a `DOMException` named
+- **A `refetch` is refused only once its query is no longer shown.** Each
+  `refetch` belongs to one set of variables. Once they changed, or the
+  component unmounted, calling it rejects at once with a `DOMException` named
   `AbortError`, sends nothing and changes nothing shown: an old callback
-  (a timer, a closure) cannot overwrite the current variables' data.
+  (a timer, a closure) cannot overwrite the current variables' data. Before
+  that, it works at any time, including from a child's mount effect or a
+  `useLayoutEffect`, which run before the hook's own effect.
 - **While `skip` is `true`, `refetch()` rejects at once** with
   [`refetch() was called while skip is true: set skip to false to send the query`](../troubleshooting.md#refetch-was-called-while-skip-is-true-set-skip-to-false-to-send-the-query)
   and sends nothing: `skip` means no request. Set `skip` to `false` instead.

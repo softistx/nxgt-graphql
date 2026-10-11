@@ -70,7 +70,7 @@ export function useQuery<TResult, TVariables>(
 			fetchPolicy,
 			headers,
 			refetches: new Set(),
-			live: false,
+			disposed: false,
 		}),
 		[client, document, variables, skip, fetchPolicy, headers],
 	);

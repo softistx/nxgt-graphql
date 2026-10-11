@@ -615,8 +615,8 @@ packages/graphql-client/src/
                         headersKey
     watched.ts          useWatched: a cache read and its watch through useSyncExternalStore,
                         the snapshot the object the watch last delivered
-    query-run.ts        startQuery (the effect: mark the request live, run; the cleanup clears
-                        the mark and aborts), refetchQuery, stateFor: plain functions over one
+    query-run.ts        startQuery (the effect: clear `disposed`, run; the cleanup sets it
+                        and aborts), refetchQuery, stateFor: plain functions over one
                         QueryRequest
     use-query.ts        useQuery: the QueryRequest memoized by value, the cache read, the state
     use-mutation.ts     useMutation: the last call recorded, nothing after unmount or reset
@@ -772,12 +772,17 @@ packages/graphql-client/test/
   unmount, new variables, and StrictMode's second effect leave no request
   behind; the specs assert on the signal `fetch` received. An abort is never
   recorded as `error`, and nothing is recorded after a cleanup.
-- **A stale `refetch` changes nothing.** Each `QueryRequest` carries `live`,
-  set by its effect (again on the same object under StrictMode) and cleared
-  by the cleanup. `refetchQuery` on a request that is not live rejects at once
+- **A stale `refetch` changes nothing.** Each `QueryRequest` carries
+  `disposed`, `false` when the request is created, set by the effect's
+  cleanup and cleared when the effect runs (StrictMode, on the same object),
+  as in `useMutation`. `refetchQuery` on a disposed request rejects at once
   with a `DOMException` `AbortError`, sends nothing and sets nothing; `settle`
-  records only while its request is live. So a `refetch` kept past new
-  variables or an unmount cannot overwrite what the current request shows.
+  records only while the request is not disposed. A refetch is refused only
+  once its query is no longer shown (unmounted or variables changed), so a
+  child's mount effect or a `useLayoutEffect` may call it before the hook's
+  effect runs: it is in `request.refetches`, and the cleanup aborts it. A
+  `refetch` kept past new variables or an unmount cannot overwrite what the
+  current request shows.
 - **`refetch()` while `skip` is true rejects at once** with an `Error`
   (`skipRefetch`, a troubleshooting entry headed by it) and sends nothing:
   `skip` means no request.
