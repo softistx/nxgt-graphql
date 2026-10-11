@@ -14,7 +14,7 @@ export const zSignUpInput = z.strictObject({
 	get person() {
 		return zPersonInput;
 	},
-	tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).check(z.maxLength(2)).nullish(),
+	tags: z.union([z.array(z.custom<string>()), z.custom<string>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(z.string()).max(2)).nullish(),
 	birth: dateTimeSchema.nullish(),
 });
 export type SignUpInput = z.output<typeof zSignUpInput>;

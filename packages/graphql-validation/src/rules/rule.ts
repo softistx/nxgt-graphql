@@ -61,14 +61,6 @@ export interface Rule<
 		context: RuleContext,
 	) => string;
 	/**
-	 * A `list` rule's narrowing as a Zod check (`z.maxLength(2)`), which holds
-	 * on any schema whose value is an array — not only a `z.array`, such as a
-	 * union that also takes a single value. Every `list` rule has one: a code
-	 * generator checks the list's size once its value is the array, so the
-	 * issue is the same whatever shape the client sent.
-	 */
-	readonly toCheckCode?: (value: ValueOf[T]) => string;
-	/**
 	 * Whether a Zod issue is this rule's refusal, so the error a client gets
 	 * names the rule (`constraint: 'minLength'`), which does not change with
 	 * Zod's own issue codes.

@@ -11,7 +11,6 @@ interface AnyRule {
 	readonly target: Target;
 	readonly toZod: (schema: never, value: never, context: never) => z.ZodType;
 	readonly toCode: (schema: string, value: never, context: never) => string;
-	readonly toCheckCode?: (value: never) => string;
 	readonly owns: (issue: IssueFields) => boolean;
 }
 
@@ -93,24 +92,6 @@ export function ruleCases(
 			cases,
 			rule,
 		);
-		if (rule.target !== 'list') return;
-		// A list rule also as a check, on a union that takes a single value:
-		// how a code generator writes the list's size.
-		const check = rule.toCheckCode as
-			| ((value: string | number) => string)
-			| undefined;
-		test('has a check form', () => expect(check).toBeFunction());
-		if (!check) return;
-		describe('as a check on a union', () => {
-			agree(
-				apply(base, value, context),
-				evaluate(
-					`z.union([${baseCode}, z.string().transform((value) => [value])]).check(${check(value)})`,
-				),
-				cases,
-				rule,
-			);
-		});
 	});
 }
 

@@ -145,6 +145,11 @@ for that.
 `minItems` and `maxItems` apply to the list; every other rule applies to its
 items. A nullable argument also accepts `null` and absence.
 
+A list longer than `maxItems` is refused with its size alone from zod 4.6.6
+on: Zod stops an oversized array before its items (its `capSize`), so the
+error has one `too_big` issue at the list's path and none for its items.
+With zod 4.6.5, the items' issues come first, then the `too_big`.
+
 ```graphql
 type Query {
   # at least one tag, at most 5; each tag 1 to 20 characters

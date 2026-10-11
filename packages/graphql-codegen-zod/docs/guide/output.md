@@ -220,7 +220,7 @@ type Query { users(first: Int = 10 @constraint(min: 1, max: 50)): [String!]! }
 ```ts
 export const zSignUpInput = z.strictObject({
 	role: zRole.prefault("USER").nullable(),
-	tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).check(z.minLength(1)).prefault(["new"]).nullable(),
+	tags: z.union([z.array(z.custom<string>()), z.custom<string>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(z.string()).min(1)).prefault(["new"]).nullable(),
 });
 export const zQueryUsersArgs = z.object({
 	first: z.int32().lte(50).gte(1).prefault(10).nullable(),
@@ -299,7 +299,7 @@ export type FilterInput = {
 /** A filter that nests. */
 export const zFilter: z.ZodType<Filter, FilterInput> = z.strictObject({
 	get and() {
-		return z.union([z.array(zFilter), z.custom<z.input<typeof zFilter>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zFilter))]).check(z.maxLength(3)).nullish();
+		return z.union([z.array(z.custom<z.input<typeof zFilter>>()), z.custom<z.input<typeof zFilter>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(zFilter).max(3)).nullish();
 	},
 	name: z.string().startsWith("n").nullish(),
 });
@@ -374,10 +374,13 @@ export type UsersQueryVariables = z.input<typeof zUsersQueryVariables>;
 
 **Coercions.** A list also takes a single value, as `graphql` does, whatever
 its items and at any depth (`"a"` for `[[String]]` is `[["a"]]`): the value
-is wrapped, then checked as the list. From `Prefs.tags`:
+is wrapped, then checked as the list. The union only gives the value its
+shape, parsing nothing; the list's own schema, the one `withValidation`
+builds on the server, comes after it in `.pipe(...)` and parses the items
+once. From `Prefs.tags`:
 
 ```ts
-tags: z.union([z.array(z.string()), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string()))]).nullish(),
+tags: z.union([z.array(z.custom<string>()), z.custom<string>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(z.string())).nullish(),
 ```
 
 `zPrefs.parse({ tags: "ok" })` gives `{ tags: ["ok"] }`, what the resolver
@@ -386,24 +389,24 @@ receives. A rule refuses a single value as the server does, at the same path:
 `tags: "toolongtag"` fails at `["input", "tags", 0]` with the server's
 message.
 
-The list's own size (`minItems`, `maxItems`) is checked on the union, once
-its value is the array: `.check(z.maxLength(2))`, never `.max(2)` inside
-an option. A list too long is then `too_big` on the array, at the list's
-path, as the server says it, with zod 4.6.5 as with 4.6.6, which stops an
-oversized array before its items and would leave the union nothing to
-report but `invalid_union`.
+A list too long is refused by that same schema, so the client says what the
+server says under any zod: `too_big` at the list's path, after its items'
+issues with zod 4.6.5, alone with zod 4.6.6 and later, which stops an
+oversized array before its items. No size check sits inside the union: an
+option that fails it is aborted from zod 4.6.6, and the union would report
+`invalid_union` instead of the list too long.
 
 A custom scalar's schema may decode (`DateTime`, a string to a `Date`), and
 an input object's holds such scalars. For both, the single value reaches the
 list's schema as it was sent, and is parsed once:
 
 ```ts
-dates: z.union([z.array(scalarSchemas.DateTime), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(scalarSchemas.DateTime))]).nullish(),
+dates: z.union([z.array(z.custom<z.input<typeof scalarSchemas.DateTime>>()), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(scalarSchemas.DateTime)).nullish(),
 ```
 
 ```ts
 get contacts() {
-	return z.union([z.array(zContact), z.custom<z.input<typeof zContact>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zContact))]).check(z.maxLength(2)).nullish();
+	return z.union([z.array(z.custom<z.input<typeof zContact>>()), z.custom<z.input<typeof zContact>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(zContact).max(2)).nullish();
 },
 ```
 
@@ -544,7 +547,7 @@ import { skuSchema } from "../sku";
 
 handle: formatSchemas.slug.max(40),
 country: formatSchemas["country-code"].nullish(),
-skus: z.union([z.array(skuSchema), /* a single value, wrapped */]).check(z.maxLength(2)).nullish(),
+skus: z.union([/* a list, or a single value wrapped */]).pipe(z.array(skuSchema).max(2)).nullish(),
 email: z.email(),
 ```
 

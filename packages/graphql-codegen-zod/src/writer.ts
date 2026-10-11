@@ -13,8 +13,8 @@ import {
 	getNamedType,
 	isEnumType,
 	isInputObjectType,
+	isListType,
 	isNonNullType,
-	isScalarType,
 	isSpecifiedScalarType,
 } from 'graphql';
 import { parsedDefault } from './defaults';
@@ -134,34 +134,56 @@ export class Writer {
 
 /**
  * A list that also takes a single value, as graphql coerces it (`"a"` for
- * `[String]` is `["a"]`, for `[[String]]` `[["a"]]`): the value is wrapped,
- * then checked as the list, so a rule refuses it with the message, and at
- * the path, the server gives. An input object's or a custom scalar's schema
- * may transform (a codec decodes): its single value goes to the pipe as it
- * was sent, and is parsed once there. Never `null`: a nullable list says
- * so with its own `.nullish()`, and graphql never wraps a null.
+ * `[String]` is `["a"]`, for `[[String]]` `[["a"]]`). The union only gives
+ * the value its shape, parsing nothing: a list as it was sent, a single
+ * value wrapped. Then it is piped into `code`, the list's own schema with
+ * every rule, the server's: its items are parsed once, there, and a rule
+ * refuses with the message, and at the path, the server gives (`[0]` for
+ * a single value). Never `null`: a nullable list says so with its own
+ * `.nullish()`, and graphql never wraps a null.
  *
- * The list's size (`minItems`, `maxItems`) is checked on the union, once
- * its value is the array, never inside an option: an option that fails it
- * is aborted from zod 4.6.6 on (an oversized array stops before its items),
- * and a union with no option left to blame reports `invalid_union`, not
- * the list too long.
+ * Nothing that can fail sits inside an option: zod 4.6.6 aborts an
+ * oversized array before its items, and a union with every option aborted
+ * reports `invalid_union`, not the list too long. `code` after the union
+ * checks size and items as the server's array does, under any zod.
  */
 const singleOrList: NonNullable<InputCodeOptions['list']> = ({
 	type,
-	array,
-	checks,
+	code,
 	single,
 }) => {
-	const named = getNamedType(type);
-	const transforms =
-		isInputObjectType(named) ||
-		(isScalarType(named) && !isSpecifiedScalarType(named));
-	const first = transforms
-		? `z.custom<z.input<typeof ${single}>>((value) => value != null && !Array.isArray(value))`
-		: single;
-	// `unknown[]`: the pipe needs what it hands on to fit what the list
-	// takes, nullable items too.
-	const sized = checks.length ? `.check(${checks.join(', ')})` : '';
-	return `z.union([${array}, ${first}.transform((value): unknown[] => [value]).pipe(${array})])${sized}`;
+	const one = singleInput(getNamedType(type), single);
+	return `z.union([z.array(z.custom<${itemInput(type.ofType, one)}>()), z.custom<${one}>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(${code})`;
 };
+
+/** What a client may send for one value of a list's named type, as a type. */
+function singleInput(named: GraphQLNamedInputType, single: string): string {
+	if (isSpecifiedScalarType(named))
+		return BUILT_IN_INPUTS[named.name] ?? 'string';
+	return `z.input<typeof ${single}>`;
+}
+
+/** The built-in scalars' input types, as `baseCode` parses them. */
+const BUILT_IN_INPUTS: Readonly<Record<string, string>> = {
+	String: 'string',
+	ID: 'string',
+	Int: 'number',
+	Float: 'number',
+	Boolean: 'boolean',
+};
+
+/**
+ * What a client may send for one item of a list, as a type: what its
+ * schema's `z.input` is, so the union types the list as `code` would.
+ */
+function itemInput(type: GraphQLInputType, one: string): string {
+	if (isNonNullType(type)) return requiredInput(type.ofType, one);
+	return `${requiredInput(type, one)} | null | undefined`;
+}
+
+function requiredInput(type: GraphQLInputType, one: string): string {
+	if (isNonNullType(type)) return requiredInput(type.ofType, one);
+	// An inner list takes a single value too.
+	if (isListType(type)) return `Array<${itemInput(type.ofType, one)}> | ${one}`;
+	return one;
+}
