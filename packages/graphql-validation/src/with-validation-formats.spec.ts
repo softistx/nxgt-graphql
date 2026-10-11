@@ -43,6 +43,24 @@ interface Issue {
 	message: string;
 }
 
+/**
+ * The unhandled rejections while `run` runs and settles. Bun fails the
+ * running test on one before this listener sees it; under Node the listener
+ * is what records it. Either way the test fails.
+ */
+async function noUnhandledRejection(run: () => unknown): Promise<unknown[]> {
+	const rejections: unknown[] = [];
+	const record = (reason: unknown) => rejections.push(reason);
+	process.on('unhandledRejection', record);
+	try {
+		await run();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	} finally {
+		process.off('unhandledRejection', record);
+	}
+	return rejections;
+}
+
 const issuesOf = (result: Awaited<ReturnType<typeof graphql>>) =>
 	result.errors?.[0]?.extensions['issues'] as Issue[] | undefined;
 
@@ -222,6 +240,77 @@ describe('withValidation with formats of the application', () => {
 			'The format "siret" rewrote the value it checked',
 		);
 		expect(result.errors?.[0]?.extensions['code']).toBeUndefined();
+	});
+
+	describe('an async format on a field with a default value', () => {
+		const sdl = `${constraintTypeDefs}
+			type Query { a(s: String = " x " @constraint(format: "free")): Int }`;
+		const message =
+			'The default value of Query.a(s:) cannot be checked at startup: the format "free" checks asynchronously, and a default value is checked synchronously. Drop the default, or move the async check out of the format into validated().';
+
+		test('fails at startup, naming the field and the format', () => {
+			const free = z.string().refine(async () => true);
+			expect(() =>
+				withValidation(buildSchema(sdl), { formats: { free } }),
+			).toThrow(message);
+		});
+
+		test.each([
+			[
+				'the format also rewrites the value',
+				z
+					.string()
+					.check((ctx) => {
+						ctx.value = ctx.value.trim();
+					})
+					.refine(async () => true),
+			],
+			[
+				'its async check rejects',
+				z.string().refine(async () => {
+					throw new Error('db down');
+				}),
+			],
+		])('leaves no unhandled rejection when %s', async (_, free) => {
+			await expect(
+				noUnhandledRejection(() =>
+					expect(() =>
+						withValidation(buildSchema(sdl), { formats: { free } }),
+					).toThrow(message),
+				),
+			).resolves.toEqual([]);
+		});
+	});
+
+	describe('an async format in a request', () => {
+		test('runs its check once per value', async () => {
+			let calls = 0;
+			const free = z.string().refine(async (value) => {
+				calls++;
+				return value !== 'taken';
+			});
+			const { schema } = server({ ...formatSchemas, siret: free });
+			await graphql({ schema, source: '{ company(input: { siret: "a" }) }' });
+			expect(calls).toBe(1);
+		});
+
+		test('fails the operation with the error its check rejects with, and nothing unhandled', async () => {
+			const down = z.string().refine(async () => {
+				throw new Error('db down');
+			});
+			const { schema, seen } = server({ ...formatSchemas, siret: down });
+			let result: Awaited<ReturnType<typeof graphql>> | undefined;
+			await expect(
+				noUnhandledRejection(async () => {
+					result = await graphql({
+						schema,
+						source: '{ company(input: { siret: "a" }) }',
+					});
+				}),
+			).resolves.toEqual([]);
+			expect(seen).toEqual([]);
+			expect(result?.errors?.[0]?.message).toBe('db down');
+		});
 	});
 });
 

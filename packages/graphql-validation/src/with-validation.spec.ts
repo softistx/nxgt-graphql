@@ -334,3 +334,25 @@ describe('withValidation', () => {
 		});
 	});
 });
+
+// The one documented exception to "the resolver receives what was sent"
+// (owner): z.url() trims, and the generated client runs the same schema.
+describe('the built-in uri format', () => {
+	const site = () => {
+		const schema = buildSchema(`${constraintTypeDefs}
+			type Query { site(url: String @constraint(format: "uri", maxLength: 13)): String }`);
+		(
+			(schema.getQueryType() as GraphQLObjectType).getFields()['site'] as {
+				resolve?: unknown;
+			}
+		).resolve = (_: unknown, { url }: { url: string }) => url;
+		return withValidation(schema);
+	};
+
+	test('hands the resolver the URL trimmed, and counts maxLength on it', async () => {
+		// " https://a.com " is 15 characters, "https://a.com" 13.
+		expect(await run(site(), '{ site(url: " https://a.com ") }')).toEqual({
+			data: { site: 'https://a.com' },
+		});
+	});
+});

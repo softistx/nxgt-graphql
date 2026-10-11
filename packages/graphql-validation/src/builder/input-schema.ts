@@ -112,7 +112,17 @@ export class InputSchemas {
 			// object's own field defaults. One graphql refuses is its to report.
 			const value = valueFromAST(literal, type);
 			if (value === undefined) continue;
-			const result = schema.safeParse(value);
+			let result: z.ZodSafeParseResult<unknown>;
+			try {
+				result = schema.safeParse(value);
+			} catch (error) {
+				// Thrown by this zod: only the formats' wrapper, ours, goes async.
+				if (!(error instanceof z.core.$ZodAsyncError)) throw error;
+				const format = this.#context.formats.takeAsync();
+				throw new Error(
+					`The default value of ${where} cannot be checked at startup: ${format ? `the format "${format}"` : 'its format'} checks asynchronously, and a default value is checked synchronously. Drop the default, or move the async check out of the format into validated().`,
+				);
+			}
 			if (!result.success) {
 				throw new Error(
 					`The default value of ${where} breaks its @constraint: ${result.error.issues[0]?.message}`,

@@ -31,6 +31,7 @@ const NAME = /^[a-z][a-z0-9-]*$/;
  */
 export class FormatRegistry {
 	readonly #formats = new Map<string, Format>();
+	#async: string | undefined;
 
 	/**
 	 * Fails, naming the format, on a bad name, a built-in's name, a schema
@@ -60,7 +61,9 @@ export class FormatRegistry {
 					`The format "${name}" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`,
 				);
 			}
-			const own = marked(name, schema);
+			const own = marked(name, schema, () => {
+				this.#async = name;
+			});
 			this.#formats.set(name, { name, toZod: () => own });
 		}
 	}
@@ -72,6 +75,18 @@ export class FormatRegistry {
 		throw new Error(
 			`Unknown @constraint format "${name}". Known formats: ${[...this.#formats.keys()].join(', ')}.`,
 		);
+	}
+
+	/**
+	 * The format of the application that last went async, then forgotten: read
+	 * right after a synchronous parse threw zod's `$ZodAsyncError`, it names the
+	 * format that made it throw (zod stops at the first check that returns a
+	 * promise, and only an application's format can).
+	 */
+	takeAsync(): string | undefined {
+		const name = this.#async;
+		this.#async = undefined;
+		return name;
 	}
 }
 
@@ -125,19 +140,34 @@ function definition(value: unknown): Definition | undefined {
  * format's: a `.regex()` inside it is the format's refusal, not `pattern`'s.
  * The value is checked, never changed: a schema that still returns another
  * value (a custom `.check()` setting `payload.value`, which `rewrites`
- * cannot see) throws, naming the format, as a resolver's bug would. An
- * async check stays async: a synchronous parse throws as the schema itself
- * would.
+ * cannot see) throws, naming the format, as a resolver's bug would.
+ *
+ * The schema runs once per value, through its own `_zod.run` (what its
+ * `safeParse` and `safeParseAsync` call) with `async: true`: a schema whose
+ * checks are all synchronous returns its result at once, one with an async
+ * check returns a promise, whatever zod copy it comes from. Nothing is
+ * started and dropped, as a synchronous `safeParse` would drop the promise of
+ * an async refine before running it again. That promise, returned to the
+ * enclosing parse, gets a handler too: a synchronous parse (a default
+ * value's check) throws zod's async error and drops it, and its rejection
+ * must not surface as an unhandled one. `onAsync` is told before it is
+ * returned.
  */
-function marked(name: string, schema: StringSchema): StringSchema {
+function marked(
+	name: string,
+	schema: StringSchema,
+	onAsync: () => void,
+): StringSchema {
 	return z.string().superRefine((value, ctx) => {
-		const raise = (result: z.ZodSafeParseResult<string>) => {
-			if (result.success && result.data !== value) {
+		const raise = (result: z.core.ParsePayload<unknown>) => {
+			if (result.issues.length === 0 && result.value !== value) {
 				throw new Error(
 					`The format "${name}" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().`,
 				);
 			}
-			for (const issue of result.error?.issues ?? []) {
+			for (const raw of result.issues) {
+				// Finalised as the schema's own parse would: its message settled.
+				const issue = z.core.util.finalizeIssue(raw, RUN, z.core.config());
 				const params = 'params' in issue ? issue.params : undefined;
 				ctx.addIssue({
 					...issue,
@@ -145,17 +175,20 @@ function marked(name: string, schema: StringSchema): StringSchema {
 				} as Parameters<typeof ctx.addIssue>[0]);
 			}
 		};
-		let result: z.ZodSafeParseResult<string>;
-		try {
-			result = schema.safeParse(value);
-		} catch (error) {
-			if (!(error instanceof z.core.$ZodAsyncError)) throw error;
-			return schema.safeParseAsync(value).then(raise);
+		const result = schema._zod.run({ value, issues: [] }, RUN);
+		if (!(result instanceof Promise)) {
+			raise(result);
+			return undefined;
 		}
-		raise(result);
-		return undefined;
+		const pending = result.then(raise);
+		pending.catch(() => {});
+		onAsync();
+		return pending;
 	});
 }
+
+/** How a format runs: async allowed, so an async check is never dropped. */
+const RUN: z.core.ParseContextInternal = { async: true };
 
 const builtInRegistry = new FormatRegistry();
 const registries = new WeakMap<FormatSchemas, FormatRegistry>();

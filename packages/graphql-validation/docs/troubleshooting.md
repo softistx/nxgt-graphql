@@ -312,11 +312,11 @@ defaults.
 type Query { a(name: String = "xy" @constraint(minLength: 2)): Int }
 ```
 
-### `Encountered Promise during synchronous parse. Use .parseAsync() instead.`
+### `The default value of Query.a(s:) cannot be checked at startup: the format "free" checks asynchronously, and a default value is checked synchronously. Drop the default, or move the async check out of the format into validated().`
 
-**When:** calling `withValidation`, on an argument or input field with a
-default value whose format is one of yours with an async check
-(`.refine(async …)`).
+**When:** calling `withValidation` (or `checkConstraints`), on an argument or
+input field with a default value whose format is one of yours with an async
+check (`.refine(async …)`), from this package's zod or another copy.
 **Why:** a default value is checked at startup, synchronously; Zod refuses
 to run an async check there. In a request, the arguments are parsed
 asynchronously and the check works.
