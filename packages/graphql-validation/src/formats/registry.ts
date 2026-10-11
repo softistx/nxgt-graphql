@@ -58,7 +58,7 @@ export class FormatRegistry {
 			}
 			if (!runnable(schema)) {
 				throw new Error(
-					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no safeParse, safeParseAsync or refine, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
+					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no safeParseAsync, check, refine or catch, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
 				);
 			}
 			if (rewrites(schema)) {
@@ -66,13 +66,11 @@ export class FormatRegistry {
 					`The format "${name}" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`,
 				);
 			}
-			const own = marked(name, schema, {
-				async: checksAsync(schema),
-				onAsync: () => {
-					this.#async = name;
-				},
+			const narrowed = marked(name, schema, () => {
+				this.#async = name;
 			});
-			this.#formats.set(name, { name, toZod: () => own });
+			const own = narrowed((schema) => schema);
+			this.#formats.set(name, { name, toZod: () => own, narrowed });
 		}
 	}
 
@@ -114,22 +112,8 @@ function isStringSchema(value: unknown): value is StringSchema {
  */
 function runnable(schema: StringSchema): boolean {
 	const api = schema as unknown as Record<string, unknown>;
-	return ['safeParse', 'safeParseAsync', 'refine'].every(
+	return ['safeParseAsync', 'check', 'refine', 'catch'].every(
 		(method) => typeof api[method] === 'function',
-	);
-}
-
-/**
- * Whether the definition shows an async check: an `async` function in a
- * `.refine()`. A hint only, read once at startup: an async `.superRefine()`
- * or a function that returns a promise without being `async` is learnt from
- * the first value instead (`marked`).
- */
-function checksAsync(schema: StringSchema): boolean {
-	return (definition(schema)?.checks ?? []).some(
-		(check) =>
-			(definition(check)?.fn as { constructor?: { name?: unknown } } | null)
-				?.constructor?.name === 'AsyncFunction',
 	);
 }
 
@@ -161,7 +145,6 @@ type Definition = {
 	coerce?: unknown;
 	format?: unknown;
 	check?: unknown;
-	fn?: unknown;
 	checks?: readonly unknown[];
 };
 

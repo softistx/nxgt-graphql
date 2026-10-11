@@ -302,10 +302,9 @@ What a format of your own is:
   then at most 64 characters. A check of yours with `abort: true`
   (`.refine(…, { message, abort: true })`) stops the rules after it, on the
   server as in a generated client: only its issue is returned. Once an async
-  check of your format is pending, the rules have already run on the server:
-  their issues come first (the error's message is then a rule's, not your
-  format's) and the abort stops nothing. Put an aborting check before any
-  async one.
+  check of your format is pending, a client has already run the rules, so
+  the abort stops nothing on either side; the server lists your format's
+  issues first. Put an aborting check before any async one.
 - **Its messages are yours.** A refusal reads as your schema writes it (the
   package's own messages never name the value; yours may, so keep the input
   out of them if your logs or clients should not see it). Every issue your
@@ -319,29 +318,30 @@ What a format of your own is:
 - **Named in lowercase letters, digits and hyphens**, starting with a letter
   (`siret`, `work-email`, `iso-6346`). A built-in name (`email`, `uuid`, …)
   cannot be replaced: it is a type error, and refused at startup.
-- **An async check stays async.** `withValidation` parses asynchronously, so a
-  `.refine(async …)` works in a request, from this package's zod or another
-  copy. It runs once per value, and when it rejects (`db down`) the operation
-  fails with that error, as a resolver's would. An async check the schema's
-  definition does not show — an async `.superRefine()`, or a `.refine()`
-  whose function returns a promise without being `async` — is learnt from the
-  first value: for that one value it runs twice (Zod tries a synchronous parse
-  first, as its own Standard Schema `validate` does), and if that first,
-  dropped run rejects, the rejection is unhandled, which ends a Node process
-  by default. Write the check as `.refine(async (value) => …)`, compiled
-  for ES2017 or later, and it runs once from the first value. A default
-  value is checked at startup synchronously, so a field whose format is async cannot have a
+- **An async check stays async, and runs once.** `withValidation` parses
+  asynchronously, so a `.refine(async …)` (or an async `.superRefine()`, or
+  any check returning a promise) works in a request, from this package's zod
+  or another copy. It runs once per value, from the first, and when it
+  rejects (`db down`) the operation fails with that error, as a resolver's
+  would: no rejection is left unhandled. A default value is checked at
+  startup synchronously, so a field whose format is async cannot have a
   default: startup throws `The default value of Query.a(s:) cannot be checked
-  at startup: the format "free" checks asynchronously, …`.
+  at startup: the format "free" checks asynchronously, …`. A check that
+  throws on the default value reads the same, since its error ends a run
+  startup cannot wait for.
 
-- **Only Zod's public API runs it.** Your format is parsed with `safeParse`
-  and `safeParseAsync`, an abort is read from two `.refine()`s chained after
-  your checks, and its issues are the ones `safeParse` returns: no Zod
-  internal is called, so a Zod 4 release that changes its internals changes
-  nothing here, and a format from another copy of Zod (another version
-  included) gets its messages from that copy's configuration
-  (`z.config()`). Startup still reads the schema's definition (`_zod.def`,
-  Zod's introspection) to refuse what rewrites the value.
+- **Only Zod's public API runs it.** Your format is parsed with
+  `safeParseAsync` only, never a synchronous `safeParse` that would start an
+  async check and drop it; a `.catch()` and `.refine()`s chained after your
+  checks tell whether the run finished at once and which abort stopped it,
+  and the rules after it run inside it, replayed on its issues as Zod runs
+  them when chained on your schema. No Zod internal is called, so a Zod 4
+  release that changes its internals changes nothing here, and a format
+  from another copy of Zod (another version included) gets its messages
+  from that copy's configuration (`z.config()`). Startup still reads the
+  schema's definition (`_zod.def`, Zod's introspection) to refuse what
+  rewrites the value. The cost, measured on Bun 1.4.2 against 0.3.0: about
+  0.1 µs more per accepted value and 1.5 µs more per refused one.
 
 Call `withValidation` once, with every format. A second call on the same
 schema wraps nothing when its record has the same names, each the very same

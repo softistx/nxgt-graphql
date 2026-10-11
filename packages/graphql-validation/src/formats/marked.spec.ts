@@ -1,6 +1,7 @@
 // A format runs through zod's public API only: these specs run the format
 // matrix (sync, async, abort, rewriting, a default value) with zod's
-// internals gone or changed, as a later zod 4 release may change them.
+// internals gone or changed, as a later zod 4 release may change them, and
+// never leaves a promise unhandled.
 import { describe, expect, test } from 'bun:test';
 import { buildSchema, type GraphQLObjectType, graphql } from 'graphql';
 import { z } from 'zod';
@@ -223,31 +224,59 @@ for (const [label, wrap] of internals) {
 	});
 }
 
-describe('an async check the definition does not show', () => {
-	// An async .superRefine(): its definition holds zod's wrapper, no async
-	// function, so the format learns it from the first value. So would a
-	// function a low TypeScript target compiles to a generator.
-	const counted = () => {
+describe('an async check its definition does not show', () => {
+	// An async .superRefine(), or a function returning a promise without being
+	// async: nothing at startup says it is async.
+	const counted = (reject = false) => {
 		const calls = { n: 0 };
 		const f = z.string().superRefine(async (value, ctx) => {
 			calls.n++;
+			if (reject) throw new Error('db down');
 			if (value === 'bad') ctx.addIssue({ code: 'custom', message: 'taken' });
 		});
 		return { f, calls };
 	};
 
-	test('runs twice for the first value, then once per value', async () => {
+	test('runs once per value, from the first', async () => {
 		const { f, calls } = counted();
 		const { ask } = server(f);
 		expect((await ask('ok')).result).toEqual({ data: { a: 'ok' } });
-		expect(calls.n).toBe(2);
+		expect(calls.n).toBe(1);
 		expect((await ask('bad')).issues).toEqual([
 			{ path: ['s'], code: 'custom', constraint: 'format', message: 'taken' },
 		]);
-		expect(calls.n).toBe(3);
+		expect(calls.n).toBe(2);
 	});
 
-	test('is told apart from a check that throws, which fails the operation, run once', async () => {
+	test('fails the operation cleanly when it rejects on the first value, nothing unhandled', async () => {
+		const { f, calls } = counted(true);
+		const { ask, seen } = server(f);
+		let message: string | undefined;
+		await expect(
+			noUnhandledRejection(async () => {
+				message = (await ask('a')).result.errors?.[0]?.message;
+			}),
+		).resolves.toEqual([]);
+		expect(message).toBe('db down');
+		expect(calls.n).toBe(1);
+		expect(seen).toEqual([]);
+	});
+
+	test('fails startup on a default value, once, nothing unhandled', async () => {
+		const { f, calls } = counted(true);
+		await expect(
+			noUnhandledRejection(() =>
+				expect(() =>
+					server(f, 'a(s: String = "x" @constraint(format: "f")): String'),
+				).toThrow('the format "f" checks asynchronously'),
+			),
+		).resolves.toEqual([]);
+		expect(calls.n).toBe(1);
+	});
+});
+
+describe('a check that throws', () => {
+	test('fails the operation with its error, run once per value', async () => {
 		let calls = 0;
 		const f = z.string().refine(() => {
 			calls++;
@@ -257,9 +286,21 @@ describe('an async check the definition does not show', () => {
 		expect((await ask('a')).result.errors?.[0]?.message).toBe('boom');
 		expect((await ask('b')).result.errors?.[0]?.message).toBe('boom');
 		expect(calls).toBe(2);
-		expect(() =>
-			server(f, 'a(s: String = "x" @constraint(format: "f")): String'),
-		).toThrow('boom');
+	});
+
+	test('fails startup on a default value, nothing unhandled', async () => {
+		// Its error ends the run's promise, which a synchronous check cannot
+		// wait for: startup reads it as an async format.
+		const f = z.string().refine(() => {
+			throw new Error('boom');
+		});
+		await expect(
+			noUnhandledRejection(() =>
+				expect(() =>
+					server(f, 'a(s: String = "x" @constraint(format: "f")): String'),
+				).toThrow('the format "f" checks asynchronously'),
+			),
+		).resolves.toEqual([]);
 	});
 });
 

@@ -7,7 +7,7 @@ import {
 	GraphQLString,
 } from 'graphql';
 import { z } from 'zod';
-import { applyRule } from '../rules';
+import { applyRule, rules } from '../rules';
 import type { RuleContext, Target } from '../rules/rule';
 import type { Constraint } from './constraints';
 
@@ -76,11 +76,22 @@ export function leafSchema(
 ): z.ZodType {
 	if (constraints.length === 0) return z.unknown();
 	assertLeafTargets(type, constraints, where);
-	let schema = baseOf(type);
-	for (const { rule, value } of constraints) {
-		schema = applyRule(rule, schema, value, context);
-	}
-	return schema;
+	const [first, ...rest] = constraints;
+	const narrow = (schema: z.ZodType) =>
+		rest.reduce(
+			(narrowed, { rule, value }) => applyRule(rule, narrowed, value, context),
+			schema,
+		);
+	// An application's format runs the rules after it inside itself.
+	const narrowed =
+		first?.rule === rules.format
+			? context.formats.named(String(first.value)).narrowed
+			: undefined;
+	if (narrowed) return narrowed(narrow);
+	return constraints.reduce(
+		(schema, { rule, value }) => applyRule(rule, schema, value, context),
+		baseOf(type),
+	);
 }
 
 /** The source of a built-in scalar's schema, before its constraints. */

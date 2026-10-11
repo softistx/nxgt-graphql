@@ -344,52 +344,55 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   the option `inputCode` throws. Wrapping a schema again with other formats, or
   none after some, throws (the record is kept on the schema under a
   `Symbol.for` key); with the same names and the very same schemas it is the
-  usual no-op. A string definition without `safeParse`, `safeParseAsync` and
-  `refine` (an object shaped like a schema, a `zod/mini` one) is refused
+  usual no-op. A string definition without `safeParseAsync`, `check`,
+  `refine` and `catch` (an object shaped like a schema, a `zod/mini` one) is refused
   at startup too, since every request calls them.
 - **An application format runs through zod's public API only** (owner: a zod
-  4 release must not break it). `formats/marked.ts` calls the schema's
-  `safeParse`/`safeParseAsync` and `refine`, pushes to a `.check()`'s
-  `ctx.issues`, and reads the issues `safeParse` returns: never `_zod.run`, `z.core.util.finalizeIssue`, `z.core.config` nor
-  a raw issue's `continue`. Startup reads `_zod.def` (zod's introspection)
-  only to refuse a schema and to hint that a check is async; what it misses
-  is caught at run time. `marked.spec.ts` runs the matrix (sync, async,
-  abort, rewriting, default value) on schemas reached through their public
-  API only, `_zod.run` gone or throwing, and on schemas whose `_zod.run`
-  returns issues without `continue` (`test/public-only.ts`);
-  `another-zod.spec.ts` does it on another copy. Never reach into zod
-  internals again to win back a degradation below.
-- **An application format's issue is `format`'s, whatever its code.** Its
-  schema runs inside a `z.string().check` (`marked`) that re-raises
-  each issue `safeParse` returns unchanged but for
-  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), and `constraintOf` reads
-  that mark before any `owns`: a `.regex()` or `.refine()` inside the format
-  is not `pattern`'s or `notContains`'. An abort stops the rules after it
-  as on the client: `marked` parses the schema with two refinements chained
-  last, a plain one, which zod skips after any issue that does not continue
-  (`abort: true`, an issue a `.check()` pushed with no `continue`), and one
-  with a `when`, skipped only after `continue: false`, which also stops the
-  length checks. Which ran says which abort it was, and the issues are
-  re-raised with that `continue` (true, absent, false). Once
-  the format has gone async, zod has already run those rules: the abort then
-  stops nothing, on the server only. A successful parse whose output differs
-  from its input throws (the rewriting backstop above).
-- **An async check stays async, from any zod copy, and runs once per value
-  when it is known.** A format whose definition shows an `async` function
-  (`.refine(async …)`), or that went async once, runs `safeParseAsync` only.
-  Any other runs `safeParse` first; when that throws zod's `$ZodAsyncError`
-  (a public export, recognised by class or by name across copies) the value
-  runs again with `safeParseAsync`, as zod's own Standard Schema `validate`
-  does; any other error is the check's own and is thrown as it is.
-  Documented degradation (troubleshooting, "runs twice for the first
-  value"): for an async check the definition does not show (an async
-  `.superRefine()`, a non-`async` function returning a promise, an `async`
-  function compiled down to a generator), the first value runs it twice, and
-  the dropped first run's rejection, zod's promise, is unhandled, which
-  terminates Node by default. The promise `marked` returns gets a handler, so a
-  synchronous parse that drops it (a default value's check) leaves no
-  unhandled rejection; `checkDefaults` then throws naming the field and the
-  format (`FormatRegistry.takeAsync`).
+  4 release must not break it, and a user's format must never crash the
+  server). `formats/marked.ts` calls the schema's `safeParseAsync`, derives
+  probes with `check` (pushing to `ctx.issues`), `refine` (with `when`) and
+  `catch`, and reads the issues they return: never `_zod.run`,
+  `z.core.util.finalizeIssue`, `z.core.config`, a raw issue's `continue`,
+  nor a synchronous `safeParse` (which starts an async check and drops its
+  promise). Startup reads `_zod.def` (zod's introspection) only to refuse a
+  schema; what `rewrites` misses is caught at run time. `marked.spec.ts`
+  runs the matrix (sync, async, abort, raw push, rewriting, default value,
+  a throwing check) on schemas reached through their public API only,
+  `_zod.run` gone or throwing, and on schemas whose `_zod.run` returns
+  issues without `continue` (`test/public-only.ts`); `another-zod.spec.ts`
+  does it on another copy. Never reach into zod internals again.
+- **An application format's issue is `format`'s, whatever its code, and the
+  rules after it run inside it.** `leafSchema` hands the rules written after
+  an application's format to `Format.narrowed`: the leaf is one
+  `z.string().check` that runs the format, then replays its issues, marked
+  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), through a `z.string()`
+  narrowed by those rules, so zod itself decides which rules run after them,
+  exactly as on the client where they are chained on the schema.
+  `constraintOf` reads the mark before any `owns`: a `.regex()` or
+  `.refine()` inside the format is not `pattern`'s or `notContains`'. The
+  abort is read from two refinements chained after the format's checks: a
+  plain one, skipped after any issue that does not continue (`abort: true`,
+  a raw push), and one with a `when`, skipped only after `continue: false`;
+  each marks a refused run's issues (`nxgtSentinel`), and the issues are
+  replayed with that `continue` (true, absent, false). Once the format has
+  gone async, the client has run the rules before its issues arrive: the
+  replay runs them too, the format's issues first. `toZod()` (no rules) is
+  for a caller that chains rules itself, which then run eagerly.
+- **An async check runs once per value, from the first, and never leaves a
+  promise unhandled.** `marked` runs the format with `safeParseAsync` only;
+  a `.catch()` then a `.refine()` chained last tell, when the call returns,
+  whether the run finished synchronously (zod runs a schema's checks within
+  the call until one returns a promise): then the result is used at once,
+  so a default value's synchronous check still works. Otherwise the promise
+  goes to the enclosing parse, with a handler; a synchronous parse throws
+  zod's async error, and `checkDefaults` throws naming the field and the
+  format (`FormatRegistry.takeAsync`). A check that throws ends the run's
+  promise too: in a request the operation fails with its error, at startup
+  it reads as async (documented). Should a zod release run no check within
+  `safeParseAsync`'s call, every format would read as async at startup (a
+  loud refusal of its default values, never a crash): the newest-peers run
+  catches it. Cost measured on Bun 1.4.2 against 0.3.0: about 0.1 µs per
+  accepted value, 1.5 µs per refused one.
 - **`uri` is http, https or ftp, scheme required; `date-time` is canonical RFC
   3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
   on purpose, each pinned by a spec.
