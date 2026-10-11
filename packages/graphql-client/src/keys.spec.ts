@@ -27,4 +27,10 @@ describe('keys', () => {
 			dedupeKey(operation, {}, {}, undefined),
 		);
 	});
+
+	test("the variables' key order does not matter", () => {
+		expect(
+			dedupeKey(operation, { a: 1, b: { c: 2, d: 3 } }, {}, undefined),
+		).toBe(dedupeKey(operation, { b: { d: 3, c: 2 }, a: 1 }, {}, undefined));
+	});
 });

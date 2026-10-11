@@ -25,6 +25,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`The document has no fragment <name>`](#the-document-has-no-fragment-name)
 - [`The document holds no fragment`](#the-document-holds-no-fragment)
 - [A `cache-first` query that always goes to the network](#a-cache-first-query-that-always-goes-to-the-network)
+- [`Watch callbacks kept writing: stopped after 100 rounds`](#watch-callbacks-kept-writing-stopped-after-100-rounds)
 - [`No GraphQL client: render this component inside <GraphQLProvider client={client}>`](#no-graphql-client-render-this-component-inside-graphqlprovider-clientclient)
 - [`useFragment() reads the cache: pass cache: normalizedCache() to createGraphQLClient`](#usefragment-reads-the-cache-pass-cache-normalizedcache-to-creategraphqlclient)
 - [A `useQuery` that sends its query again on every render](#a-usequery-that-sends-its-query-again-on-every-render)
@@ -422,6 +423,27 @@ what the cache holds:
 
 ```ts
 console.log(client.cache?.read(BookQuery, { id: '1' })); // undefined: a miss
+```
+
+## `Watch callbacks kept writing: stopped after 100 rounds`
+
+**When:** the cache's `onError` (default `console.error`) gets an `Error`
+with this message after a write. The writes still pending are dropped; the
+call that made the first write is not affected.
+**Why:** a watch callback writes to the cache, that write wakes a watch whose
+callback writes again, and so on: each round is called back after the one
+before, and one write is allowed 100 rounds. Usually a callback writes a value
+that differs every time (a timestamp, a new id, a counter), or two watches
+write each other's data.
+**Fix:** write from a callback only when the value changed, or move the write
+out of the callback (into the code that triggered it):
+
+```ts
+client.cache!.watch(BookQuery, { id: '1' }, (data) => {
+  const title = data?.book.title.trim();
+  if (!data || title === data.book.title) return; // nothing to write: no new round
+  client.cache!.write(BookQuery, { id: '1' }, { book: { ...data.book, title } });
+});
 ```
 
 ## `No GraphQL client: render this component inside <GraphQLProvider client={client}>`

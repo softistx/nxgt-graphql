@@ -442,6 +442,21 @@ describe('dedupe', () => {
 		expect(api.calls()).toBe(1);
 	});
 
+	test('variables in another key order share one request', async () => {
+		const api = held();
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		const Pair = parse(
+			'query Pair($a: Int, $b: Int) { viewer { id } }',
+		) as TypedDocumentNode<Viewer, { a: number; b: number }>;
+		const both = Promise.all([
+			client.query(Pair, { a: 1, b: 2 }),
+			client.query(Pair, { b: 2, a: 1 }),
+		]);
+		api.release();
+		await both;
+		expect(api.calls()).toBe(1);
+	});
+
 	test('different headers are different requests', async () => {
 		const api = held();
 		const client = createGraphQLClient({ url, fetch: api.fetch });

@@ -2,35 +2,6 @@
 
 What `@nxgt/graphql-client` is heading for, phrased as what you get.
 
-## Now
-
-- **The core client** (this effort, not released yet). `query` and `mutate`
-  typed from a `TypedDocumentNode` or `TypedDocumentString`, typed errors, an
-  unauthenticated hook, query retries, and deduplication of identical in-flight
-  requests.
-- **Persisted queries** (this effort, not released yet). Operations sent by
-  the client preset's `persistedDocuments` hash (`documentId`), or by
-  Automatic Persisted Queries (`apq`), registered on first use.
-- **Batching** (this effort, not released yet). Queries issued together
-  posted as one JSON array, each with its own result, error and signal.
-- **Subscriptions over SSE** (this effort, not released yet). `subscribe`
-  yields each result over server-sent events (the GraphQL over SSE protocol's
-  distinct connections mode, as graphql-yoga serves it), closed on every way
-  out of the loop. No reconnection yet.
-- **A normalized cache** (this effort, not released yet). `normalizedCache({
-  possibleTypes, keys })` for the browser: entities stored once, `cache-first`
-  queries answered without a request, mutations' entities written back,
-  `fetchPolicy`, and `client.cache`'s `read`, `write`, `watch`,
-  `readFragment`, `watchFragment`, `evict`, `modify` and `reset`. Off by
-  default.
-- **React bindings** (this effort, not released yet).
-  `@nxgt/graphql-client/react` for React 19: `GraphQLProvider`, `useClient`,
-  `useQuery` (variables compared by value, aborted on unmount, kept current
-  by the cache's `watch`), `useMutation`, `useSubscription` and `useFragment`
-  (over `watchFragment`). Nothing is sent during a render, so a server render
-  sends nothing. `react` is an optional peer; the root entry never imports
-  it.
-
 ## Next
 
 Candidates, not commitments.
@@ -44,7 +15,8 @@ Candidates, not commitments.
 - **A GraphQL error carried by an error status's event stream read as an
   `ApiError`**, rather than an `ApiStatusError` holding the stream's raw text.
   APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
-  `forceStatusCodeOk`, which they need today.
+  `forceStatusCodeOk`, which they need today. Waits on
+  [nxgt-http#131](https://github.com/softistx/nxgt-http/issues/131).
 - **Suspense for `useQuery`.** A query that suspends the component until its
   first answer, for a `<Suspense>` boundary and streaming server rendering,
   instead of returning `loading`.
@@ -61,3 +33,34 @@ Candidates, not commitments.
   objects, so a UI binding can skip a render.
 - **Vue bindings.**
 - **Subscriptions over WebSocket.**
+
+## Shipped
+
+Released in 0.1.0.
+
+- **The core client**. `query` and `mutate`
+  typed from a `TypedDocumentNode` or `TypedDocumentString`, typed errors, an
+  unauthenticated hook, query retries, and deduplication of identical in-flight
+  requests.
+- **Persisted queries**. Operations sent by
+  the client preset's `persistedDocuments` hash (`documentId`), or by
+  Automatic Persisted Queries (`apq`), registered on first use.
+- **Batching**. Queries issued together
+  posted as one JSON array, each with its own result, error and signal.
+- **Subscriptions over SSE**. `subscribe`
+  yields each result over server-sent events (the GraphQL over SSE protocol's
+  distinct connections mode, as graphql-yoga serves it), closed on every way
+  out of the loop. No reconnection yet.
+- **A normalized cache**. `normalizedCache({
+  possibleTypes, keys })` for the browser: entities stored once, `cache-first`
+  queries answered without a request, mutations' entities written back,
+  `fetchPolicy`, and `client.cache`'s `read`, `write`, `watch`,
+  `readFragment`, `watchFragment`, `evict`, `modify` and `reset`. Off by
+  default.
+- **React bindings**.
+  `@nxgt/graphql-client/react` for React 19: `GraphQLProvider`, `useClient`,
+  `useQuery` (variables compared by value, aborted on unmount, kept current
+  by the cache's `watch`), `useMutation`, `useSubscription` and `useFragment`
+  (over `watchFragment`). Nothing is sent during a render, so a server render
+  sends nothing. `react` is an optional peer; the root entry never imports
+  it.

@@ -69,6 +69,9 @@ export interface FragmentOptions {
  * Where results are kept between calls, entity by entity. The client
  * writes every query's and mutation's result to it, and serves
  * `cache-first` queries from it.
+ *
+ * Implemented by `normalizedCache()`, and not meant to be implemented
+ * elsewhere: it may gain methods in a minor version.
  */
 export interface GraphQLCache {
 	/**

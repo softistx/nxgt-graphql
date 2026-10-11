@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Published on npm. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -564,8 +564,8 @@ packages/graphql-client/src/
   send.ts        one operation sent (APQ's register resend included), and post: one POST of a
                  body or a batch's array, its headers, signal, timeout, retry; errors mapped
   response.ts    dataOf (errors, status, data), replyError (a whole reply), refusedError (a
-                 non-2xx stream reply, its body read) and transportError (timeout, network,
-                 unparsable body)
+                 non-2xx stream reply, its body read), transportError (timeout, network,
+                 unparsable body) and isHttpyzError (httpyz's errors by name, any copy)
   persisted.ts   the body for each persisted mode, the documentId check, the APQ hash (SHA-256,
                  cached per Operation) and the PersistedQueryNotFound test
   subscribe.ts   EventSubscription: one subscription over SSE (graphql-sse distinct
@@ -573,7 +573,8 @@ packages/graphql-client/src/
   batch.ts       the Batcher: queries with the same call options posted as one array
   dedupe.ts      the Deduplicator: identical queries in flight share one request
   share.ts       Party: callers on one request, each with its own signal (dedupe and batch)
-  keys.ts        callKey (headers, timeout, retry) and dedupeKey (text, variables, callKey)
+  keys.ts        callKey (headers, timeout, retry) and dedupeKey (text, variables as
+                 stableJson, callKey)
   document.ts    operationOf: a TypedDocumentNode or TypedDocumentString read once, cached,
                  with the preset's __meta__.hash and the parsed node; fragmentNodeOf: a
                  fragment document's node (no operation needed); the only place that
@@ -662,8 +663,8 @@ packages/graphql-client/test/
   `PersistedQueryNotFound` in a refused connection's JSON body or as the first
   event (nothing ran). Exactly once.
 - **An error status's event stream is an `ApiStatusError(status)` whose `body`
-  is the stream's raw text**, never parsed (httpyz exports no SSE parser; the
-  gap is with nxgt-http). Do not hand-parse SSE here. So graphql-yoga's default
+  is the stream's raw text**, never parsed (httpyz exports no SSE parser:
+  Temporary, until nxgt-http#131). Do not hand-parse SSE here. So graphql-yoga's default
   APQ answer, a 404 event stream, is not resent: APQ subscriptions on yoga
   need `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`, and the docs
   say so until the roadmap's Next entry lands.
@@ -811,9 +812,16 @@ packages/graphql-client/test/
   and two field keys in the cache; reading a `Date` as a plain object would
   key every one as `{}`.
 - **Source imports carry no extension.**
-- **Temporary, until nxgt-http wraps body reads**: `response.ts` checks for the
+- **Temporary, until nxgt-http#130**: `response.ts` checks for the
   `DOMException` named `TimeoutError`, which is what a deadline firing while the
   body is read rejects with, and maps it to `ApiUnavailableError('timeout')`.
+- **httpyz's errors are matched by `name`, never `instanceof`**
+  (`isHttpyzError` in `response.ts`: `TimeoutError`, `NetworkError`,
+  `ValidationError`, `UndeclaredStatusError`), each field they need checked
+  before it is read, as `isApiError` is cross-copy: an application may pass
+  its own httpyz copy as `http`, whose classes are not this package's. A
+  `DOMException` never matches; the #130 body-read timeout is its own check.
+  `transport.spec.ts` throws look-alike plain errors from a custom `fetch`.
 
 ## The green bar
 

@@ -123,6 +123,17 @@ class ApiUnavailableError extends Error {
 | `timeout` | `The API did not answer in time` | the `timeout` passed, before the answer or while its body was read |
 | `invalid-response` | `The API answered with neither data nor errors` | a 2xx with no `data` and no `errors`, or labelled JSON that does not parse |
 
+New `UnavailableReason` values may come in a minor version: a `switch` on
+`reason` should keep a `default` branch.
+
+```ts
+switch (error.reason) {
+  case 'unreachable': return showOffline();
+  case 'timeout': return showRetry();
+  default: return showFailure(error); // invalid-response, and any reason added later
+}
+```
+
 ## CacheMissError
 
 A query with `fetchPolicy: 'cache-only'` whose result the cache does not hold

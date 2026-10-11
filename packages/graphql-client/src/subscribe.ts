@@ -1,8 +1,4 @@
-import {
-	type EventStream,
-	type ServerEvent,
-	UndeclaredStatusError,
-} from '@nxgt/httpyz';
+import type { EventStream, ServerEvent } from '@nxgt/httpyz';
 import type { Operation } from './document';
 import { ApiUnavailableError } from './errors';
 import type { SubscribeOptions, Subscription } from './options';
@@ -12,7 +8,12 @@ import {
 	type OperationBody,
 	withQuery,
 } from './persisted';
-import { dataOf, refusedError, transportError } from './response';
+import {
+	dataOf,
+	isHttpyzError,
+	refusedError,
+	transportError,
+} from './response';
 import type { Transport } from './send';
 
 /** Runs on each error before the loop rejects with it: the client's 401 hook. */
@@ -132,9 +133,28 @@ function resultOf(data: string): unknown {
 	}
 }
 
-/** What a stream threw, as this package's errors: a refused connection's body read. */
+// Temporary, until nxgt-http#131: httpyz exports no SSE parser, so a refused
+// connection's event stream reaches the caller as an ApiStatusError of raw text.
+/**
+ * What a stream threw, as this package's errors: a refused connection's body
+ * read. httpyz's `UndeclaredStatusError` is matched by name, as in
+ * `transportError`, its `response` checked before it is read.
+ */
 async function failureOf(error: unknown): Promise<unknown> {
-	if (error instanceof UndeclaredStatusError)
-		return refusedError(error.response);
+	if (isHttpyzError(error, 'UndeclaredStatusError')) {
+		const response = error['response'];
+		if (isResponse(response)) return refusedError(response);
+	}
 	return transportError(error);
+}
+
+/** A fetch `Response`, by shape: another realm's or a polyfill's included. */
+function isResponse(value: unknown): value is Response {
+	if (typeof value !== 'object' || value === null) return false;
+	const response = value as Partial<Response>;
+	return (
+		typeof response.status === 'number' &&
+		typeof response.text === 'function' &&
+		typeof response.headers?.get === 'function'
+	);
 }

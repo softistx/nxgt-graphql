@@ -221,6 +221,9 @@ written, and not needed for a `cache-first` hit.
 `client.cache` is the cache passed as `cache` (or `undefined`). Every method
 takes the client preset's documents and is typed from them.
 
+`GraphQLCache` is the type `normalizedCache()` returns, not an interface to
+implement yourself: it may gain methods in a minor version.
+
 ```ts
 interface GraphQLCache {
   onError?: (error: unknown) => void;
