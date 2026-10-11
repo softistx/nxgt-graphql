@@ -215,23 +215,37 @@ interceptor, as in [Under Bun](guide/handlers.md#under-bun).
 `extensions.fields` says where, each field's `code` which kind of rule
 (`too-short`, `out-of-range`, `invalid-format`, …).
 **Fix:** send what the schema takes; the field's `path` and `code` name the
-rule that refused.
+rule that refused. One case the server takes: an integer for an `ID`
+(codegen-zod takes an `ID` as a string only, where GraphQL also takes an
+integer), answered `validation.errors.invalid`; send the `ID` as a string:
+`{ id: String(user.id) }`.
 
-### A request answers 400 `Variable "$id" got invalid value 1; ID cannot represent value: 1`
+### A request answers 400 `Variable "$id" got invalid value true; ID cannot represent value: true`
 
 **When:** the variables hold a value the API refuses while coercing them: a
 missing or `null` value for a non-null type, a value of the wrong type, an
-unknown enum value, an input field the type does not declare.
+unknown enum value, an input field the type does not declare, an `Int`
+beyond 32 bits, a value a custom scalar refuses.
 **Why:** graphql-yoga refuses these before any resolver or validation runs,
 with one plain error per problem and status 400; the mock answers the same,
-whatever `invalidInput` is. One difference with a real server: codegen-zod
-takes an `ID` as a string only, where GraphQL also takes an integer, so the
-mock refuses `id: 1`.
-**Fix:** send what the variable's type takes; for an `ID`, send a string.
+in graphql 17's words, whatever `invalidInput` is.
+**Fix:** send what the variable's type takes; the message names the type and,
+for an enum value or an input field, graphql's closest match (`Did you mean
+"tags"?`).
 
 ```ts
 await client.query(UserDocument, { id: String(user.id) });
 ```
+
+### A message differs from the API's after an upgrade
+
+**When:** the coercion answer names a type, or a field, the schema no longer
+has.
+**Why:** the generated file describes the input types from the schema at
+generation time (`inputTypes`, `variableTypes`); they go stale with the
+schema, and their shape may change with this package.
+**Fix:** regenerate the file after a schema change and after upgrading
+`@nxgt/graphql-codegen-msw`.
 
 ### The resolver's error answers 500
 

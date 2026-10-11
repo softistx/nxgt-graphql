@@ -42,7 +42,8 @@ function pathOf(issue: z.core.$ZodIssue): (string | number)[] {
  * `validation.errors.too-short` / `too-long` (a string's length),
  * `out-of-range` (a number's or bigint's bound, a multiple),
  * `too-few` / `too-many` (a list's or set's size), `invalid-format` (a
- * format or pattern), `invalid` (anything else).
+ * named format or a pattern), `invalid` (anything else, a prefix, a suffix
+ * or a substring included).
  */
 export function fieldIssueOf(issue: z.core.$ZodIssue): FieldIssue {
 	return { path: inputPath(pathOf(issue)), code: codeOf(issue) };
@@ -69,11 +70,22 @@ function codeOf(issue: z.core.$ZodIssue): string {
 		case 'not_multiple_of':
 			return FIELD_CODES.outOfRange;
 		case 'invalid_format':
-			return FIELD_CODES.invalidFormat;
+			// A prefix, a suffix or a substring is not a format: only a named
+			// format (`email`, `uuid`, …) or a pattern is.
+			return TEXT_CHECKS.has(issue.format)
+				? FIELD_CODES.invalid
+				: FIELD_CODES.invalidFormat;
 		default:
 			return FIELD_CODES.invalid;
 	}
 }
+
+/** The string checks Zod reports as `invalid_format` that are not a format. */
+const TEXT_CHECKS: ReadonlySet<string> = new Set([
+	'starts_with',
+	'ends_with',
+	'includes',
+]);
 
 /** The field codes the default answer writes, as the API answers them. */
 const FIELD_CODES = {

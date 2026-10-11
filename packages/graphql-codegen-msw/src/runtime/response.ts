@@ -19,19 +19,25 @@ export function isGraphQLError(value: unknown): value is GraphQLError {
 	);
 }
 
-/** `error` as the response carries it: a `GraphQLError`'s `toJSON()`, or itself. */
+/**
+ * `error` as the response carries it: a `GraphQLError`'s `toJSON()`, or
+ * itself, without `extensions.http` and `extensions.unexpected`, which
+ * graphql-yoga keeps for itself and never sends (an `extensions` left empty
+ * goes too).
+ */
 export function formatted(error: AnyGraphQLError): GraphQLFormattedError {
-	return isGraphQLError(error) ? error.toJSON() : error;
+	const json = isGraphQLError(error) ? error.toJSON() : error;
+	const { extensions, ...rest } = json;
+	if (extensions === undefined) return json;
+	const { http: _http, unexpected: _unexpected, ...kept } = extensions;
+	return Object.keys(kept).length > 0 ? { ...rest, extensions: kept } : rest;
 }
 
 /**
- * `extensions.http.status`, when it is a status a response can carry: an
- * integer from 200 to 599 other than 204, 205 and 304, which have no body.
+ * `status` when a response can carry it: an integer from 200 to 599 other
+ * than 204, 205 and 304, which have no body.
  */
-export function statusOf(error: AnyGraphQLError): number | undefined {
-	const http = (error.extensions as { http?: { status?: unknown } } | undefined)
-		?.http;
-	const status = http?.status;
+function validStatus(status: unknown): number | undefined {
 	return typeof status === 'number' &&
 		Number.isInteger(status) &&
 		status >= 200 &&
@@ -43,10 +49,19 @@ export function statusOf(error: AnyGraphQLError): number | undefined {
 		: undefined;
 }
 
+/** `extensions.http.status`, when it is a status a response can carry. */
+export function statusOf(error: AnyGraphQLError): number | undefined {
+	const http = (error.extensions as { http?: { status?: unknown } } | undefined)
+		?.http;
+	return validStatus(http?.status);
+}
+
 /**
- * A GraphQL response holding `errors` only: `{ errors: [error] }`, with
- * `status`, else the error's `extensions.http.status`, else 200. What a
- * resolver returns to refuse, as your server would:
+ * A GraphQL response holding `errors` only, as graphql-yoga answers one:
+ * `{ errors }`, each error without its `extensions.http` (see `formatted`),
+ * at `status` when a response can carry it, else the highest
+ * `extensions.http.status` among the errors, else 200. What a resolver
+ * returns to refuse, as your server would:
  * `return errorResponse(fieldsError('conflict', fields, { status: 409 }))`.
  */
 export function errorResponse(
@@ -54,9 +69,11 @@ export function errorResponse(
 	init: { readonly status?: number } = {},
 ): HttpResponse<{ errors: GraphQLFormattedError[] }> {
 	const errors = (Array.isArray(error) ? error : [error]) as AnyGraphQLError[];
+	const statuses = errors
+		.map(statusOf)
+		.filter((status) => status !== undefined);
 	const status =
-		init.status ??
-		errors.map(statusOf).find((found) => found !== undefined) ??
-		200;
+		validStatus(init.status) ??
+		(statuses.length > 0 ? Math.max(...statuses) : 200);
 	return HttpResponse.json({ errors: errors.map(formatted) }, { status });
 }

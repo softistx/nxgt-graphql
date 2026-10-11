@@ -17,6 +17,8 @@ import * as badUserInput from '../test/msw-bad-user-input';
 import * as own from '../test/msw-own';
 import * as translated from '../test/msw-translate';
 import { setupFetchNetwork } from '../test/network';
+import { zUsersQueryVariables } from '../test/zod';
+import { type InvalidInput, mockOperation } from './runtime';
 
 // The generated handlers, served by msw's network in this process: every
 // request is a real fetch, answered by the handler the spec registers.
@@ -113,7 +115,6 @@ describe("invalidInput: 'invalid-input', the default", () => {
 					message: 'validation.errors.invalid-input',
 					extensions: {
 						code: 'validation.errors.invalid-input',
-						http: { status: 400 },
 						fields: [
 							{
 								path: 'person.firstName',
@@ -227,6 +228,42 @@ describe("invalidInput: '<module>#<export>'", () => {
 	});
 });
 
+describe('a status invalidInput returns', () => {
+	const usersWith = (invalidInput: InvalidInput) =>
+		mockOperation(
+			{
+				type: 'query',
+				name: 'Users',
+				variables: zUsersQueryVariables,
+				variableTypes: { first: 'Int', role: 'Role' },
+				inputTypes: {
+					Int: { kind: 'builtin' },
+					Role: { kind: 'enum', values: ['ADMIN', 'MEMBER'] },
+				},
+				endpoint: ENDPOINT,
+				invalidInput,
+			},
+			answering({ users: [] }).resolver,
+		);
+
+	test("is ignored when no response can carry it: the error's own, else 200", async () => {
+		for (const [status, extensions, expected] of [
+			[204, undefined, 200],
+			[99, { http: { status: 409 } }, 409],
+			[700, undefined, 200],
+		] as const) {
+			server.use(
+				usersWith(() => ({
+					error: extensions ? { message: 'no', extensions } : { message: 'no' },
+					status,
+				})),
+			);
+			expect((await post(USERS, { first: 0 })).status).toBe(expected);
+			server.resetHandlers();
+		}
+	});
+});
+
 describe('what the API refuses before validation', () => {
 	// graphql-yoga 5.24 refuses these while coercing the variables: one
 	// error per problem, no extensions, status 400 under either Accept.
@@ -311,17 +348,28 @@ describe('what the API refuses before validation', () => {
 		);
 	});
 
-	test("inside an input object: the variable's own type named, a field's not", async () => {
+	test('an Int beyond 32 bits, or beyond the safe range', async () => {
+		server.use(defaults.mockUsersQuery(answering({ users: [] }).resolver));
+		for (const first of [1e20, -1e20])
+			expect(await post(USERS, { first })).toEqual(
+				refusal([
+					`Variable "$first" got invalid value ${String(first)}; Int cannot represent non 32-bit signed integer value: ${String(first)}`,
+					13,
+				]),
+			);
+	});
+
+	test('inside an input object: every type named from the schema, in graphql order', async () => {
 		server.use(defaults.mockSignUpMutation(answering({}).resolver));
 		const input = { person: { email: 'ada@example.com' }, extra: 1, tags: [1] };
 		expect(await post(SIGN_UP, { input })).toEqual(
 			refusal(
 				[
-					'Variable "$input" got invalid value { email: "ada@example.com" } at "input.person"; Expected value to include required field "firstName", found: { email: "ada@example.com" }.',
+					'Variable "$input" got invalid value { email: "ada@example.com" } at "input.person"; Expected value of type "PersonInput" to include required field "firstName", found: { email: "ada@example.com" }.',
 					17,
 				],
 				[
-					'Variable "$input" got invalid value 1 at "input.tags[0]"; Expected value of another type, found: 1.',
+					'Variable "$input" got invalid value 1 at "input.tags[0]"; String cannot represent a non string value: 1',
 					17,
 				],
 				[
@@ -342,7 +390,31 @@ describe('what the API refuses before validation', () => {
 			}),
 		).toEqual(
 			refusal([
-				'Variable "$input" got invalid value null at "input.person.firstName"; Expected value of non-null type not to be null.',
+				'Variable "$input" got invalid value null at "input.person.firstName"; Expected value of non-null type "String!" not to be null.',
+				17,
+			]),
+		);
+	});
+
+	test('a field graphql does not know, with its suggestion', async () => {
+		server.use(defaults.mockSignUpMutation(answering({}).resolver));
+		const input = { person: { firstName: 'Ada', email: 'a@b.co' }, tag: 'a' };
+		expect(await post(SIGN_UP, { input })).toEqual(
+			refusal([
+				'Variable "$input" got invalid value { person: { firstName: "Ada", email: "a@b.co" }, tag: "a" }; Expected value of type "SignUpInput" not to include unknown field "tag". Did you mean "tags"? Found: { person: { firstName: "Ada", email: "a@b.co" }, tag: "a" }.',
+				17,
+			]),
+		);
+	});
+
+	test('a custom scalar refused by its schema, as a zodScalar words it', async () => {
+		server.use(defaults.mockSignUpMutation(answering({}).resolver));
+		const person = { firstName: 'Ada', email: 'ada@example.com' };
+		expect(
+			await post(SIGN_UP, { input: { person, birth: 'yesterday' } }),
+		).toEqual(
+			refusal([
+				'Variable "$input" got invalid value "yesterday" at "input.birth"; DateTime cannot represent this input: Invalid ISO datetime',
 				17,
 			]),
 		);
@@ -373,7 +445,7 @@ describe('what the API refuses before validation', () => {
 });
 
 describe('the resolver', () => {
-	test('throwing a GraphQLError answers with it, at its extensions.http.status', async () => {
+	test('throwing a GraphQLError answers with it, at its extensions.http.status, which the body leaves out', async () => {
 		server.use(
 			defaults.mockSignUpMutation(() => {
 				throw fieldsError(
@@ -391,7 +463,6 @@ describe('the resolver', () => {
 					message: 'person.errors.duplicate',
 					extensions: {
 						code: 'person.errors.duplicate',
-						http: { status: 409 },
 						fields: [
 							{
 								path: 'person.email',
@@ -419,12 +490,7 @@ describe('the resolver', () => {
 		const { status, body } = await post(USER, { id: 'u_1' });
 		expect(status).toBe(404);
 		expect(body).toEqual({
-			errors: [
-				{
-					message: 'No such user',
-					extensions: { code: 'NOT_FOUND', http: { status: 404 } },
-				},
-			],
+			errors: [{ message: 'No such user', extensions: { code: 'NOT_FOUND' } }],
 		});
 	});
 

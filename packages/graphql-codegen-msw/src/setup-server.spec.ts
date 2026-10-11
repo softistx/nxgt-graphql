@@ -60,7 +60,6 @@ describe.skipIf(!node)(`msw/node's setupServer, under Node ${node}`, () => {
 			expect(results.invalidInput.status).toBe(400);
 			expect(results.invalidInput.body.errors[0].extensions).toEqual({
 				code: 'validation.errors.invalid-input',
-				http: { status: 400 },
 				fields: [
 					{
 						path: 'person.firstName',

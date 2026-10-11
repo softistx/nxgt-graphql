@@ -1,3 +1,4 @@
+export type { InputType, InputTypes } from './coercion';
 export {
 	type GraphQLMockInfo,
 	type GraphQLMockResolver,

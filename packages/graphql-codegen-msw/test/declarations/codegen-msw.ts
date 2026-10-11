@@ -47,6 +47,8 @@ export const handler = mockOperation<
 		type: 'query',
 		name: 'A',
 		variables: z.object({ n: z.int().nullish() }),
+		variableTypes: { n: 'Int' },
+		inputTypes: { Int: { kind: 'builtin' } },
 		endpoint: '*/graphql',
 		invalidInput: refusals.default,
 	},

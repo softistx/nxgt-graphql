@@ -7,7 +7,8 @@ What `@nxgt/graphql-codegen-msw` is heading for, phrased as what you get.
 - **The first release, 0.1.0** (in progress, not released yet). One typed
   msw 3 handler per named query and mutation, its variables checked with
   `@nxgt/graphql-codegen-zod`'s schemas, a value the API cannot coerce
-  answered as graphql-yoga answers it, and a constraint answered as one 400
+  answered as graphql-yoga answers it (every type named from the schema,
+  graphql's suggestions included), and a constraint answered as one 400
   error with a list of fields, as `BAD_USER_INPUT`, or by a function of
   yours.
 
@@ -17,11 +18,6 @@ Candidates, not commitments.
 
 - **A `setupServer` that works under Bun**, once msw's own does, or a helper
   for the web `fetch` interceptor network the specs build today.
-- **Every type named in a coercion refusal.** Inside an input object the
-  mock leaves the type's name out (`Expected value to include required field
-  "firstName"`) and writes no `Did you mean …?`; the generated file could
-  carry the input types its operations reach, so each message reads exactly
-  as the API's.
 
 ## Later
 

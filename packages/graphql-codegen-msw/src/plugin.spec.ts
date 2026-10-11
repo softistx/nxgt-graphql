@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
-import { parse } from 'graphql';
+import {
+	buildSchema,
+	GraphQLInputObjectType,
+	GraphQLInt,
+	GraphQLNonNull,
+	GraphQLObjectType,
+	GraphQLSchema,
+	parse,
+} from 'graphql';
 import { documents, ENDPOINT, schema } from '../test/fixture';
 import { generated } from '../test/write-generated';
 import { type CodegenMswConfig, plugin } from './index';
@@ -118,6 +126,58 @@ describe('plugin', () => {
 		);
 		expect(output).toContain(
 			'export const invalidInput: InvalidInput = invalidInput2;',
+		);
+	});
+
+	test('writes the input types the variables reach, sorted, and each variable type', () => {
+		const sdl = buildSchema(`
+			input B { b: Int! = 1, a: A, self: B }
+			input A @oneOf { x: ID, y: String }
+			enum E { Y X }
+			scalar S
+			input Unused { u: Int }
+			type Query { q(b: B, e: [E!], s: S): Int, none: Int }
+		`);
+		const output = plugin(
+			sdl,
+			of(
+				'query Q($b: B, $e: [E!]! = [X], $s: S) { q(b: $b, e: $e, s: $s) } query None { none }',
+			),
+			base,
+		);
+		expect(output).toContain(
+			[
+				'const inputTypes: InputTypes = {',
+				'\tA: { kind: "input", fields: { x: "ID", y: "String" }, oneOf: true },',
+				'\tB: { kind: "input", fields: { b: "Int! = 1", a: "A", self: "B" } },',
+				'\tE: { kind: "enum", values: ["Y", "X"] },',
+				'\tID: { kind: "builtin" },',
+				'\tInt: { kind: "builtin" },',
+				'\tS: { kind: "scalar" },',
+				'\tString: { kind: "builtin" },',
+				'};',
+			].join('\n'),
+		);
+		expect(output).toContain(
+			'variableTypes: { b: "B", e: "[E!]! = [X]", s: "S" }, inputTypes,',
+		);
+		expect(output).toContain('variableTypes: {}, inputTypes,');
+		expect(output).not.toContain('Unused');
+	});
+
+	test("marks a default a schema built in code cannot print: a non-null field's is not required", () => {
+		const input = new GraphQLInputObjectType({
+			name: 'C',
+			fields: { n: { type: new GraphQLNonNull(GraphQLInt), defaultValue: 2 } },
+		});
+		const coded = new GraphQLSchema({
+			query: new GraphQLObjectType({
+				name: 'Query',
+				fields: { q: { type: GraphQLInt, args: { c: { type: input } } } },
+			}),
+		});
+		expect(plugin(coded, of('query Q($c: C) { q(c: $c) }'), base)).toContain(
+			'\tC: { kind: "input", fields: { n: "Int! = …" } },',
 		);
 	});
 

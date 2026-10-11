@@ -143,7 +143,6 @@ shape, one field per Zod issue.
     "message": "validation.errors.invalid-input",
     "extensions": {
       "code": "validation.errors.invalid-input",
-      "http": { "status": 400 },
       "fields": [
         { "path": "person.firstName", "code": "validation.errors.too-short",
           "message": "validation.errors.too-short" }
@@ -154,14 +153,19 @@ shape, one field per Zod issue.
 ```
 
 The codes are `too-short`, `too-long`, `out-of-range`, `too-few`, `too-many`,
-`invalid-format` and `invalid`, under `validation.errors.`, with no params.
-Each message is its code, unless you name a translator:
+`invalid-format` (a format or a pattern) and `invalid` (anything else, a
+prefix, suffix or substring included), under `validation.errors.`, with no
+params. Each message is its code, unless you name a translator:
 `translate: './i18n#translate'`.
 
 A value the API refuses before its validation (a missing or `null` value for a
-non-null type, a wrong type, an unknown enum value or input field) is answered
-as graphql-yoga answers it, whatever `invalidInput` is: status 400, one plain
-error per problem in graphql-js's wording, no `extensions`:
+non-null type, a wrong type, an unknown enum value or input field, an Int
+beyond 32 bits, a value a custom scalar refuses) is answered as graphql-yoga
+answers it, whatever `invalidInput` is: status 400, one plain error per
+problem in graphql 17's wording, types named and "Did you mean …?" included,
+no `extensions`. The generated file describes the input types from the schema
+for it. The few cases where the mock still differs are listed in
+[the handlers guide](./docs/guide/handlers.md#known-differences).
 
 ```json
 { "errors": [{ "message": "Variable \"$id\" of required type \"ID!\" was not provided.", "locations": [{ "line": 1, "column": 12 }] }] }
@@ -189,7 +193,9 @@ export const invalidInput: InvalidInput = (issues, operation) => ({
 
 Throw a `GraphQLError`, as your server's resolver would: the handler answers
 `{ errors: [error] }` at its `extensions.http.status`, else 200. Or return
-`errorResponse(error, { status })`.
+`errorResponse(error, { status })`. As graphql-yoga does, the body leaves out
+`extensions.http` (and `extensions.unexpected`), and several errors answer at
+the highest status among them.
 
 ```ts
 import { fieldsError } from '@nxgt/graphql-validation';

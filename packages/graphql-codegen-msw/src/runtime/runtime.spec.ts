@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GraphQLError } from 'graphql';
 import { z } from 'zod';
-import { coercionErrors, isCoercionIssue } from './coercion';
 import {
 	badUserInputRefusal,
 	errorResponse,
@@ -9,7 +8,6 @@ import {
 	invalidInputRefusal,
 	isGraphQLError,
 } from './index';
-import { inspect } from './inspect';
 
 const issuesOf = (schema: z.ZodType, value: unknown) => {
 	const result = schema.safeParse(value);
@@ -48,6 +46,9 @@ describe('fieldIssueOf', () => {
 		],
 		['a format', z.email(), 'nope', 'invalid-format'],
 		['a pattern', z.string().regex(/^a/), 'b', 'invalid-format'],
+		['a prefix', z.string().startsWith('a'), 'b', 'invalid'],
+		['a suffix', z.string().endsWith('a'), 'b', 'invalid'],
+		['a substring', z.string().includes('a'), 'b', 'invalid'],
 		[
 			'a date too early',
 			z.date().min(new Date(2020, 0, 1)),
@@ -78,90 +79,6 @@ describe('fieldIssueOf', () => {
 			ids: ['ab', 'c'],
 		});
 		expect(issue && fieldIssueOf(issue).path).toBe('ids.1');
-	});
-});
-
-describe('isCoercionIssue', () => {
-	const coercion = (schema: z.ZodType, value: unknown) =>
-		issuesOf(schema, value).map(isCoercionIssue);
-	const tags = z.union([
-		z.array(z.string()).max(2),
-		z
-			.string()
-			.transform((value): unknown[] => [value])
-			.pipe(z.array(z.string()).max(2)),
-	]);
-
-	test('a missing, null or wrongly typed value, an unknown enum value or field', () => {
-		const person = z.strictObject({ name: z.string(), role: z.enum(['A']) });
-		expect(coercion(person, { role: 'A' })).toEqual([true]);
-		expect(coercion(person, { name: null, role: 'A' })).toEqual([true]);
-		expect(coercion(person, { name: 1, role: 'A' })).toEqual([true]);
-		expect(coercion(person, { name: 'a', role: 'B' })).toEqual([true]);
-		expect(coercion(person, { name: 'a', role: 'A', age: 1 })).toEqual([true]);
-	});
-
-	test("an Int beyond 32 bits, which GraphQL's Int refuses", () => {
-		expect(coercion(z.int32(), 2 ** 31)).toEqual([true]);
-		expect(coercion(z.int32(), -(2 ** 31) - 1)).toEqual([true]);
-	});
-
-	test('a union, when every branch failed on one of those', () => {
-		expect(coercion(tags, 5)).toEqual([true]);
-		expect(coercion(tags, [1])).toEqual([true]);
-	});
-
-	test('not a constraint: a bound, a format, a list too long', () => {
-		expect(coercion(z.string().min(2), 'a')).toEqual([false]);
-		expect(coercion(z.email(), 'x')).toEqual([false]);
-		expect(coercion(tags, ['a', 'b', 'c'])).toEqual([false]);
-	});
-});
-
-describe('coercionErrors', () => {
-	const variables = z.object({ ids: z.array(z.string()) });
-
-	test("names a list item's type from the document", () => {
-		const sent = { ids: ['a', 2] };
-		expect(
-			coercionErrors(issuesOf(variables, sent), {
-				query: 'query Q($ids: [ID!]!) { q(ids: $ids) }',
-				operationName: 'Q',
-				variables: sent,
-			}),
-		).toEqual([
-			{
-				message:
-					'Variable "$ids" got invalid value 2 at "ids[1]"; ID cannot represent value: 2',
-				locations: [{ line: 1, column: 9 }],
-			},
-		]);
-	});
-
-	test('without a document it parses, no type and no locations', () => {
-		const sent = {};
-		expect(
-			coercionErrors(issuesOf(variables, sent), {
-				query: 'not graphql',
-				operationName: 'Q',
-				variables: sent,
-			}),
-		).toEqual([
-			{ message: 'Variable "$ids" of required type was not provided.' },
-		]);
-	});
-});
-
-describe('inspect', () => {
-	test("prints a value as graphql-js's error messages do", () => {
-		expect(inspect('a')).toBe('"a"');
-		expect(inspect({ a: [1, 'b'], c: null, d: {}, e: [] })).toBe(
-			'{ a: [1, "b"], c: null, d: {}, e: [] }',
-		);
-		expect(inspect({ a: { b: { c: { d: 1 } } } })).toBe(
-			'{ a: { b: { c: [Object] } } }',
-		);
-		expect(inspect([[[[1]]]])).toBe('[[[[Array]]]]');
 	});
 });
 
@@ -236,18 +153,39 @@ describe('errorResponse', () => {
 		expect(await plain.json()).toEqual({ errors: [{ message: 'no' }] });
 	});
 
-	test('takes a list, the first status found answering', async () => {
+	test('takes a list, the highest status answering, as graphql-yoga does', async () => {
 		const response = errorResponse([
 			{ message: 'a' },
 			{ message: 'b', extensions: { http: { status: 401 } } },
+			{ message: 'c', extensions: { http: { status: 403 } } },
+			{ message: 'd', extensions: { http: { status: 400 } } },
 		]);
-		expect(response.status).toBe(401);
+		expect(response.status).toBe(403);
 		expect(await response.json()).toEqual({
 			errors: [
 				{ message: 'a' },
-				{ message: 'b', extensions: { http: { status: 401 } } },
+				{ message: 'b' },
+				{ message: 'c' },
+				{ message: 'd' },
 			],
 		});
+	});
+
+	test('leaves extensions.http and extensions.unexpected out of the body, as graphql-yoga does', async () => {
+		const thrown = new GraphQLError('taken', {
+			extensions: { code: 'TAKEN', http: { status: 409 }, unexpected: true },
+		});
+		expect(await errorResponse(thrown).json()).toEqual({
+			errors: [{ message: 'taken', extensions: { code: 'TAKEN' } }],
+		});
+	});
+
+	test('ignores a status given that a response cannot carry', () => {
+		const conflict = { message: 'a', extensions: { http: { status: 409 } } };
+		for (const status of [99, 204, 600, 409.5]) {
+			expect(errorResponse(conflict, { status }).status).toBe(409);
+			expect(errorResponse({ message: 'a' }, { status }).status).toBe(200);
+		}
 	});
 
 	test('ignores a status a response cannot carry: 99, 600, 204, 205, 304', () => {

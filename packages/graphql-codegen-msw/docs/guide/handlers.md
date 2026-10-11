@@ -40,7 +40,7 @@ The plugin writes:
 
 ```ts
 import type { GraphQLHandler } from "msw/graphql";
-import { type GraphQLMockResolver, type MockOptions, type InvalidInput, mockOperation, invalidInputRefusal } from "@nxgt/graphql-codegen-msw/runtime";
+import { type GraphQLMockResolver, type MockOptions, type InvalidInput, type InputTypes, mockOperation, invalidInputRefusal } from "@nxgt/graphql-codegen-msw/runtime";
 import type { UserQuery, UserQueryVariables, SignUpMutation, SignUpMutationVariables } from "./graphql";
 import { zUserQueryVariables, zSignUpMutationVariables } from "./zod";
 
@@ -50,12 +50,24 @@ export const endpoint = "https://api.example.com/graphql";
 /** How an invalid input is answered, without calling the resolver. */
 export const invalidInput: InvalidInput = invalidInputRefusal();
 
+/**
+ * The input types the variables reach, from the schema: how a handler words
+ * a value graphql refuses. Internal: its shape may change in any version.
+ */
+const inputTypes: InputTypes = {
+	DateTime: { kind: "scalar" },
+	ID: { kind: "builtin" },
+	PersonInput: { kind: "input", fields: { firstName: "String!", email: "String!" } },
+	SignUpInput: { kind: "input", fields: { person: "PersonInput!", tags: "[String!]", birth: "DateTime" } },
+	String: { kind: "builtin" },
+};
+
 /** Mocks the User query: `resolver` answers once the variables pass `zUserQueryVariables`. */
 export function mockUserQuery(
 	resolver: GraphQLMockResolver<UserQuery, UserQueryVariables>,
 	options?: MockOptions,
 ): GraphQLHandler {
-	return mockOperation({ type: "query", name: "User", variables: zUserQueryVariables, endpoint, invalidInput }, resolver, options);
+	return mockOperation({ type: "query", name: "User", variables: zUserQueryVariables, variableTypes: { id: "ID!" }, inputTypes, endpoint, invalidInput }, resolver, options);
 }
 
 /** Mocks the SignUp mutation: … */
@@ -63,7 +75,12 @@ export function mockSignUpMutation(…): GraphQLHandler { … }
 ```
 
 One handler factory per **named query and mutation**, in document order. The
-schema is not read: the documents name everything the file needs.
+schema gives `inputTypes`, every input type the variables reach (sorted by
+name), and each handler's `variableTypes`: the answer to a value graphql
+refuses is worded from them (see
+[What the API refuses before your resolvers](#what-the-api-refuses-before-your-resolvers)).
+Their shape is internal to the generated file and the runtime, and may change
+in any version; regenerate after an upgrade.
 
 ## What each import is
 
@@ -163,7 +180,10 @@ It answers as an msw resolver does:
 - `HttpResponse.json({ data })`: the response;
 - `undefined`: the next handler answers (msw's own fall-through);
 - `errorResponse(error, { status })`: `{ errors: [error] }` at `status`, else
-  the error's `extensions.http.status`, else 200;
+  the error's `extensions.http.status` (the highest, for several errors),
+  else 200, a status no response can carry (outside 200–599, or 204, 205,
+  304) ignored; the body leaves out `extensions.http` and
+  `extensions.unexpected`, as graphql-yoga does;
 - a thrown `GraphQLError` (from any copy of `graphql`): the same as
   `errorResponse(error)`, so the resolver can throw what your server's throws
   (`invalidInputError`, `fieldsError`, `badUserInput`);
@@ -211,46 +231,88 @@ two steps, always in this order:
 graphql-yoga checks the variables against their GraphQL types before it
 executes anything: a missing value for a non-null type, a `null` for one, a
 value of the wrong type (a number for a `String`, an `Int` beyond 32 bits), an
-unknown enum value, an input field the type does not declare. Your server's
-validation never sees these, so its invalid-input answer never names them.
-The mock answers them as graphql-yoga 5.24 does:
+unknown enum value, an input field the type does not declare, a value a
+custom scalar refuses. Your server's validation never sees these, so its
+invalid-input answer never names them. The mock answers them as graphql-yoga
+5.24 on graphql 17 does:
 
 - status **400**, under `Accept: application/json` and
   `application/graphql-response+json` alike;
 - one plain GraphQL error per problem, `{ message, locations }`, with no
   `extensions`: no `code`, no `fields`;
-- the message in graphql-js's wording, located at the variable's definition.
+- the message in graphql 17's wording, every type named as the schema names
+  it and graphql's "Did you mean …?" included, located at the variable's
+  definition in the query sent;
+- the errors in graphql's order: variables as declared, an input object's
+  fields as the schema declares them, its unknown fields last.
 
 ```json
 {
   "errors": [
     { "message": "Variable \"$id\" of required type \"ID!\" was not provided.", "locations": [{ "line": 1, "column": 12 }] },
-    { "message": "Variable \"$role\" got invalid value \"NOPE\"; Value \"NOPE\" does not exist in \"Role\" enum.", "locations": [{ "line": 1, "column": 26 }] }
+    { "message": "Variable \"$role\" got invalid value \"ADMN\"; Value \"ADMN\" does not exist in \"Role\" enum. Did you mean the enum value \"ADMIN\"?", "locations": [{ "line": 1, "column": 26 }] }
   ]
 }
 ```
 
-When any issue is of this kind, the whole request gets this answer and no
+When graphql refuses any variable, the whole request gets this answer and no
 other: the constraint issues beside it are not reported, as the API never
 reaches its validation. It applies whatever `invalidInput` is, a function of
-yours included, which therefore only receives constraint issues.
+yours included, which therefore only receives the issues graphql would let
+through.
 
-| Zod issue | The API's refusal |
+How it is decided: the generated file describes, from the schema, every input
+type the variables reach (`inputTypes`) and each variable's type
+(`variableTypes`). The handler walks the variables sent as graphql walks
+them. A built-in scalar, an enum, an input object, a list and a non-null type
+are judged as graphql judges them, from the declared type and the value,
+never from a Zod issue: an `Int` past 32 bits is refused as the API refuses
+it, an `@constraint(max: 50)` exceeded is not. A custom scalar refuses where
+the operation's Zod schema has an issue at its position.
+
+| What is sent | The API's refusal, and the mock's |
 | --- | --- |
-| `invalid_type`, the value absent | `Variable "$id" of required type "ID!" was not provided.`; inside an input object, `… at "input.person"; Expected value of type "PersonInput" to include required field "firstName", found: …` |
-| `invalid_type`, the value `null` | `Variable "$id" of non-null type "ID!" must not be null.`; inside, `Expected value of non-null type "String!" not to be null.` |
-| `invalid_type`, another value | `Variable "$id" got invalid value true; ID cannot represent value: true` (`String`, `Int`, `Float`, `Boolean`, `ID` as graphql-js words them; an input object `Expected value of type "SignUpInput" to be an object, found: "x".`) |
-| `invalid_value` | `Value "NOPE" does not exist in "Role" enum.`, or `Enum "Role" cannot represent non-string value: 5.` |
-| `unrecognized_keys` | `Expected value of type "SignUpInput" not to include unknown field "extra", found: …`, one error per field |
-| `too_big` / `too_small` at Int's 32-bit bound | `Int cannot represent non 32-bit signed integer value: 3000000000` |
-| `invalid_union`, every branch failing on one of these | the branch that went deepest: `[1]` for `[String!]` is refused at `tags[0]` |
+| a non-null variable left out | `Variable "$id" of required type "ID!" was not provided.` |
+| `null` for a non-null variable | `Variable "$id" of non-null type "ID!" must not be null.` |
+| a value of the wrong type | `Variable "$id" got invalid value true; ID cannot represent value: true`, as graphql words `String`, `Int`, `Float`, `Boolean` and `ID` |
+| an `Int` beyond 32 bits | `… got invalid value 3000000000; Int cannot represent non 32-bit signed integer value: 3000000000` |
+| an unknown enum value | `… Value "ADMN" does not exist in "Role" enum. Did you mean the enum value "ADMIN"?`, or `Enum "Role" cannot represent non-string value: 5.` |
+| an input object missing a required field | `… got invalid value { email: "a@b.co" } at "input.person"; Expected value of type "PersonInput" to include required field "firstName", found: { email: "a@b.co" }.` |
+| `null` for a non-null field or list item | `… got invalid value null at "input.person.firstName"; Expected value of non-null type "String!" not to be null.` |
+| an unknown input field | `… Expected value of type "SignUpInput" not to include unknown field "tag". Did you mean "tags"? Found: { … }.` |
+| something else than an object | `… Expected value of type "SignUpInput" to be an object, found: "x".` |
+| a value a custom scalar refuses | `… got invalid value "x" at "input.birth"; DateTime cannot represent this input: Invalid ISO datetime` |
+| a `@oneOf` input object without exactly one non-null field | `… Within OneOf Input Object type "Pick", exactly one field must be specified, and the value for that field must be non-null.` |
 
-The wording is the API's for every type the operation's document declares:
-a variable's own type and its list items. The mock does not hold the schema,
-so inside an input object it leaves the type's name out: `Expected value to
-include required field "firstName"`, `Expected value of another type, found:
-1.` graphql-js's `Did you mean …?` suggestions are not written either. Match
-on the status and the error's shape rather than on the text after the `;`.
+A list also takes a single value, as graphql coerces it: `"MEMBR"` for
+`[Role!]` is refused at `roles`, an item of `["ADMIN", "MEMBR"]` at
+`roles[1]`.
+
+### Known differences
+
+Checked against graphql-yoga 5.24.2, `@graphql-tools/executor` 2.0.3 and
+graphql 17.0.2 over 64 requests (missing, null and wrongly typed values at the
+top level and nested, unknown enum values and fields, Int overflow, custom
+scalars, lists, single values for lists, `@oneOf`): 62 answers are identical,
+status and body. Where the mock still differs:
+
+- **An `ID` given an integer.** graphql takes `5` for an `ID` (as `"5"`);
+  codegen-zod's schema for `ID` is a string, so the mock refuses it with
+  `invalidInput`'s answer (`validation.errors.invalid` by default).
+- **A custom scalar's message.** The mock words it as a scalar built with
+  `zodScalar` (`@nxgt/graphql-scalars`) does, `<Name> cannot represent this
+  input: <the schema's first issue>`, which holds when the client's schema is
+  the scalar's own. A scalar of another make words its refusal its own way
+  (graphql's `Expected value of type "X", found: …` when it returns nothing,
+  `…, but encountered error "…"; found: …` when it throws a plain `Error`).
+- **An application format.** A format of the application's own
+  (`withValidation`'s `formats`, a Zod string schema) is answered with the
+  code its Zod issue gives: `validation.errors.invalid-format` only for a
+  Zod format or a pattern, `validation.errors.invalid` for a refinement, a
+  prefix, a suffix or a substring. The API may answer `invalid-format` for
+  every format of its own.
+- **graphql 16.** An API on graphql 16 words some of these messages
+  differently; the mock always words them as graphql 17 does.
 
 ### `'invalid-input'`, the default
 
@@ -270,6 +332,7 @@ in the order Zod reports them.
 | `too_small` / `too_big` on a number or a bigint, `not_multiple_of` | `validation.errors.out-of-range` |
 | `too_small` / `too_big` on a list or a set | `validation.errors.too-few` / `validation.errors.too-many` |
 | `invalid_format` (a format such as `email`, or a `pattern`) | `validation.errors.invalid-format` |
+| `invalid_format` for `startsWith`, `endsWith` or `includes` | `validation.errors.invalid` |
 | any other constraint (a date's bound, a refinement, …) | `validation.errors.invalid` |
 
 A field has no `params`: the bound or the format is not written. These codes
@@ -282,7 +345,6 @@ addition, a changed code a breaking change.
     "message": "validation.errors.invalid-input",
     "extensions": {
       "code": "validation.errors.invalid-input",
-      "http": { "status": 400 },
       "fields": [
         { "path": "person.firstName", "code": "validation.errors.too-short", "message": "validation.errors.too-short" },
         { "path": "person.email", "code": "validation.errors.invalid-format", "message": "validation.errors.invalid-format" },
@@ -358,9 +420,12 @@ interface InvalidInputAnswer {
 ```
 
 `issues` are Zod's, each `path` starting with the variable's name, and only
-constraint issues: a value the API refuses while coercing the variables is
-answered before your function is called. The handler answers `{ errors: [error] }` at `status`; a `GraphQLError` is
-written through its `toJSON()`.
+the issues graphql lets through: a value the API refuses while coercing the
+variables is answered before your function is called. The handler answers
+`{ errors: [error] }` at `status`, as `errorResponse` does: a `GraphQLError`
+is written through its `toJSON()`, `extensions.http` left out, and a status no
+response can carry (outside 200–599, or 204, 205, 304) is ignored for the
+error's own `extensions.http.status`, else 200.
 
 ```ts
 // src/mocks/invalid-input.ts
@@ -463,8 +528,8 @@ requests (an array of operations in one POST) are not matched either.
 ## The runtime
 
 `@nxgt/graphql-codegen-msw/runtime` is what the generated file calls. It
-imports `msw`, `msw/graphql`, `graphql` (to read the operation's document for
-the coercion answer), `zod` and `@nxgt/graphql-validation` at run time, never
+imports `msw`, `msw/graphql`, `graphql` (to locate the coercion answer's
+errors in the query sent), `zod` and `@nxgt/graphql-validation` at run time, never
 the plugin.
 
 ```ts
@@ -478,6 +543,8 @@ interface MockedOperation {
 	readonly type: 'query' | 'mutation';
 	readonly name: string;
 	readonly variables: z.ZodType;
+	readonly variableTypes: Readonly<Record<string, string>>; // internal: { first: "Int = 10" }
+	readonly inputTypes: InputTypes; // internal: the input types the variables reach
 	readonly endpoint: Path;
 	readonly invalidInput: InvalidInput;
 }
@@ -498,10 +565,14 @@ declare function isGraphQLError(value: unknown): value is GraphQLError;
 
 Types: `GraphQLMockResolver`, `GraphQLMockInfo`, `MockedOperation`,
 `MockOptions`, `InvalidInput`, `InvalidInputAnswer`, `RefusedOperation`,
-`AnyGraphQLError`.
+`AnyGraphQLError`, and `InputTypes` / `InputType`, internal: exported for the
+generated file's annotation, their shape may change in any version.
 
 `mockOperation` is the generated handlers' only call: you can write a handler
-the plugin does not, for an operation outside your documents, with it.
+the plugin does not, for an operation outside your documents, with it. Its
+`variableTypes` and `inputTypes` are best copied from a generated file; with
+`variableTypes: {}`, no variable is walked and every refusal goes to
+`invalidInput`.
 
 ## The plugin function
 

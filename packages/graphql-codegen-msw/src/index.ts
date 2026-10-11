@@ -1,6 +1,7 @@
 import type { GraphQLSchema } from 'graphql';
 import type { CodegenMswConfig, DocumentFile } from './config';
 import { Imports } from './imports';
+import { inputTypesCode, variableTypesCode } from './input-types';
 import { Naming } from './naming';
 import { type MockedOperationNode, mockedOperations } from './operations';
 import { type CheckedOptions, checkedOptions } from './options';
@@ -15,10 +16,11 @@ const RUNTIME = '@nxgt/graphql-codegen-msw/runtime';
  * mutation of `documents`, `mock<Operation>(resolver, options?)`, typed with
  * the operation's result and variables types, its variables checked with
  * `@nxgt/graphql-codegen-zod`'s schema before the resolver runs. The schema
- * is not read: the documents name everything the file needs.
+ * gives the input types the variables reach, written once as `inputTypes`
+ * for the answer to a value graphql refuses.
  */
 export function plugin(
-	_schema: GraphQLSchema,
+	schema: GraphQLSchema,
 	documents: readonly DocumentFile[],
 	config: CodegenMswConfig = {},
 ): string {
@@ -36,7 +38,12 @@ export function plugin(
 			`@nxgt/graphql-codegen-msw: the file would declare ${twice} twice: two operations give it the same name. Rename one of them.`,
 		);
 	}
-	const imports = new Imports(['endpoint', 'invalidInput', ...handlers]);
+	const imports = new Imports([
+		'endpoint',
+		'invalidInput',
+		'inputTypes',
+		...handlers,
+	]);
 	// Only what the file uses is imported: no operation, no handler types.
 	const any = operations.length > 0;
 	const handler = any ? imports.type('msw/graphql', 'GraphQLHandler') : '';
@@ -44,6 +51,7 @@ export function plugin(
 		resolver: any ? imports.type(RUNTIME, 'GraphQLMockResolver') : '',
 		options: any ? imports.type(RUNTIME, 'MockOptions') : '',
 		invalidInput: imports.type(RUNTIME, 'InvalidInput'),
+		inputTypes: any ? imports.type(RUNTIME, 'InputTypes') : '',
 		mock: any ? imports.value(RUNTIME, 'mockOperation') : '',
 	};
 	const refusal = refusalCode(options, imports);
@@ -70,6 +78,7 @@ export function plugin(
 		imports.lines().join('\n'),
 		`/** Where the client sends its operations; a handler's \`options.endpoint\` overrides it. */\nexport const endpoint = ${JSON.stringify(options.endpoint)};`,
 		`/** How an invalid input is answered, without calling the resolver. */\nexport const invalidInput: ${runtime.invalidInput} = ${refusal};`,
+		...(any ? [inputTypesBlock(schema, operations, runtime.inputTypes)] : []),
 		...blocks,
 	].join('\n\n')}\n`;
 }
@@ -90,6 +99,25 @@ function refusalCode(options: CheckedOptions, imports: Imports): string {
 	return `${refusal}({ ${translate === 'translate' ? translate : `translate: ${translate}`} })`;
 }
 
+/** The file's private `inputTypes`, which every handler passes on. */
+function inputTypesBlock(
+	schema: GraphQLSchema,
+	operations: readonly MockedOperationNode[],
+	type: string,
+): string {
+	const code = inputTypesCode(
+		schema,
+		operations.map(({ node }) => node),
+	);
+	return [
+		'/**',
+		' * The input types the variables reach, from the schema: how a handler words',
+		' * a value graphql refuses. Internal: its shape may change in any version.',
+		' */',
+		`const inputTypes: ${type} = ${code};`,
+	].join('\n');
+}
+
 /** The local names one handler's source uses. */
 interface HandlerNames {
 	readonly handler: string;
@@ -102,11 +130,11 @@ interface HandlerNames {
 }
 
 function handlerBlock(
-	{ name, kind }: MockedOperationNode,
+	{ name, kind, node }: MockedOperationNode,
 	factory: string,
 	names: HandlerNames,
 ): string {
-	const operation = `{ type: ${JSON.stringify(kind)}, name: ${JSON.stringify(name)}, variables: ${names.schema}, endpoint, invalidInput }`;
+	const operation = `{ type: ${JSON.stringify(kind)}, name: ${JSON.stringify(name)}, variables: ${names.schema}, variableTypes: ${variableTypesCode(node)}, inputTypes, endpoint, invalidInput }`;
 	return [
 		`/** Mocks the ${name} ${kind}: \`resolver\` answers once the variables pass \`${names.schema}\`. */`,
 		`export function ${factory}(`,
