@@ -4,7 +4,9 @@
 import {
 	badUserInput,
 	constraintTypeDefs,
+	FIELD_CODES,
 	type FormatSchemas,
+	fieldIssueOf,
 	fieldsError,
 	inputPath,
 	invalidInputError,
@@ -86,6 +88,16 @@ export const conflict = fieldsError(
 	},
 );
 export const translated = { translate };
+
+// A Zod parse answered as that error, with the codes for translations.
+const parsed = z.object({ name: z.string().min(2) }).safeParse({ name: 'a' });
+export const fromZod = invalidInputError(
+	parsed.success ? [] : parsed.error.issues.map(fieldIssueOf),
+	{ translate },
+);
+export const mapIssue = fieldIssueOf;
+export const codes = FIELD_CODES;
+export const symbolPath = inputPath(['input', Symbol('k'), 0]);
 
 // The ./codegen subpath, as a code generator holds its results.
 const codegenSchema = buildSchema(

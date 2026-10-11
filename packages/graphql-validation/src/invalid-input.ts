@@ -118,12 +118,15 @@ export function fieldsError(
 }
 
 /**
- * A GraphQL path as a `FieldIssue` path: dotted, without the leading `input`
- * argument when a field follows it. `['input', 'person', 'firstName']` is
- * `person.firstName`, `['input', 'tags', 1]` is `tags.1`, `['first']` and
- * `['input']` stay as they are.
+ * A GraphQL or Zod path as a `FieldIssue` path: dotted, without the leading
+ * `input` argument when a field follows it, a symbol written as
+ * `String(key)`. `['input', 'person', 'firstName']` is `person.firstName`,
+ * `['input', 'tags', 1]` is `tags.1`, `['first']` and `['input']` stay as
+ * they are.
  */
-export function inputPath(path: readonly (string | number)[]): string {
+export function inputPath(path: readonly PropertyKey[]): string {
 	const [first, ...rest] = path;
-	return (first === 'input' && rest.length > 0 ? rest : path).join('.');
+	return (first === 'input' && rest.length > 0 ? rest : path)
+		.map((key) => String(key))
+		.join('.');
 }

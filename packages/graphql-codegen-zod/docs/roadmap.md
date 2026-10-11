@@ -4,11 +4,7 @@ What `@nxgt/graphql-codegen-zod` is heading for, phrased as what you get.
 
 ## Now
 
-- **Your own formats** (in progress, not released yet). `formatSchemas:
-  './formats'` reads the record `withValidation(schema, { formats })` takes,
-  `zodFormats` one format; the generated schemas import your formats and
-  chain the other rules on them, so the client refuses what the server
-  refuses. Needs `@nxgt/graphql-validation` 0.3.
+Nothing in progress.
 
 ## Next
 
@@ -31,6 +27,11 @@ Nothing yet.
 
 ## Shipped
 
+- **Your own formats, 0.3.0.** `formatSchemas: './formats'` reads the record
+  `withValidation(schema, { formats })` takes, `zodFormats` one format; the
+  generated schemas import your formats and chain the other rules on them,
+  so the client refuses what the server refuses. Needs
+  `@nxgt/graphql-validation` 0.3.
 - **Declarations that resolve under `nodenext`, 0.2.1.** The generated
   file's `scalarSchemas` import typechecks with `moduleResolution`
   `nodenext` or `node16`, with `@nxgt/graphql-scalars` 0.4.1 or later.

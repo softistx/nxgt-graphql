@@ -1,3 +1,14 @@
+// What an `invalidInput` of your own builds its answer with, from
+// `@nxgt/graphql-validation`, so an application needs no direct import of it.
+export {
+	type FieldError,
+	type FieldIssue,
+	fieldIssueOf,
+	fieldsError,
+	inputPath,
+	invalidInputError,
+	type Translate,
+} from '@nxgt/graphql-validation';
 export type { InputType, InputTypes } from './coercion';
 export {
 	type GraphQLMockInfo,
@@ -8,7 +19,6 @@ export {
 } from './mock-operation';
 export {
 	badUserInputRefusal,
-	fieldIssueOf,
 	type InvalidInput,
 	type InvalidInputAnswer,
 	invalidInputRefusal,

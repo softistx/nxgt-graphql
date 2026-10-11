@@ -1,8 +1,7 @@
 // What the generated handlers' types say, checked by typecheck: a resolver
 // receives the operation's variables type and answers its result type.
 
-import { errorResponse } from '@nxgt/graphql-codegen-msw/runtime';
-import { fieldsError } from '@nxgt/graphql-validation';
+import { errorResponse, fieldsError } from '@nxgt/graphql-codegen-msw/runtime';
 import { HttpResponse } from 'msw';
 import type { SignUpMutationVariables, UserQueryVariables } from './graphql';
 import { mockSignUpMutation, mockUserQuery } from './msw';

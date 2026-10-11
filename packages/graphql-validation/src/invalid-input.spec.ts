@@ -265,4 +265,16 @@ describe('inputPath', () => {
 	] as const)('%j is %j', (path, expected) => {
 		expect(inputPath(path)).toBe(expected);
 	});
+
+	test('writes a symbol as String(key)', () => {
+		expect(inputPath(['input', Symbol('tag'), 0])).toBe('Symbol(tag).0');
+		expect(inputPath([Symbol()])).toBe('Symbol()');
+		expect(inputPath([Symbol.for('input'), 'a'])).toBe('Symbol(input).a');
+	});
+
+	test("takes a Zod issue's path as it is", () => {
+		const key = Symbol('k');
+		const path: PropertyKey[] = ['input', 'person', key];
+		expect(inputPath(path)).toBe('person.Symbol(k)');
+	});
 });

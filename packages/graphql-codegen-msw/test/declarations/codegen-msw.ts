@@ -6,10 +6,16 @@ import { type CodegenMswConfig, plugin } from '@nxgt/graphql-codegen-msw';
 import {
 	badUserInputRefusal,
 	errorResponse,
+	type FieldError,
+	type FieldIssue,
 	fieldIssueOf,
+	fieldsError,
 	type InvalidInput,
+	inputPath,
+	invalidInputError,
 	invalidInputRefusal,
 	mockOperation,
+	type Translate,
 } from '@nxgt/graphql-codegen-msw/runtime';
 import { buildSchema } from 'graphql';
 import { HttpResponse } from 'msw';
@@ -72,3 +78,28 @@ export const handWritten = mockOperation<
 );
 
 export const refused = errorResponse({ message: 'no' }, { status: 409 });
+
+// An invalidInput of your own, built from ./runtime's re-exports alone.
+const translate: Translate = (code) => code;
+export const ownShape = ((issues) => ({
+	error: invalidInputError(
+		issues.map((issue): FieldIssue => {
+			const field = fieldIssueOf(issue);
+			return issue.code === 'too_small'
+				? { ...field, params: { min: Number(issue.minimum) } }
+				: field;
+		}),
+		{ translate },
+	),
+	status: 400,
+})) satisfies InvalidInput;
+export const conflict = fieldsError(
+	'conflict',
+	[{ path: inputPath(['input', Symbol('k')]), code: 'taken' }],
+	{ status: 409, translate },
+);
+export const written: FieldError = {
+	path: 'email',
+	code: 'taken',
+	message: 'taken',
+};

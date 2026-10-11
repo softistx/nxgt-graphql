@@ -216,8 +216,19 @@ throw invalidInputError(
 
 Fields keep the order given; `params` is written only when it has a key
 (never `{}`); `GraphQLError`'s options (`originalError`, `path`, …) are kept,
-but an `extensions` among them is replaced. Mapping a Zod parse and
-`fieldsError` are in
+but an `extensions` among them is replaced. From a Zod parse,
+`fieldIssueOf` maps each issue to a field and a code (`too-short`,
+`invalid-format`, …):
+
+```ts
+import { fieldIssueOf, invalidInputError } from '@nxgt/graphql-validation';
+
+const result = PersonInput.safeParse(input);
+if (!result.success)
+  throw invalidInputError(result.error.issues.map(fieldIssueOf), { translate: t });
+```
+
+The codes, and `fieldsError`, are in
 [Answering invalid input as one error](docs/guide/invalid-input.md).
 
 ## IDE support
@@ -265,7 +276,9 @@ the directive declared is this package's. Both at once throw
 | `badUserInput(where, zodError)` | builds the error above, for code that validates by hand |
 | `invalidInputError(issues, options?)` | one 400 error, `extensions: { code: 'validation.errors.invalid-input', http, fields }`; `options`: `translate` and `GraphQLError`'s own |
 | `fieldsError(code, issues, options?)` | a refusal of your own naming fields, `extensions: { code, params?, http?, fields }`; `options` adds `status` and `params` |
-| `inputPath(path)` | `['input', 'person', 'firstName']` as `person.firstName`: dotted, the leading `input` argument dropped |
+| `inputPath(path)` | `['input', 'person', 'firstName']` as `person.firstName`: dotted, the leading `input` argument dropped; a symbol written as `String(key)` |
+| `fieldIssueOf(issue)` | a Zod issue as a `FieldIssue`: `inputPath(issue.path)` and a code under `validation.errors.` (`too-short`, `too-long`, `out-of-range`, `too-few`, `too-many`, `invalid-format`, `invalid`), no params |
+| `FIELD_CODES` | those codes, keyed `tooShort`, `tooLong`, `outOfRange`, `tooFew`, `tooMany`, `invalidFormat`, `invalid` |
 | `INVALID_INPUT` | `'validation.errors.invalid-input'` |
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |

@@ -199,6 +199,8 @@ if (!result.success) {
 }
 ```
 
+[`@nxgt/graphql-codegen-msw`](https://www.npmjs.com/package/@nxgt/graphql-codegen-msw) checks each mocked request's variables with these same `z<Operation>Variables` schemas.
+
 ### On the client: parse the response
 
 An operation's result is typed `z.output`: what the response holds, custom

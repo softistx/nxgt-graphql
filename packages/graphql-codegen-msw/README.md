@@ -30,7 +30,11 @@ The generated file imports `@nxgt/graphql-codegen-msw/runtime` at run time:
 keep the package wherever the mocks run. A dev dependency is enough for tests
 and a development server; a production build that ships its mocks (a demo
 mode) needs it as a dependency. `@nxgt/graphql-validation`, which builds the
-refusals, comes with it.
+refusals, comes with it, and `./runtime` re-exports what a function of your
+own builds with (`invalidInputError`, `fieldsError`, `fieldIssueOf`,
+`inputPath`, the types `Translate`, `FieldIssue`, `FieldError`): import them
+from `@nxgt/graphql-codegen-msw/runtime`. An application that also imports
+`@nxgt/graphql-validation` itself needs `^0.4.0`.
 
 ## Setup
 
@@ -156,7 +160,8 @@ for an API that answers invalid input that way.
 The codes are `too-short`, `too-long`, `out-of-range`, `too-few`, `too-many`,
 `invalid-format` (a format or a pattern) and `invalid` (anything else, a
 prefix, suffix or substring included), under `validation.errors.`, with no
-params. Each message is its code, unless you name a translator:
+params: `@nxgt/graphql-validation`'s `fieldIssueOf`, the mapping a server
+using it applies. Each message is its code, unless you name a translator:
 `translate: './i18n#translate'`.
 
 A value the API refuses before its validation (a missing or `null` value for a
@@ -199,8 +204,7 @@ Throw a `GraphQLError`, as your server's resolver would: the handler answers
 the highest status among them.
 
 ```ts
-import { fieldsError } from '@nxgt/graphql-validation';
-import { errorResponse } from '@nxgt/graphql-codegen-msw/runtime';
+import { errorResponse, fieldsError } from '@nxgt/graphql-codegen-msw/runtime';
 
 mockSignUpMutation(() => {
 	throw fieldsError('person.errors.duplicate', [{ path: 'person.email', code: 'person.errors.email-taken' }], { status: 409 });
@@ -279,8 +283,10 @@ Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 The package exports `plugin` and the `CodegenMswConfig` and `DocumentFile`
 types from `.`; graphql-codegen finds `plugin` by the package name. The
 generated file's runtime is `./runtime`: `mockOperation`,
-`invalidInputRefusal`, `badUserInputRefusal`, `fieldIssueOf`, `errorResponse`,
-`isGraphQLError` and their types.
+`invalidInputRefusal`, `badUserInputRefusal`, `errorResponse`,
+`isGraphQLError` and their types, and, re-exported from
+`@nxgt/graphql-validation`, `invalidInputError`, `fieldsError`,
+`fieldIssueOf`, `inputPath`, `Translate`, `FieldIssue` and `FieldError`.
 
 - [Documentation index](docs/README.md)
 - Guides: [Handlers](docs/guide/handlers.md)
