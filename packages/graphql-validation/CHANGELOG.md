@@ -1,5 +1,11 @@
 # @nxgt/graphql-validation
 
+## 0.4.1
+
+### Patch Changes
+
+- [#99](https://github.com/softistx/nxgt-graphql/pull/99) [`f04d08c`](https://github.com/softistx/nxgt-graphql/commit/f04d08c9fc179efd259ab38cfe7dc8c5ca84f254) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Docs: from zod 4.6.6, a list longer than `maxItems` is refused with one `too_big` issue at the list's path and none for its items, since zod stops an oversized array before parsing them.
+
 ## 0.4.0
 
 ### Minor Changes
