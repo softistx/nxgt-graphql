@@ -174,7 +174,8 @@ type UnavailableReason = 'unreachable' | 'timeout' | 'invalid-response';
 
 class ApiUnavailableError extends Error {
   readonly reason: UnavailableReason;
-  // cause: the transport's error, for unreachable, timeout, and an unparsable 2xx
+  // cause: the transport's error, for unreachable, timeout, and an unparsable 2xx;
+  // for a timeout, httpyz's TimeoutError, the answer's or its body's
 }
 ```
 

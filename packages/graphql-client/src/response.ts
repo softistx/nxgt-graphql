@@ -57,11 +57,11 @@ export function statusTextOf(reply: AnyReply): string {
 	return typeof statusText === 'string' ? statusText : '';
 }
 
-// Temporary, until nxgt-http#131: httpyz exports no SSE parser, so an error
-// status's event stream is kept here as its raw text, never parsed.
 /**
  * What a reply refusing a stream stands for, its body read by its media type:
- * its GraphQL errors as an `ApiError`, else an `ApiStatusError`.
+ * its GraphQL errors as an `ApiError`, else an `ApiStatusError`. An error
+ * status's event stream is kept as its raw text: reading its events as
+ * GraphQL errors is a change of contract, on the roadmap.
  */
 export async function refusedError(response: Response): Promise<unknown> {
 	let body: unknown;
@@ -98,7 +98,7 @@ async function bodyOfReply(response: Response): Promise<unknown> {
  * this package's.
  */
 export function transportError(error: unknown): unknown {
-	if (isBodyTimeout(error) || isHttpyzError(error, 'TimeoutError'))
+	if (isHttpyzError(error, 'TimeoutError') || isBodyTimeout(error))
 		return new ApiUnavailableError('timeout', { cause: error });
 	if (isHttpyzError(error, 'NetworkError'))
 		return new ApiUnavailableError('unreachable', { cause: error });
@@ -145,10 +145,12 @@ export function isHttpyzError(
 }
 
 /**
- * The deadline firing while the body is read: httpyz rejects with the
- * signal's own `DOMException`, not its `TimeoutError`.
- * Temporary, until nxgt-http#130: httpyz rejects a body-read deadline with
- * the signal's DOMException.
+ * A deadline that fired while the body was read, as an httpyz copy before
+ * 0.4 rejects: the signal's own `DOMException`, not its `TimeoutError`.
+ * httpyz 0.4, this package's, throws its `TimeoutError` there; an
+ * application may still pass an older copy as `http`, and its timeout stays
+ * an `ApiUnavailableError('timeout')`. A caller's own deadline never gets
+ * here: `post` and `subscribe` rethrow an aborted `signal`'s reason first.
  */
 function isBodyTimeout(error: unknown): boolean {
 	return error instanceof DOMException && error.name === 'TimeoutError';
