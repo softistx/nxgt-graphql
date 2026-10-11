@@ -4,7 +4,7 @@
 
 | Page | Read it when |
 | --- | --- |
-| [Client](guide/client.md) | you create a client, run queries and mutations, retry, dedupe, or use it on a server |
+| [Client](guide/client.md) | you create a client, run queries and mutations, retry, dedupe, send persisted queries, batch, or use it on a server |
 | [Errors](guide/errors.md) | you catch a failure, read its code or fields, or map it to an HTTP response |
 
 ## Reference

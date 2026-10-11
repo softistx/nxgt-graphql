@@ -1,3 +1,4 @@
+export type { BatchOptions } from './batch';
 export { createGraphQLClient } from './client';
 export type { GraphQLDocument } from './document';
 export {
@@ -21,3 +22,4 @@ export type {
 	UrlClientOptions,
 	VariablesArgs,
 } from './options';
+export type { PersistedQueries } from './persisted';

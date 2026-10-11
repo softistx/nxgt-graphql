@@ -1,6 +1,8 @@
 import type { HttpClient, HttpClientOptions, RetryOptions } from '@nxgt/httpyz';
+import type { BatchOptions } from './batch';
 import type { GraphQLDocument } from './document';
 import type { ApiError, ApiStatusError } from './errors';
+import type { PersistedQueries } from './persisted';
 
 /** A query's retries: always over POST, which is how GraphQL is sent. */
 export type QueryRetry = number | Omit<RetryOptions, 'methods'> | false;
@@ -21,6 +23,17 @@ interface CommonOptions {
 	retry?: QueryRetry;
 	/** Identical queries in flight share one request. Default: `true`. */
 	dedupe?: boolean;
+	/**
+	 * Operations named by a hash instead of their text: the client preset's
+	 * `persistedDocuments` hash (`documentId`), or Automatic Persisted Queries
+	 * (`apq`). The server must accept them. Default: `false`.
+	 */
+	persisted?: PersistedQueries;
+	/**
+	 * Queries issued together posted as one JSON array; a mutation is always
+	 * sent alone. The server must accept batches. Default: `false`.
+	 */
+	batch?: false | BatchOptions;
 }
 
 /** A client of its own: the endpoint's URL, and `@nxgt/httpyz`'s options. */

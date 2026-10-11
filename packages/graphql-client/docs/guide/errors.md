@@ -83,12 +83,20 @@ fails. Prefer it to `instanceof ApiError`.
 
 A status that is not a success, with no GraphQL body: a 401, 403, 404, a
 gateway's 503. A reply labelled JSON that does not parse (a gateway's HTML page
-under a JSON header, a cut body) is the same error with `body` undefined.
+under a JSON header, a cut body) is the same error with `body` undefined and
+`cause` set to the transport's parse error.
 
 ```ts
 class ApiStatusError extends Error {
   readonly status: number;
   readonly body: unknown; // read by its media type, when there was one
+  // cause: the transport's parse error, for a non-2xx labelled JSON that does not parse
+}
+```
+
+```ts
+if (error instanceof ApiStatusError && error.body === undefined) {
+  console.log(error.status, error.cause); // what did not parse, and why
 }
 ```
 

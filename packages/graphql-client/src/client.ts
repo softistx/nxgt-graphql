@@ -1,14 +1,16 @@
 import { createHttpClient } from '@nxgt/httpyz';
+import { Batcher } from './batch';
 import { Deduplicator } from './dedupe';
 import { type GraphQLDocument, type Operation, operationOf } from './document';
 import { ApiError, ApiStatusError } from './errors';
+import { dedupeKey } from './keys';
 import type {
 	GraphQLClient,
 	GraphQLClientOptions,
 	QueryOptions,
-	QueryRetry,
 } from './options';
-import { send, type Transport } from './send';
+import { checkPersistable } from './persisted';
+import { type Sending, send, type Transport } from './send';
 
 /** Any operation's document: its variables' type is contravariant. */
 type AnyDocument = GraphQLDocument<unknown, never>;
@@ -19,24 +21,28 @@ export function createGraphQLClient(
 	const { onUnauthenticated, retry: clientRetry, dedupe = true } = options;
 	const transport = transportOf(options);
 	const flights = new Deduplicator();
+	const batcher = options.batch
+		? new Batcher(transport, options.batch)
+		: undefined;
 
+	/** A query: shared with identical ones in flight, then batched. */
 	function sendQuery(
 		operation: Operation,
 		variables: unknown,
 		call: QueryOptions,
 	): Promise<unknown> {
 		const retry = call.retry ?? clientRetry;
-		if (!dedupe)
-			return send(transport, operation, variables, {
-				call,
-				retry,
-				signal: call.signal,
-			});
+		const go = (signal: AbortSignal | undefined) => {
+			const sending: Sending = { call, retry, signal };
+			return batcher
+				? batcher.run(operation, variables, sending)
+				: send(transport, operation, variables, sending);
+		};
+		if (!dedupe) return go(call.signal);
 		return flights.run(
 			dedupeKey(operation, variables, call, retry),
 			call.signal,
-			(signal) =>
-				send(transport, operation, variables, { call, retry, signal }),
+			go,
 		);
 	}
 
@@ -52,6 +58,7 @@ export function createGraphQLClient(
 				`${expected === 'query' ? 'query()' : 'mutate()'} was given a ${operation.kind}`,
 			);
 		}
+		checkPersistable(operation, transport.persisted);
 		try {
 			if (expected === 'query')
 				return await sendQuery(operation, variables, call);
@@ -77,32 +84,23 @@ export function createGraphQLClient(
 }
 
 function transportOf(options: GraphQLClientOptions): Transport {
+	const persisted = options.persisted ?? false;
 	if (options.http)
-		return { http: options.http, path: options.path ?? '/graphql' };
+		return { http: options.http, path: options.path ?? '/graphql', persisted };
 	const {
 		url,
 		onUnauthenticated: _hook,
 		retry: _retry,
 		dedupe: _dedupe,
+		persisted: _persisted,
+		batch: _batch,
 		...http
 	} = options;
-	return { http: createHttpClient({ ...http, baseUrl: url }), path: '' };
-}
-
-/** Queries alike in all a request carries share one flight. */
-function dedupeKey(
-	operation: Operation,
-	variables: unknown,
-	call: QueryOptions,
-	retry: QueryRetry | undefined,
-): string {
-	return JSON.stringify([
-		operation.query,
-		variables ?? {},
-		[...new Headers(call.headers)],
-		call.timeout,
-		retry,
-	]);
+	return {
+		http: createHttpClient({ ...http, baseUrl: url }),
+		path: '',
+		persisted,
+	};
 }
 
 function isUnauthenticated(error: unknown): error is ApiError | ApiStatusError {

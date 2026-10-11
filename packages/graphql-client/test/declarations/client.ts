@@ -10,6 +10,7 @@ import {
 	type ApiFieldError,
 	ApiStatusError,
 	ApiUnavailableError,
+	type BatchOptions,
 	type CallOptions,
 	createGraphQLClient,
 	type GraphQLClient,
@@ -17,6 +18,7 @@ import {
 	type GraphQLDocument,
 	type HttpClientBasedOptions,
 	isApiError,
+	type PersistedQueries,
 	type QueryOptions,
 	type QueryRetry,
 	type UnavailableReason,
@@ -48,7 +50,18 @@ export const overHttp = createGraphQLClient({
 	http: createHttpClient({ baseUrl: 'https://api.example.com' }),
 	path: '/graphql',
 	dedupe: false,
+	persisted: { mode: 'documentId' },
+	batch: { max: 5, wait: 10 },
 });
+
+export const apq = createGraphQLClient({
+	url: 'https://api.example.com/graphql',
+	persisted: { mode: 'apq' },
+	batch: false,
+});
+
+export const persisted: PersistedQueries = { mode: 'apq' };
+export const batch: BatchOptions = { max: 10 };
 
 export const viewer = client.query(Viewer);
 export const renamed = client.mutate(Rename, { name: 'a' });
