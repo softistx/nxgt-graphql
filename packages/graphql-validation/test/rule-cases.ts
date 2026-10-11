@@ -1,15 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { z } from 'zod';
-import type { Format } from '../src/formats/format';
+import type { BuiltInFormat } from '../src/formats/format';
+import { registryOf } from '../src/formats/registry';
 import { rules } from '../src/rules';
-import type { IssueFields, Target } from '../src/rules/rule';
+import type { IssueFields, RuleContext, Target } from '../src/rules/rule';
 
 /** Any rule, whatever its value and target. */
 interface AnyRule {
 	readonly argument: string;
 	readonly target: Target;
-	readonly toZod: (schema: never, value: never) => z.ZodType;
-	readonly toCode: (schema: string, value: never) => string;
+	readonly toZod: (schema: never, value: never, context: never) => z.ZodType;
+	readonly toCode: (schema: string, value: never, context: never) => string;
 	readonly owns: (issue: IssueFields) => boolean;
 }
 
@@ -19,6 +20,9 @@ const bases: Record<Target, () => [z.ZodType, string]> = {
 	number: () => [z.number(), 'z.number()'],
 	list: () => [z.array(z.string()), 'z.array(z.string())'],
 };
+
+/** The built-in formats only, as a schema with no `formats` option has. */
+const context: RuleContext = { formats: registryOf() };
 
 /** What a code generator's output becomes once it runs. */
 function evaluate(code: string): z.ZodType {
@@ -75,17 +79,24 @@ export function ruleCases(
 		const apply = rule.toZod as (
 			schema: z.ZodType,
 			value: string | number,
+			context: RuleContext,
 		) => z.ZodType;
 		const write = rule.toCode as (
 			schema: string,
 			value: string | number,
+			context: RuleContext,
 		) => string;
-		agree(apply(base, value), evaluate(write(baseCode, value)), cases, rule);
+		agree(
+			apply(base, value, context),
+			evaluate(write(baseCode, value, context)),
+			cases,
+			rule,
+		);
 	});
 }
 
 /** The same promise for a format: its schema and its source agree. */
-export function formatCases(format: Format, cases: Cases): void {
+export function formatCases(format: BuiltInFormat, cases: Cases): void {
 	describe(`@constraint(format: "${format.name}")`, () => {
 		agree(format.toZod(), evaluate(format.toCode()), cases);
 	});

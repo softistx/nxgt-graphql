@@ -11,9 +11,11 @@ import {
 } from 'graphql';
 import { z } from 'zod';
 import { documents, schema, sdl } from '../test/fixture';
+import { formatSchemas } from '../test/formats';
 import * as generatedModule from '../test/generated';
 import { scalarSchemas } from '../test/scalars';
-import { config, generated } from '../test/write-generated';
+import { skuSchema } from '../test/sku';
+import { config, generated, info } from '../test/write-generated';
 import { type CodegenZodConfig, plugin } from './index';
 
 const GENERATED = new URL('../test/generated.ts', import.meta.url);
@@ -41,6 +43,7 @@ function server() {
 		groups: true,
 		log: true,
 		rate: true,
+		order: true,
 		search: [
 			{
 				__typename: 'User',
@@ -65,7 +68,10 @@ function server() {
 			};
 		}
 	}
-	return withValidation(schema);
+	// The application's formats, as the generated file imports them.
+	return withValidation(schema, {
+		formats: { ...formatSchemas, sku: skuSchema },
+	});
 }
 
 const source = documents[0]?.document.loc?.source.body ?? '';
@@ -295,6 +301,57 @@ describe('the generated file', () => {
 			['Reach', 'zReachQueryVariables', { c: {} }],
 			['ReachEmail', 'zReachEmailQueryVariables', { e: 'a@b.co' }],
 			['ReachEmail', 'zReachEmailQueryVariables', { e: 'nope' }],
+			// The application's own formats, and the rules chained on them.
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{
+					input: { email: 'a@b.co', name: 'Al', handle: 'al-b', country: 'FR' },
+				},
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', handle: 'Al B' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', handle: 'a-very-long-one' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', country: 'fr' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', country: 'FRA' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', skus: 'SKU-0001' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{ input: { email: 'a@b.co', name: 'Al', skus: 'SKU-1' } },
+			],
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{
+					input: {
+						email: 'a@b.co',
+						name: 'Al',
+						skus: ['SKU-0001', 'SKU-0002', 'SKU-0003'],
+					},
+				},
+			],
+			['Order', 'zOrderMutationVariables', { sku: 'SKU-0001' }],
+			['Order', 'zOrderMutationVariables', { sku: 'sku-0001' }],
 		];
 		for (const [operationName, schema, variableValues] of cases) {
 			const result = await graphql({
@@ -406,6 +463,7 @@ describe('the generated file', () => {
 				role: 'USER',
 				prefs: { tags: ['x'], grid: [[1]], owner: '7', ids: ['1'] },
 				tags: ['new'],
+				handle: 'new-user',
 			},
 		});
 		expect(schemas['zContact']?.safeParse({ email: 'a@b.co' }).success).toBe(
@@ -506,7 +564,7 @@ describe('plugin', () => {
 		];
 		const names = async (config: CodegenZodConfig) =>
 			[
-				...(await plugin(schema, documents, config)).matchAll(
+				...(await plugin(schema, documents, config, info)).matchAll(
 					/^export type (\w+) /gm,
 				),
 			].map((m) => m[1]);
@@ -621,10 +679,12 @@ describe('the generated file, output types', () => {
 	});
 
 	test('writes none with objects: false', async () => {
-		const out = await plugin(schema, documents, {
-			...config,
-			objects: false,
-		});
+		const out = await plugin(
+			schema,
+			documents,
+			{ ...config, objects: false },
+			info,
+		);
 		expect(out).not.toContain('export const zUser =');
 		expect(out).toContain('export const zSignUpInput =');
 	});
@@ -731,7 +791,7 @@ describe('the generated file, operation results', () => {
 	});
 
 	test('declares a deep selection apart, so TypeScript infers it', async () => {
-		const out = await plugin(schema, documents, config);
+		const out = await plugin(schema, documents, config, info);
 		expect(out).toMatch(/^const zDeepQuery\$1: z\.ZodType</m);
 		let user: unknown = { id: 'u_0' };
 		for (let i = 0; i < 16; i++) user = { friends: [user] };
@@ -746,7 +806,7 @@ describe('the generated file, operation results', () => {
 				),
 			},
 		];
-		await expect(plugin(schema, keys, config)).rejects.toThrow(
+		await expect(plugin(schema, keys, config, info)).rejects.toThrow(
 			'@nxgt/graphql-codegen-zod: Keys.search selects __typename under a different key for each member of SearchResult (t, k). Select it under one key for every member, so the result tells its members apart.',
 		);
 		const conditional = [
@@ -756,7 +816,7 @@ describe('the generated file, operation results', () => {
 				),
 			},
 		];
-		await expect(plugin(schema, conditional, config)).rejects.toThrow(
+		await expect(plugin(schema, conditional, config, info)).rejects.toThrow(
 			'without __typename for User',
 		);
 	});
@@ -769,7 +829,7 @@ describe('the generated file, operation results', () => {
 				),
 			},
 		];
-		const out = await plugin(schema, odd, config);
+		const out = await plugin(schema, odd, config, info);
 		expect(out).toContain('__TYPENAME__: z.array(');
 		expect(out).toContain(
 			'info: z.unknown().optional()'.replace('.optional()', ''),
@@ -812,16 +872,18 @@ describe('the generated file, operation results', () => {
 				),
 			},
 		];
-		await expect(plugin(schema, bare, config)).rejects.toThrow(
+		await expect(plugin(schema, bare, config, info)).rejects.toThrow(
 			'@nxgt/graphql-codegen-zod: Bare.search selects the abstract type SearchResult without __typename for User. Select __typename there, so the result tells its members apart.',
 		);
 	});
 
 	test('writes none with operations: false', async () => {
-		const out = await plugin(schema, documents, {
-			...config,
-			operations: false,
-		});
+		const out = await plugin(
+			schema,
+			documents,
+			{ ...config, operations: false },
+			info,
+		);
 		expect(out).not.toContain('export const zUserQuery =');
 		expect(out).toContain('export const zUserQueryVariables =');
 	});

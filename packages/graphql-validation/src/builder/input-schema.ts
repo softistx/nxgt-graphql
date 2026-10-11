@@ -13,7 +13,9 @@ import {
 	valueFromAST,
 } from 'graphql';
 import { z } from 'zod';
+import { type FormatRegistry, registryOf } from '../formats/registry';
 import { applyRule } from '../rules';
+import type { RuleContext } from '../rules/rule';
 import { type Constraint, constraintsOn } from './constraints';
 import { assertObjectTargets, leafSchema } from './leaf';
 
@@ -25,6 +27,7 @@ import { assertObjectTargets, leafSchema } from './leaf';
  */
 export class InputSchemas {
 	readonly directive: GraphQLDirective | undefined;
+	readonly #context: RuleContext;
 	readonly #objects = new Map<string, z.ZodType>();
 	readonly #defaults: {
 		schema: z.ZodType;
@@ -35,7 +38,9 @@ export class InputSchemas {
 	/** The input types a value can break a constraint inside. */
 	readonly #constrained = new Set<string>();
 
-	constructor(schema: GraphQLSchema) {
+	/** `formats`: the built-in ones by default, the application's added. */
+	constructor(schema: GraphQLSchema, formats: FormatRegistry = registryOf()) {
+		this.#context = { formats };
 		this.directive = schema.getDirective('constraint') ?? undefined;
 		const objects = Object.values(schema.getTypeMap()).filter(
 			isInputObjectType,
@@ -107,7 +112,17 @@ export class InputSchemas {
 			// object's own field defaults. One graphql refuses is its to report.
 			const value = valueFromAST(literal, type);
 			if (value === undefined) continue;
-			const result = schema.safeParse(value);
+			let result: z.ZodSafeParseResult<unknown>;
+			try {
+				result = schema.safeParse(value);
+			} catch (error) {
+				// Thrown by this zod: only the formats' wrapper, ours, goes async.
+				if (!(error instanceof z.core.$ZodAsyncError)) throw error;
+				const format = this.#context.formats.takeAsync();
+				throw new Error(
+					`The default value of ${where} cannot be checked at startup: ${format ? `the format "${format}"` : 'its format'} checks asynchronously, and a default value is checked synchronously. Drop the default, or move the async check out of the format into validated().`,
+				);
+			}
 			if (!result.success) {
 				throw new Error(
 					`The default value of ${where} breaks its @constraint: ${result.error.issues[0]?.message}`,
@@ -138,14 +153,15 @@ export class InputSchemas {
 			const own = constraints.filter(({ rule }) => rule.target === 'list');
 			const items = constraints.filter(({ rule }) => rule.target !== 'list');
 			let list: z.ZodType = z.array(this.#typed(type.ofType, items, where));
-			for (const { rule, value } of own) list = applyRule(rule, list, value);
+			for (const { rule, value } of own)
+				list = applyRule(rule, list, value, this.#context);
 			return list;
 		}
 		if (isInputObjectType(type)) {
 			assertObjectTargets(type.name, constraints, where);
 			return this.#object(type);
 		}
-		return leafSchema(type, constraints, where);
+		return leafSchema(type, constraints, where, this.#context);
 	}
 
 	#object(type: GraphQLInputObjectType): z.ZodType {

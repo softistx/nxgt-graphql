@@ -83,6 +83,61 @@ request. The resolver receives the parsed arguments.
 Every argument, its rule and its Zod equivalent, and the formats, are in
 [Constraints](docs/guide/constraints.md).
 
+### Your own formats
+
+Name a format of your own in `@constraint(format: "...")`: write each as a Zod
+string schema in one module, and hand the record to `withValidation`.
+
+```ts
+// formats.ts
+import { z } from 'zod';
+
+export const formatSchemas = {
+  siret: z.string().regex(/^\d{14}$/, 'Invalid SIRET: write its 14 digits'),
+  'work-email': z.email().endsWith('@example.com', 'Use your work address'),
+};
+```
+
+```ts
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { constraintTypeDefs, withValidation } from '@nxgt/graphql-validation';
+import { formatSchemas } from './formats';
+
+const typeDefs = [
+  constraintTypeDefs,
+  /* GraphQL */ `
+    input Company {
+      siret: String! @constraint(format: "siret")
+      contact: String @constraint(format: "work-email", maxLength: 64)
+    }
+    type Mutation { register(input: Company!): Boolean }
+  `,
+];
+const resolvers = { Mutation: { register: () => true } };
+
+export const schema = withValidation(
+  makeExecutableSchema({ typeDefs, resolvers }),
+  { formats: formatSchemas },
+);
+```
+
+A format is `z.string()` or a string format (`z.email()`, …), narrowed as you
+like (`.regex()`, `.refine()`) but never transformed nor rewritten (no
+`.transform()`, `.trim()`, `.toLowerCase()`, `z.url()`, which trims,
+`z.coerce.string()`, …): the resolver receives what the client sent. The one
+exception is the built-in `uri`, `z.url()`, which trims surrounding white
+space (see [Formats](docs/guide/constraints.md#formats)). The other rules
+narrow your format as they narrow a built-in one. Its messages are yours: a
+refusal reads as your schema writes it, and its issue carries
+`constraint: "format"`. A name is lowercase letters, digits and hyphens; a
+built-in name (`email`, …) is a type error and refused at startup, and so is
+a schema that rewrites the value (a custom `.check()` that does fails the
+request, naming the format). An async check (`.refine(async …)`) works in a
+request, and runs once per value. Call `withValidation` once, with every
+format: a second call with the same record wraps nothing; with other
+formats, or none, it throws. Without `formats`, nothing changes. Details in
+[Constraints](docs/guide/constraints.md#your-own-formats).
+
 ### Read the error
 
 ```json
@@ -171,12 +226,13 @@ the directive declared is this package's. Both at once throw
 | Export | Is |
 | --- | --- |
 | `constraintTypeDefs` | the SDL of `@constraint`, to add to `typeDefs` |
-| `withValidation(schema)` | checks every `@constraint` of a schema before its resolvers run |
+| `withValidation(schema, options?)` | checks every `@constraint` of a schema before its resolvers run; `options.formats` adds your own formats |
 | `validated(schema \| shape, resolver)` | a resolver whose arguments a Zod schema checks |
 | `badUserInput(where, zodError)` | builds the error above, for code that validates by hand |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
+| `WithValidationOptions`, `FormatSchemas`, `OwnFormats`, `StringSchema`, `FormatName` | the types of `withValidation`'s options: a record of string schemas, with no built-in format name (`FormatName`) |
 
 `@nxgt/graphql-validation/codegen` is for a code generator, such as
 [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod): it writes the schemas `withValidation` builds as source, and
@@ -184,9 +240,10 @@ refuses the schemas `withValidation` refuses. A server does not need it.
 
 | Export | Is |
 | --- | --- |
-| `checkConstraints(schema, onArgs?)` | runs every startup check of `withValidation` without wrapping anything; returns the `@constraint` directive, or `undefined` when the schema declares none |
+| `checkConstraints(schema, onArgs?, formats?)` | runs every startup check of `withValidation` without wrapping anything; returns the `@constraint` directive, or `undefined` when the schema declares none. `formats` is the record `withValidation` takes, checked the same way |
 | `constraintsOn(directive, node)` | the `Constraint`s written on an argument or input field (`arg.astNode`), `format` first |
-| `inputCode(type, constraints, where, named, options?)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where`. `options` (`InputCodeOptions`): `list({ type, code, single })` returns each list's source, given `code` (the array with every rule) and `single` (the list's named type, non-null, without rules), e.g. to take a single value as graphql does: `single`, wrapped, piped into `code` |
+| `inputCode(type, constraints, where, named, options?, formats?)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where`. `options` (`InputCodeOptions`): `list({ type, code, single })` returns each list's source, given `code` (the array with every rule) and `single` (the list's named type, non-null, without rules), e.g. to take a single value as graphql does: `single`, wrapped, piped into `code`. `format(name)` returns the source of one of your formats, since only the generator knows where your record is imported from: a reference to your schema, which the other rules narrow (`formatSchemas.siret.max(14)`); built-in formats never reach it. `formats`: the record `withValidation` takes, checked the same way, so its names are known; a field using one of them without the `format` option throws `@constraint(format: "<name>") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.` |
+| `FormatSchemas` | the type of that record |
 | `Constraint` | `{ rule, value }`, one `@constraint` argument. Of `rule`, read `argument` (`'minItems'`, `'format'`, …), `target` (`'list'` for `minItems`/`maxItems`, else what the rule narrows) and `base` (`true` for `format`, which picks the schema the others narrow); the rest is internal |
 
 ```ts
@@ -233,4 +290,4 @@ Every startup error and its fix is in [Troubleshooting](docs/troubleshooting.md)
 - [Documentation index](docs/README.md)
 - Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- [Roadmap](docs/roadmap.md): your own formats, schemas that read the context
+- [Roadmap](docs/roadmap.md): your own formats in the Zod codegen plugin, schemas that read the context

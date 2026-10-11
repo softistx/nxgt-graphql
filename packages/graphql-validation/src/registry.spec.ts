@@ -25,22 +25,22 @@ const folders = [
 		suffix: 'Rule',
 		registry: rules,
 		key: 'argument',
-		helper: 'rule.ts',
+		helpers: ['rule.ts'],
 	},
 	{
 		folder: 'formats',
 		suffix: 'Format',
 		registry: formats,
 		key: 'name',
-		helper: 'format.ts',
+		helpers: ['format.ts', 'registry.ts'],
 	},
 ] as const;
 
-for (const { folder, suffix, registry, key, helper } of folders) {
+for (const { folder, suffix, registry, key, helpers } of folders) {
 	const dir = join(import.meta.dir, folder);
 	const files = [...new Glob('*.ts').scanSync(dir)]
 		.filter((file) => !file.endsWith('.spec.ts'))
-		.filter((file) => !['all.ts', 'index.ts', helper].includes(file))
+		.filter((file) => !['all.ts', 'index.ts', ...helpers].includes(file))
 		.sort();
 
 	describe(`every file in ${folder}/`, () => {

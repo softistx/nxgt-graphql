@@ -4,6 +4,7 @@
 import {
 	badUserInput,
 	constraintTypeDefs,
+	type FormatSchemas,
 	validated,
 	withValidation,
 } from '@nxgt/graphql-validation';
@@ -33,6 +34,31 @@ export const schema = withValidation(
 	),
 );
 
+// An application's formats module, named to withValidation.
+export const formatSchemas = { siret: z.string().regex(/^\d{14}$/) };
+export const withFormats = withValidation(
+	buildSchema(
+		`${constraintTypeDefs}\ntype Query { a(s: String @constraint(format: "siret")): Int }`,
+	),
+	{ formats: formatSchemas },
+);
+
+// A record typed wider than its literal may hold no built-in name: it passes.
+const widened: FormatSchemas = formatSchemas;
+const loose: Record<string, z.ZodString> = { siret: z.string() };
+export const withWidened = withValidation(withFormats, { formats: widened });
+export const withLoose = withValidation(
+	buildSchema(`${constraintTypeDefs}\ntype Query { a: Int }`),
+	{ formats: loose },
+);
+
+// A literal record naming a built-in format is a type error.
+export const withBuiltInName = () =>
+	withValidation(buildSchema(`${constraintTypeDefs}\ntype Query { a: Int }`), {
+		// @ts-expect-error -- "email" is a built-in format
+		formats: { email: z.email() },
+	});
+
 export const refused = badUserInput('Query.a', new z.ZodError([]));
 
 // The ./codegen subpath, as a code generator holds its results.
@@ -40,8 +66,23 @@ const codegenSchema = buildSchema(
 	`${constraintTypeDefs} type Query { a(n: Int @constraint(min: 1)): Int }`,
 );
 export const directive = checkConstraints(codegenSchema);
+export const directiveWithFormats = checkConstraints(
+	codegenSchema,
+	undefined,
+	formatSchemas,
+);
 const arg = codegenSchema.getQueryType()?.getFields()['a']?.args[0];
 export const constraints = constraintsOn(directive, arg?.astNode);
 export const source = arg
 	? inputCode(arg.type, constraints, 'Query.a(n:)', (type) => type.name)
+	: '';
+export const sourceWithFormats = arg
+	? inputCode(
+			arg.type,
+			constraints,
+			'Query.a(n:)',
+			(type) => type.name,
+			{},
+			formatSchemas,
+		)
 	: '';

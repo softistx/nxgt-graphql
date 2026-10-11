@@ -18,6 +18,7 @@ import {
 	isSpecifiedScalarType,
 } from 'graphql';
 import { parsedDefault } from './defaults';
+import type { FormatCode } from './formats';
 import type { Naming } from './naming';
 import type { ScalarSources } from './scalars';
 
@@ -40,15 +41,21 @@ export class Writer {
 	readonly directive: GraphQLDirective | undefined;
 	readonly #naming: Naming;
 	readonly #scalars: ScalarSources;
+	readonly #formats: FormatCode;
+	readonly #options: InputCodeOptions;
 
 	constructor(
 		directive: GraphQLDirective | undefined,
 		naming: Naming,
 		scalars: ScalarSources,
+		formats: FormatCode,
 	) {
 		this.directive = directive;
 		this.#naming = naming;
 		this.#scalars = scalars;
+		this.#formats = formats;
+		// An application format is a reference to its schema, chained on.
+		this.#options = { list: singleOrList, format: formats.code };
 	}
 
 	/** The source of a custom scalar's schema, from its mapping. */
@@ -83,9 +90,14 @@ export class Writer {
 		};
 		if (!defaultValue)
 			return {
-				code: inputCode(type, constraints, where, named, {
-					list: singleOrList,
-				}),
+				code: inputCode(
+					type,
+					constraints,
+					where,
+					named,
+					this.#options,
+					this.#formats.schemas,
+				),
 				lazy,
 			};
 		// The default parsed as the client's value would be, then null allowed
@@ -96,7 +108,8 @@ export class Writer {
 			constraints,
 			where,
 			named,
-			{ list: singleOrList },
+			this.#options,
+			this.#formats.schemas,
 		);
 		const value = JSON.stringify(parsedDefault(defaultValue, type, where));
 		return {

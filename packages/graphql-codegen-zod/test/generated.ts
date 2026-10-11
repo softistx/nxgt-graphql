@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { scalarSchemas } from "./scalars";
+import { formatSchemas } from "./formats";
+import { skuSchema } from "./sku";
 
 /** Who someone is. */
 export const zRole = z.enum(["ADMIN", "USER"]);
@@ -56,6 +58,11 @@ export const zSignUpInput = z.strictObject({
 	get contacts() {
 		return z.union([z.array(zContact).max(2), z.custom<z.input<typeof zContact>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zContact).max(2))]).nullish();
 	},
+	/** The application's own formats: from the formatSchemas record, then zodFormats. */
+	handle: formatSchemas.slug.max(12).prefault("new-user").nullable(),
+	country: formatSchemas["country-code"].nullish(),
+	code: formatSchemas.code.max(3).nullish(),
+	skus: z.union([z.array(skuSchema).max(2), z.string().transform((value): unknown[] => [value]).pipe(z.array(skuSchema).max(2))]).nullish(),
 });
 export type SignUpInput = z.output<typeof zSignUpInput>;
 
@@ -172,6 +179,11 @@ export const zMutationRateArgs = z.object({
 	ids: z.union([z.array(z.string().min(3)).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().min(3)).min(1))]),
 });
 export type MutationRateArgs = z.output<typeof zMutationRateArgs>;
+
+export const zMutationOrderArgs = z.object({
+	sku: skuSchema,
+});
+export type MutationOrderArgs = z.output<typeof zMutationOrderArgs>;
 
 /** Someone with an account. */
 export type User = {
@@ -449,6 +461,7 @@ export const zMutation = z.object({
 		return zUser.nullish();
 	},
 	rate: z.boolean().nullish(),
+	order: z.boolean().nullish(),
 });
 export type Mutation = z.output<typeof zMutation>;
 
@@ -490,6 +503,11 @@ export const zRateMutationVariables = z.object({
 	id: z.string().min(3),
 });
 export type RateMutationVariables = z.input<typeof zRateMutationVariables>;
+
+export const zOrderMutationVariables = z.object({
+	sku: skuSchema,
+});
+export type OrderMutationVariables = z.input<typeof zOrderMutationVariables>;
 
 export const zReachQueryVariables = z.object({
 	get c() {
@@ -595,6 +613,11 @@ export const zRateMutation = z.object({
 	rate: z.boolean().nullable(),
 });
 export type RateMutation = z.output<typeof zRateMutation>;
+
+export const zOrderMutation = z.object({
+	order: z.boolean().nullable(),
+});
+export type OrderMutation = z.output<typeof zOrderMutation>;
 
 export const zReachQuery = z.object({
 	reach: z.boolean().nullable(),

@@ -4,11 +4,14 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Now
 
-Nothing in progress.
+- **Your own formats** (in progress, not released yet). Name a Zod string schema in
+  `@constraint(format: "...")`: `withValidation(schema, { formats })`, one
+  record your module exports, checked at startup, its refusals named
+  `format`. `@nxgt/graphql-codegen-zod` 0.3 reads the same record, so the
+  client refuses what the server refuses, with the same messages.
 
 ## Next
 
-- **Your own formats**, named in `@constraint(format: "...")`.
 - **Schemas that read the context**, `(args, context) => schema`, for checks
   that need the request (uniqueness in a database, permissions).
 

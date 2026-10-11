@@ -15,8 +15,8 @@ are public.
 | package | what it is |
 | --- | --- |
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema)`, `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`. Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
+| `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -254,7 +254,9 @@ packages/graphql-validation/src/
     rule.ts                Rule, defineRule, literal
     all.ts                 one `export *` line per rule
     index.ts               `rules` keyed by argument, applyRule, constraintOf
-  formats/                 one format per file, `<name>Format`; format.ts, all.ts, index.ts alike
+  formats/                 one format per file, `<name>Format`; format.ts, all.ts, index.ts alike;
+                           registry.ts, FormatRegistry: the built-in formats plus the
+                           application's, one Map, handed to every rule as RuleContext
   builder/                 GraphQL types to Zod: InputSchemas, argsSchemaOf, leaf, constraints;
                            check-constraints.ts, every startup check;
                            input-code.ts, the same walk written as source
@@ -265,9 +267,16 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   The directive's SDL, the registry, `constraintOf` and the list of known
   formats follow. `registry.spec.ts` fails a file that is unregistered, has no
   spec, exports anything else (a helper would reach the registry), or is not
-  named after its argument (`minLength` in `min-length.ts`, `minLengthRule`).
+  named after its argument (`minLength` in `min-length.ts`, `minLengthRule`);
+  `rule.ts`, `format.ts` and `formats/registry.ts` are its helpers, the only
+  files it skips.
   Then regenerate `graphql/constraint.graphqls`: a spec fails until you do.
-- **Every rule and format is written twice:** `toZod`, applied at startup, and
+- **No module-global format lookup.** A rule's `toZod`/`toCode` take a third
+  argument, `RuleContext` (`{ formats: FormatRegistry }`), threaded from
+  `InputSchemas`, `leafSchema`, `checkConstraints` and `inputCode`;
+  `registryOf(record)` builds and checks a registry once per record (a
+  `WeakMap`), `registryOf()` is the built-in one.
+- **Every rule and built-in format is written twice:** `toZod`, applied at startup, and
   `toCode`, the same schema as source for a code generator, `z` a free
   identifier. Each spec goes through `test/rule-cases.ts`, which evaluates the
   source and requires both to accept and refuse the same inputs, and every
@@ -311,9 +320,57 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   its path relative to the arguments, Zod's `code`, and `constraint` (the
   refusing `@constraint` argument) when a directive refused. `validated` and
   `badUserInput` raise the same, without `constraint`.
+- **An application's format is a Zod string schema, and changes nothing.**
+  `withValidation(schema, { formats })` and the two `./codegen` exports take
+  the same record. Its keys match `/^[a-z][a-z0-9-]*$/` and never name a
+  built-in format (typed `never` by `OwnFormats`, refused at startup too); each
+  value's definition is `type: 'string'` (`z.string()` or a string format,
+  never a pipe, so no transform or codec), read from `_zod.def` so another zod
+  copy passes, and nothing in it rewrites the value though it keeps
+  `type: 'string'` (`rewrites`, from an audit of zod 4.6.5's string schemas):
+  no `coerce` (`z.coerce.string()`), no `format: 'url'` on the schema or a
+  check (`z.url()`, `z.httpUrl()`, `.url()` trim, drop tabs and newlines, or
+  normalise), no `check: 'overwrite'` (`.trim()`, `.toLowerCase()`,
+  `.toUpperCase()`, `.normalize()`, `.slugify()`, `.overwrite()`). A client
+  chaining rules on such a schema would check the rewritten value in place of
+  what was sent. What no definition shows (a `.check()` setting `ctx.value`)
+  `marked` catches as it runs: a parse whose output differs from its input
+  throws a plain `Error` naming the format, a programming error like a
+  resolver's bug, never a `BAD_USER_INPUT`. A zod upgrade re-runs the audit. An unknown format lists the
+  application's after the built-in ones. Its entry has no `toCode`: the generator writes it, through
+  `InputCodeOptions.format(name)` (threaded to the rule as
+  `RuleContext.formatCode`), the other rules chained on that source; without
+  the option `inputCode` throws. Wrapping a schema again with other formats, or
+  none after some, throws (the record is kept on the schema under a
+  `Symbol.for` key); with the same names and the very same schemas it is the
+  usual no-op. A string definition with no `_zod.run` (an object shaped like
+  a schema) is refused at startup too, since every request calls it.
+- **An application format's issue is `format`'s, whatever its code.** Its
+  schema runs inside a `z.string().superRefine` (`formats/registry.ts`,
+  `marked`) that re-raises each issue unchanged but for
+  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), keeping `continue: false`
+  (which `finalizeIssue` drops) so an aborting check stops the rules after
+  it as on the client, and `constraintOf` reads
+  that mark before any `owns`: a `.regex()` or `.refine()` inside the format
+  is not `pattern`'s or `notContains`'. An async check stays async, from any
+  zod copy, and runs once per value: `marked` calls the schema's own
+  `_zod.run` with `async: true`, which returns at once when every check is
+  synchronous and a promise otherwise, never a `safeParse` that would start
+  an async refine, drop its promise (unhandled if it rejects) and run it
+  again. The promise `marked` returns gets a handler, so a synchronous parse
+  that drops it (a default value's check) leaves no unhandled rejection;
+  `checkDefaults` then throws naming the field and the format
+  (`FormatRegistry.takeAsync`). `_zod.run` and `z.core.util.finalizeIssue`
+  are zod internals: a zod upgrade re-runs `another-zod.spec.ts`.
 - **`uri` is http, https or ftp, scheme required; `date-time` is canonical RFC
   3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
   on purpose, each pinned by a spec.
+- **`uri` is the one documented exception to "the resolver receives what was
+  sent"** (owner): `z.url()` trims surrounding white space, so for
+  `" https://a.com "` the resolver receives `"https://a.com"` and a `maxLength`
+  after it counts the trimmed value. The generated client runs the same
+  schema, so server and client agree. An application's format may not do this
+  (`rewrites` refuses it).
 - **The bin exits 0 done, 1 the file could not be written, 2 a usage error**,
   nxgt-mongo-backup's convention, and runs under Node and Bun. Its flags read
   as `nxgt-graphql-scalars typedefs`' do (owner): `--out` alone writes
@@ -333,6 +390,8 @@ packages/graphql-codegen-zod/src/
   config.ts                CodegenZodConfig
   naming.ts                the typescript plugins' names, behind schemaPrefix for schemas
   scalars.ts               ScalarSources: `zodScalars` entries (never `scalars`, the typescript plugins' option a root config shares), then the scalarSchemas record
+  formats.ts               FormatSources: `zodFormats` entries, then the formatSchemas record, loaded (never trusted) and handed to checkConstraints and inputCode
+  modules.ts               importModule (relative to the generated file, or a package) and `<module>#<export>` parsing, shared by both
   imports.ts               the generated file's imports, zod first, aliases on a clash
   writer.ts                one value's schema: inputCode, .prefault, the single-or-list union
   defaults.ts              defaultLiteral, parsedDefault (exact integers), coerced
@@ -349,6 +408,7 @@ packages/graphql-codegen-zod/src/
   plugin.spec.ts           the guards below
 packages/graphql-codegen-zod/test/
   fixture.ts               the SDL and operations the specs generate from
+  formats.ts, sku.ts       the application's formats: a formatSchemas record (one hyphenated key) and one zodFormats export (plus the rewriting ones generation refuses: .trim(), z.url(), z.coerce.string())
   generated.ts             generated, typechecked: `bun run generated:write`
   real-scalars.ts          every @nxgt/graphql-scalars scalar, alone and in a list
   generated-scalars.ts     generated against the real scalarSchemas record, typechecked
@@ -362,10 +422,21 @@ packages/graphql-codegen-zod/test/
   by operation. A change to how a value is written is proved there, not
   argued.
 - **The plugin refuses what `withValidation` refuses**, with its message:
-  it runs `checkConstraints` before writing anything. It also fails, rather
+  it runs `checkConstraints` before writing anything, with the application's
+  formats loaded from `formatSchemas`/`zodFormats`. It also fails, rather
   than write a weaker schema, on a custom scalar with no mapping (never
   `z.unknown()`), a variable passed to two different `format`s, and a schema
   that declares `@constraint` without SDL (introspected: no directive to read).
+- **An application's format is loaded, never trusted** (owner): unlike a
+  `scalarSchemas` record (whose unloadable module is trusted), a format
+  module that cannot be imported fails generation, naming the option and
+  what to do, since `checkConstraints` needs the real schemas to check
+  defaults. The generated file imports the user's schema and chains the
+  other rules on it (`formatSchemas.slug.max(12)`, `formatSchemas["country-code"]`
+  for a key that is no identifier); built-in formats stay inline. The client's
+  issues carry no `constraint`, as for a built-in format. `plugin.spec.ts`
+  serves the fixture behind `withValidation(schema, { formats })` with the
+  same record, and `formats.spec.ts` pins messages and the config errors.
 - **Input types are `z.strictObject`**, as graphql refuses an unknown field;
   variables and args objects stay `z.object`. Defaults are coerced as graphql
   coerces them, through lists and nested input literals.

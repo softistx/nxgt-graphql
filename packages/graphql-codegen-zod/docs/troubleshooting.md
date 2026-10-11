@@ -1,12 +1,13 @@
 # Troubleshooting
 
 One entry per error you can hit, headed by the message you will search for.
-Configuration, Scalars, Operations and The schema happen while
+Configuration, Scalars, Formats, Operations and The schema happen while
 `graphql-codegen` runs; The generated file is what `tsc` and the generated
 schemas report.
 
 - [Configuration](#configuration)
 - [Scalars](#scalars)
+- [Formats](#formats)
 - [Operations](#operations)
 - [The generated file](#the-generated-file)
 - [The schema](#the-schema)
@@ -86,6 +87,119 @@ export const scalarSchemas = {
 };
 ```
 
+## Formats
+
+Your own `@constraint(format: "...")` values, from `formatSchemas` and
+`zodFormats`. The plugin loads them at generation, so each module must be one
+graphql-codegen can import.
+
+### `@nxgt/graphql-codegen-zod: cannot load ./formats (formatSchemas): …`
+
+The full message goes on: `<the loader's own error>. The plugin checks your
+formats as withValidation does, so it must import them: point formatSchemas at
+a module graphql-codegen can load: a path relative to the generated file or a
+package, in JavaScript, or in TypeScript when codegen runs under Bun or tsx.`
+With `zodFormats`, the option reads `zodFormats.slug`.
+
+**When:** running codegen with `formatSchemas` or `zodFormats` set, when the
+module cannot be imported: the path is wrong, it is TypeScript and codegen
+runs under a Node that does not load it, or the module itself throws.
+**Why:** the plugin checks your formats, and every default value against
+them, as `withValidation` does at startup, so it needs the real schemas.
+Unlike a `scalarSchemas` record, a module it cannot load is never trusted:
+a default that breaks its format would reach the generated file unseen.
+**Fix:** a relative path is relative to the **generated file**, not to
+`codegen.ts`. Then make the module loadable: run codegen under Bun or tsx
+(`bunx --bun graphql-codegen` runs it under Bun), or point
+the option at a compiled `.js` file or a package.
+
+```ts
+// generating src/generated/zod.ts from src/formats.ts
+config: { formatSchemas: '../formats' }
+```
+
+### `The format "sku" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
+
+**When:** running codegen with `formatSchemas` or `zodFormats` naming a
+schema that rewrites the value: `z.string().trim().toUpperCase()`, any of
+`.trim()`, `.toLowerCase()`, `.toUpperCase()`, `.normalize()`, `.slugify()`,
+`.overwrite()`, a URL format (`z.url()`, `z.httpUrl()`, `.url()`, which trim
+the value) or `z.coerce.string()` (which turns `12345` into `"12345"`).
+**Why:** the generated client chains the other rules on your schema, so it
+would check the rewritten value while the server checks the one sent: with
+`@constraint(format: "sku", maxLength: 8)`, the server refuses `" sku-1234 "`
+and the client accepts it. The plugin refuses it as `withValidation` does
+([its entry](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md)).
+**Fix:** refuse what is not canonical instead:
+
+```ts
+export const skuSchema = z.string().regex(/^SKU-[0-9]{4}$/, 'Invalid SKU');
+```
+
+### `@nxgt/graphql-codegen-zod: ./formats exports no formatSchemas record.`
+
+**When:** running codegen with `formatSchemas` set. The module path in the
+message is the one you configured.
+**Why:** the module loaded, but exports no `formatSchemas` object.
+**Fix:** export the record under that name, or name one format at a time
+with `zodFormats`.
+
+```ts
+// formats.ts
+import { z } from 'zod';
+
+export const formatSchemas = {
+	slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug'),
+};
+```
+
+### `@nxgt/graphql-codegen-zod: zodFormats.slug is "slugSchema"; write it '<module>#<export>', e.g. './slug#slugSchema'.`
+
+**When:** running codegen with a `zodFormats` entry that is not
+`module#export`.
+**Why:** the entry needs a module and an export name on either side of the
+last `#`; the one in the message has none, or an empty side.
+**Fix:**
+
+```ts
+config: { zodFormats: { slug: './slug#slugSchema' } }
+```
+
+### `@nxgt/graphql-codegen-zod: ./slug exports no slugSchema (zodFormats.slug).`
+
+**When:** running codegen with a `zodFormats` entry whose module loaded but
+has no export of that name.
+**Why:** the name after `#` must be one the module exports, spelled the same.
+**Fix:** export the schema under that name, or correct the entry.
+
+```ts
+// slug.ts
+export const slugSchema = z.string().regex(/^[a-z0-9-]+$/, 'Invalid slug');
+```
+
+### `Unknown @constraint format "slug". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid.`
+
+**When:** running codegen on a schema whose `@constraint(format: "slug")`
+names a format of your own, with neither `formatSchemas` nor `zodFormats`
+mapping it. The list ends with the formats the plugin did load.
+**Why:** this is `withValidation`'s own message: the plugin knows the
+built-in formats and those you map, nothing else.
+**Fix:** point `formatSchemas` at the record the server hands
+`withValidation`, or map that one format.
+
+```ts
+config: { formatSchemas: '../formats' }
+// or
+config: { zodFormats: { slug: '../slug#slugSchema' } }
+```
+
+The plugin also refuses, with `withValidation`'s messages, a format whose name
+is a built-in one (`The format "email" is built in: give yours another
+name.`), a schema that is not a Zod string schema, and a default value its
+format refuses (`The default value of Query.a(s:) breaks its @constraint`);
+each is in
+[`@nxgt/graphql-validation`'s troubleshooting](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md).
+
 ## Operations
 
 ### `@nxgt/graphql-codegen-zod: SignUp's $input has a type the schema does not define.`
@@ -146,6 +260,29 @@ query Both($e: String, $u: String) { e(v: $e) u(v: $u) }
 ```
 
 ## The generated file
+
+### `TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../formats.js'?`
+
+**When:** type-checking the generated file under `moduleResolution`
+`nodenext` or `node16`, with a relative `formatSchemas`, `zodFormats`,
+`scalarSchemas` or `zodScalars` path written without an extension
+(`formatSchemas: '../formats'`).
+**Why:** the plugin writes the path into the generated import as you give it,
+and `nodenext` requires a relative import to name its file, with the `.js`
+extension even for a `.ts` source.
+**Fix:** give the path its `.js` extension in the config. Bun and tsx load the
+`.ts` file behind it at generation; plain `graphql-codegen` under Node never
+reads `formats.js` as `formats.ts` (and, depending on its version, does not
+load a `.ts` module at all), so run it under Bun (`bunx --bun graphql-codegen`)
+or tsx.
+
+```ts
+// generating src/generated/zod.ts from src/formats.ts and src/sku.ts
+config: {
+	formatSchemas: '../formats.js',
+	zodFormats: { sku: '../sku.js#skuSchema' },
+}
+```
 
 ### `TS2305: Module '"@nxgt/graphql-scalars"' has no exported member 'scalarSchemas'`
 

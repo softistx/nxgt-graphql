@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { StringSchema } from '../formats/format';
+import type { FormatRegistry } from '../formats/registry';
 
 /** The schema each kind of rule narrows. */
 export interface Targets {
@@ -9,6 +10,16 @@ export interface Targets {
 }
 
 export type Target = keyof Targets;
+
+/**
+ * What a rule may read besides its value: the formats `format` resolves
+ * against, the built-in ones and the application's own, and, when writing
+ * source, how to write one of the application's (`InputCodeOptions.format`).
+ */
+export interface RuleContext {
+	readonly formats: FormatRegistry;
+	readonly formatCode?: ((name: string) => string) | undefined;
+}
 
 /** What a `@constraint` argument's value can be. */
 interface ValueOf {
@@ -35,12 +46,20 @@ export interface Rule<
 	readonly type: T;
 	readonly target: K;
 	readonly base?: true;
-	readonly toZod: (schema: Targets[K], value: ValueOf[T]) => Targets[K];
+	readonly toZod: (
+		schema: Targets[K],
+		value: ValueOf[T],
+		context: RuleContext,
+	) => Targets[K];
 	/**
 	 * `schema` is the source of the schema this rule narrows. The source names
 	 * zod as a free `z`: the generated file imports it.
 	 */
-	readonly toCode: (schema: string, value: ValueOf[T]) => string;
+	readonly toCode: (
+		schema: string,
+		value: ValueOf[T],
+		context: RuleContext,
+	) => string;
 	/**
 	 * Whether a Zod issue is this rule's refusal, so the error a client gets
 	 * names the rule (`constraint: 'minLength'`), which does not change with
@@ -55,7 +74,15 @@ export interface IssueFields {
 	readonly origin?: string;
 	readonly format?: string;
 	readonly inclusive?: boolean;
+	readonly params?: Readonly<Record<string, unknown>>;
 }
+
+/**
+ * The `params` key that marks an issue as one argument's whatever its code:
+ * an application format's issues carry `format` there, so a `.regex()` or a
+ * `.refine()` inside one is not read as `pattern` or `notContains`.
+ */
+export const RULE_PARAM = 'nxgtConstraint';
 
 /** Declares a rule, with its argument name kept literal. */
 export function defineRule<

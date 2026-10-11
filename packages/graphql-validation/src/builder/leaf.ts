@@ -8,7 +8,7 @@ import {
 } from 'graphql';
 import { z } from 'zod';
 import { applyRule } from '../rules';
-import type { Target } from '../rules/rule';
+import type { RuleContext, Target } from '../rules/rule';
 import type { Constraint } from './constraints';
 
 /** The kind of value each built-in scalar holds once graphql parsed it. */
@@ -72,12 +72,13 @@ export function leafSchema(
 	type: GraphQLLeafType,
 	constraints: readonly Constraint[],
 	where: string,
+	context: RuleContext,
 ): z.ZodType {
 	if (constraints.length === 0) return z.unknown();
 	assertLeafTargets(type, constraints, where);
 	let schema = baseOf(type);
 	for (const { rule, value } of constraints) {
-		schema = applyRule(rule, schema, value);
+		schema = applyRule(rule, schema, value, context);
 	}
 	return schema;
 }
