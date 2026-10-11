@@ -19,7 +19,7 @@ Peers, all **required**:
 | --- | --- |
 | `graphql` | `^16.11.0 \|\| ^17.0.0` |
 | `zod` | `>=4.6.5 <5` |
-| `typescript` | `^6.0.3` |
+| `typescript` | `^6.0.3 \|\| ^7.0.0` |
 
 Your `tsconfig.json` needs:
 

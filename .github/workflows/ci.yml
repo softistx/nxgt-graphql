@@ -61,8 +61,8 @@ jobs:
   newest-peers:
     # The job above runs the lockfile's toolchain: the exact versions each
     # package pins as a devDependency, the oldest end of each peer range. This
-    # one runs the newest end — the latest graphql 17 and zod 4 the ranges
-    # accept, and TypeScript within `^6.0.3` — so a range stays true after the
+    # one runs the newest end — the latest graphql 17, zod 4 and TypeScript 7
+    # the ranges accept — so a range stays true after the
     # release that would break it. It resolves without a lockfile, so an
     # upstream release can turn it red with no change here: read it, do not
     # make it a required check.

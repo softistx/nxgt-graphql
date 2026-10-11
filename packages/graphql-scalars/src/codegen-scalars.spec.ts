@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import ts from 'typescript';
+// TypeScript 6's compiler API, pinned under an alias: the `typescript` peer
+// also allows 7, which has no compiler API, and the newest-peers job runs it.
+import ts from 'typescript-api';
 import {
 	type CodegenScalars,
 	clientCodegenScalars,
