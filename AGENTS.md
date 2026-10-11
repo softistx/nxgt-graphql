@@ -350,11 +350,15 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   `params.nxgtConstraint: 'format'` (`RULE_PARAM`), and `constraintOf` reads
   that mark before any `owns`: a `.regex()` or `.refine()` inside the format
   is not `pattern`'s or `notContains`'. An async check stays async, from any
-  zod copy: `isAsyncParseError` knows another copy's `$ZodAsyncError` by zod
-  4's message, since `instanceof` sees only this copy's class. The promise
-  `marked` starts gets a handler, so a synchronous parse that drops it (a
-  default value's check) leaves no unhandled rejection; `checkDefaults` then
-  throws naming the field and the format (`FormatRegistry.takeAsync`).
+  zod copy, and runs once per value: `marked` calls the schema's own
+  `_zod.run` with `async: true`, which returns at once when every check is
+  synchronous and a promise otherwise, never a `safeParse` that would start
+  an async refine, drop its promise (unhandled if it rejects) and run it
+  again. The promise `marked` returns gets a handler, so a synchronous parse
+  that drops it (a default value's check) leaves no unhandled rejection;
+  `checkDefaults` then throws naming the field and the format
+  (`FormatRegistry.takeAsync`). `_zod.run` and `z.core.util.finalizeIssue`
+  are zod internals: a zod upgrade re-runs `another-zod.spec.ts`.
 - **`uri` is http, https or ftp, scheme required; `date-time` is canonical RFC
   3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
   on purpose, each pinned by a spec.

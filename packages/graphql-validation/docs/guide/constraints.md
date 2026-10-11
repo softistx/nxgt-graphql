@@ -315,7 +315,8 @@ What a format of your own is:
   cannot be replaced: it is a type error, and refused at startup.
 - **An async check stays async.** `withValidation` parses asynchronously, so a
   `.refine(async …)` works in a request, from this package's zod or another
-  copy; a default value is checked at startup synchronously, so a field whose
+  copy. It runs once per value, and when it rejects (`db down`) the operation
+  fails with that error, as a resolver's would. A default value is checked at startup synchronously, so a field whose
   format is async cannot have a default: startup throws `The default value of
   Query.a(s:) cannot be checked at startup: the format "free" checks
   asynchronously, …`.

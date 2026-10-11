@@ -13,11 +13,7 @@ import {
 	valueFromAST,
 } from 'graphql';
 import { z } from 'zod';
-import {
-	type FormatRegistry,
-	isAsyncParseError,
-	registryOf,
-} from '../formats/registry';
+import { type FormatRegistry, registryOf } from '../formats/registry';
 import { applyRule } from '../rules';
 import type { RuleContext } from '../rules/rule';
 import { type Constraint, constraintsOn } from './constraints';
@@ -120,7 +116,8 @@ export class InputSchemas {
 			try {
 				result = schema.safeParse(value);
 			} catch (error) {
-				if (!isAsyncParseError(error)) throw error;
+				// Thrown by this zod: only the formats' wrapper, ours, goes async.
+				if (!(error instanceof z.core.$ZodAsyncError)) throw error;
 				const format = this.#context.formats.takeAsync();
 				throw new Error(
 					`The default value of ${where} cannot be checked at startup: ${format ? `the format "${format}"` : 'its format'} checks asynchronously, and a default value is checked synchronously. Drop the default, or move the async check out of the format into validated().`,
