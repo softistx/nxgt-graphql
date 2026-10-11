@@ -2,12 +2,12 @@ import type { FieldNode, SelectionSetNode } from 'graphql';
 import { fieldKey } from './field-key';
 import { identify } from './identity';
 import { collectFields, subSelections, type Walk } from './selection';
-import type { EntityStore } from './store';
+import type { EntityWrites } from './store';
 import type { CacheKeys } from './types';
 import { isPlainObject, isReference, type StoreObject } from './values';
 
 interface Writer extends Walk {
-	readonly store: EntityStore;
+	readonly store: EntityWrites;
 	readonly keys: CacheKeys | undefined;
 }
 

@@ -4,9 +4,11 @@ export type {
 	CacheKeys,
 	EntityRef,
 	FieldModifier,
+	FragmentOptions,
 	GraphQLCache,
 	NormalizedCacheOptions,
 	PossibleTypes,
+	VariablesThen,
 } from './cache/types';
 export { createGraphQLClient } from './client';
 export type { GraphQLDocument } from './document';

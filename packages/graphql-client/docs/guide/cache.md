@@ -47,19 +47,25 @@ when it has a `__typename` and an identity:
 ```ts
 normalizedCache({
   keys: {
-    Book: (book) => String(book.isbn), // Book:978-0441013593
+    // Book:978-0441013593; a Book selected without its isbn has no identity
+    Book: (book) => (book.isbn == null ? null : String(book.isbn)),
     Viewer: () => 'me',                // a singleton: Viewer:me
     Price: () => null,                 // always stored inside its parent
   },
 });
 ```
 
-The fields the function reads must be selected wherever the type is queried.
+The fields the function reads must be selected wherever the type is queried;
+return `null` when they are absent, rather than an identity made of
+`undefined`. A function that throws fails the whole write, which then changes
+nothing: the client reports the error (see [Errors in the cache](#errors-in-the-cache))
+and the call still returns the network's data.
 
 An object with no identity is stored inside its parent's field. When a later
 result writes the same field with an object of the same `__typename`, the two
 are merged field by field, so two queries selecting different fields of it both
-stay whole. A list is replaced as a whole, never merged item by item.
+stay whole. A list is replaced as a whole by a later write, never merged item
+by item.
 
 ## `__typename`
 
@@ -126,6 +132,9 @@ try {
 - With `network-only` and `no-cache`, and on a `cache-first` miss, the caller
   gets exactly what the network returned; the cache only keeps a copy.
 - A result that throws (`ApiError` and the rest) writes nothing.
+- A call whose `signal` is already aborted rejects with the signal's reason,
+  even when the cache holds the result (`cache-first` and `cache-only`, hit or
+  miss).
 - **Without a cache**, every query goes to the network whatever its
   `fetchPolicy`, except `cache-only`, which throws a `TypeError`
   ([troubleshooting](../troubleshooting.md#fetchpolicy-cache-only-needs-a-cache-pass-cache-normalizedcache-to-creategraphqlclient)).
@@ -177,6 +186,12 @@ type is written when its fields are present, and read only when all its fields
 are in the cache; pass `possibleTypes` when your documents spread fragments on
 abstract types.
 
+Without `possibleTypes`, a fragment whose condition is another object type (a
+sibling of the object's own type, `... on Thing` on a `Box`) is undecided just
+the same: its fields are merged into the result when the entity holds them all.
+A field both select is merged too: objects field by field, and two lists of
+the same length item by item.
+
 `@include` and `@skip` are applied from the variables: a skipped field is not
 written, and not needed for a `cache-first` hit.
 
@@ -188,21 +203,32 @@ takes the client preset's documents and is typed from them.
 ```ts
 interface GraphQLCache {
   read(document, variables?): TResult | undefined;
-  write(document, variables, data: TResult): void;
-  watch(document, variables, callback: (data: TResult | undefined) => void): () => void;
+  write(document, variables?, data: TResult): void;
+  watch(document, variables?, callback: (data: TResult | undefined) => void): () => void;
+  readFragment(fragment, ref: EntityRef, options?: FragmentOptions): TResult | undefined;
+  watchFragment(
+    fragment, ref: EntityRef, callback: (data: TResult | undefined) => void, options?: FragmentOptions,
+  ): () => void;
   evict(ref: EntityRef): boolean;
   modify(ref: EntityRef, fields: { [field: string]: (current: unknown) => unknown }): boolean;
   reset(): void;
 }
 
 type EntityRef = string | { __typename: string; [field: string]: unknown };
+type FragmentOptions = { fragmentName?: string; variables?: Record<string, unknown> };
 ```
+
+`variables` may be left out of `read`, `write` and `watch` when the document
+requires none: `cache.write(ViewerQuery, data)` and
+`cache.write(ViewerQuery, {}, data)` are the same.
 
 ### `read` and `write`
 
 `read` returns the document's result as the cache holds it, a fresh object
 each time, or `undefined` when anything is missing. `write` stores a result as
-the server would send it: each object must carry its `__typename`.
+the server would send it: each object must carry its `__typename`. A write is
+all or nothing: it is worked out in full, then applied, so one that throws
+halfway (a `keys` function) leaves the cache and its watches as they were.
 
 ```ts
 const cache = client.cache!;
@@ -244,10 +270,9 @@ cache.modify({ __typename: 'Book', id: '1' }, { title: (title) => `${title} (2nd
 ### `watch`
 
 The hook for UI bindings. `watch` calls back with the document's result read
-afresh after each `write`, `evict`, `modify` or `reset` that changed a field the
-last read used (or that created or removed an entity it looked up), including a
-result the client wrote after a query or a mutation. The callback gets
-`undefined` when the result is no longer whole.
+afresh after each `write`, `evict`, `modify` or `reset` that changed it,
+including a result the client wrote after a query or a mutation. The callback
+gets `undefined` when the result is no longer whole.
 
 ```ts
 const stop = cache.watch(BooksQuery, {}, (data) => {
@@ -259,20 +284,72 @@ stop();
 ```
 
 - It is called **once per batch** (one write, one evict, one modify), however
-  many fields that batch changed, and never for a change to another entity, to
-  a field the read did not use, or to a value written again unchanged.
+  many fields that batch changed, and **only when its result changed**: never
+  for a change to another entity, to a field the read did not use, or to a
+  value written again unchanged. A write to a field it reads that leaves its
+  result equal (another query writing `settings { lang }` while it reads
+  `settings { theme }`) does not call it either.
 - It does not call back on its own when it starts: call `read` for the current
   result.
 - Its dependencies are those of its last read, so a miss is watched too: the
   callback runs when the missing fields arrive.
+- A callback that throws does not stop the others, nor the write that caused
+  it: see [Errors in the cache](#errors-in-the-cache).
+
+### `readFragment` and `watchFragment`
+
+One entity's fields, read through a fragment document: what a component that
+receives a book by its reference shows (the hook a `useFragment` binding is
+built on). The client preset's `graphql()` writes these documents for each fragment: its
+own definition first, then the fragments it spreads.
+
+```ts
+const BookCard = graphql(`
+  fragment BookCard on Book { title author { name } }
+`);
+
+cache.readFragment(BookCard, { __typename: 'Book', id: '1' }); // or 'Book:1'
+// { __typename: 'Book', title: 'Dune', author: { __typename: 'Author', name: 'Herbert' } }
+
+const stop = cache.watchFragment(BookCard, 'Book:1', (book) => render(book));
+```
+
+- `ref` is the entity's key, or an object holding its `__typename` and the
+  fields its identity reads, as for `evict`.
+- It returns `undefined` when the cache does not hold the entity, when a field
+  the fragment selects is missing, or when `ref` has no identity.
+- `fragmentName` picks another fragment of the document; by default, the
+  first. `variables` are those the fragment's arguments read
+  (`cover(size: $size)`).
+- `watchFragment` behaves as `watch`: called back once per batch, only when the
+  fragment's result changed.
+- A document with no fragment throws `The document holds no fragment`, and an
+  unknown `fragmentName` `The document has no fragment <name>`
+  ([troubleshooting](../troubleshooting.md#the-document-holds-no-fragment)).
 
 ### `reset`
 
-Empties the cache, on sign-out for instance. Every watch is called back, with
-`undefined`.
+Empties the cache, on sign-out for instance. Every watch whose result was whole
+is called back, with `undefined`.
 
 ```ts
 cache.reset();
+```
+
+## Errors in the cache
+
+A call that succeeded on the network never rejects because of the cache:
+
+- A watch callback that throws is **reported**, not thrown: through
+  `globalThis.reportError` where it exists (a browser logs it as an uncaught
+  error and fires the window's `error` event), else thrown from a microtask.
+  The other watches still run, and the write stands.
+- A write that throws, such as a `keys` function, changes nothing (writes are
+  all or nothing), is reported the same way, and the query or the mutation
+  still returns the network's data.
+
+```ts
+window.addEventListener('error', (event) => logger.error(event.error));
 ```
 
 ## Limits

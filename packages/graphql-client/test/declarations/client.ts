@@ -18,6 +18,7 @@ import {
 	type EntityRef,
 	type FetchPolicy,
 	type FieldModifier,
+	type FragmentOptions,
 	type GraphQLCache,
 	type GraphQLClient,
 	type GraphQLClientOptions,
@@ -35,6 +36,7 @@ import {
 	type UnavailableReason,
 	type UrlClientOptions,
 	type VariablesArgs,
+	type VariablesThen,
 } from '@nxgt/graphql-client';
 import { createHttpClient } from '@nxgt/httpyz';
 
@@ -97,8 +99,22 @@ export const ref: EntityRef = { __typename: 'Book', id: '1' };
 export const renamed2 = cache.modify(ref, {
 	title: ((title) => String(title)) satisfies FieldModifier,
 });
+export const BookCard = {} as TypedDocumentNode<{ title: string }, unknown>;
+export const fragmentOptions: FragmentOptions = { fragmentName: 'BookCard' };
+export const card = cache.readFragment(BookCard, ref, fragmentOptions);
+export const stopCard = cache.watchFragment(BookCard, 'Book:1', (data) =>
+	data?.title.toUpperCase(),
+);
+export const writeArgs: VariablesThen<{ name: string }, boolean> = [
+	{ name: 'a' },
+	true,
+];
+export const stopViewer = cache.watch(Viewer, (data) => data?.viewer.id);
 export function writeViewer() {
 	cache.write(Viewer, {}, { viewer: { id: 'u' } });
+	cache.write(Viewer, { viewer: { id: 'u' } });
+	// @ts-expect-error: Rename requires its variables
+	cache.write(Rename, { rename: true });
 	cache.evict('User:u');
 	cache.reset();
 }

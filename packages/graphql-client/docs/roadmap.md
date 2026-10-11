@@ -20,8 +20,9 @@ What `@nxgt/graphql-client` is heading for, phrased as what you get.
 - **A normalized cache** (this effort, not released yet). `normalizedCache({
   possibleTypes, keys })` for the browser: entities stored once, `cache-first`
   queries answered without a request, mutations' entities written back,
-  `fetchPolicy`, and `client.cache`'s `read`, `write`, `watch`, `evict`,
-  `modify` and `reset`. Off by default.
+  `fetchPolicy`, and `client.cache`'s `read`, `write`, `watch`,
+  `readFragment`, `watchFragment`, `evict`, `modify` and `reset`. Off by
+  default.
 
 ## Next
 
@@ -38,7 +39,7 @@ Candidates, not commitments.
   APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
   `forceStatusCodeOk`, which they need today.
 - **React bindings.** `useQuery`, `useMutation`, `useSubscription` and
-  `useFragment` over the cache's `watch`.
+  `useFragment` over the cache's `watch` and `watchFragment`.
 - **A subscription's results written to the cache**, as an option, so a live
   update reaches every query showing the same entity.
 

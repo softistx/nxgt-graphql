@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
+import { stubReportError } from '../test/report-error';
 import { normalizedCache } from './cache/normalized-cache';
 import { createGraphQLClient } from './client';
 import { CacheMissError } from './errors';
@@ -38,13 +39,12 @@ function server(answer: (body: { operationName: string }) => unknown) {
 
 const url = 'https://api.test/graphql';
 
-function setup(answer: (body: { operationName: string }) => unknown) {
+function setup(
+	answer: (body: { operationName: string }) => unknown,
+	cache = normalizedCache(),
+) {
 	const api = server(answer);
-	const client = createGraphQLClient({
-		url,
-		fetch: api.fetch,
-		cache: normalizedCache(),
-	});
+	const client = createGraphQLClient({ url, fetch: api.fetch, cache });
 	return {
 		api,
 		client,
@@ -81,9 +81,9 @@ describe('fetchPolicy with a cache', () => {
 		title = 'Dune Messiah';
 		const written: unknown[] = [];
 		const write = cache.write.bind(cache);
-		cache.write = ((document, variables, data) => {
-			written.push(data);
-			write(document, variables, data);
+		cache.write = ((document, ...args) => {
+			written.push(args.at(-1));
+			write(document, ...args);
 		}) as typeof cache.write;
 		const data = await client.query(
 			BookQuery,
@@ -140,6 +140,93 @@ describe('fetchPolicy with a cache', () => {
 		const { client, cache } = setup(() => null);
 		await expect(client.query(BookQuery, { id: '1' })).rejects.toThrow();
 		expect(cache.read(BookQuery, { id: '1' })).toBeUndefined();
+	});
+});
+
+describe('a cache that throws never fails a call', () => {
+	test('a watch that throws after a mutation: mutate resolves, the next watch runs, the error is reported', async () => {
+		const reported = stubReportError();
+		try {
+			const { client, cache } = setup((body) =>
+				body.operationName === 'Book'
+					? { book: book('Dune') }
+					: { rename: book('Arrakis') },
+			);
+			await client.query(BookQuery, { id: '1' });
+			const failure = new Error('render failed');
+			cache.watch(BookQuery, { id: '1' }, () => {
+				throw failure;
+			});
+			const second: unknown[] = [];
+			cache.watch(BookQuery, { id: '1' }, (data) => second.push(data));
+			expect(
+				await client.mutate(RenameMutation, { id: '1', title: 'Arrakis' }),
+			).toEqual({ rename: book('Arrakis') });
+			expect(second).toEqual([{ book: book('Arrakis') }]);
+			expect(reported.errors).toEqual([failure]);
+		} finally {
+			reported.restore();
+		}
+	});
+
+	test('a keys function that throws: the query and the mutation return the network’s data, the cache is unchanged', async () => {
+		const reported = stubReportError();
+		try {
+			const failure = new Error('no isbn');
+			const cache = normalizedCache({
+				keys: {
+					Book: () => {
+						throw failure;
+					},
+				},
+			});
+			const { client } = setup(
+				(body) =>
+					body.operationName === 'Book'
+						? { book: book('Dune') }
+						: { rename: book('Arrakis') },
+				cache,
+			);
+			expect(await client.query(BookQuery, { id: '1' })).toEqual({
+				book: book('Dune'),
+			});
+			expect(
+				await client.mutate(RenameMutation, { id: '1', title: 'Arrakis' }),
+			).toEqual({ rename: book('Arrakis') });
+			expect(reported.errors).toEqual([failure, failure]);
+			expect(cache.read(BookQuery, { id: '1' })).toBeUndefined();
+		} finally {
+			reported.restore();
+		}
+	});
+});
+
+describe('an aborted signal wins over the cache', () => {
+	test('cache-first: a hit rejects with the signal’s reason', async () => {
+		const { api, client } = setup(() => ({ book: book('Dune') }));
+		await client.query(BookQuery, { id: '1' });
+		const reason = new Error('navigated away');
+		const call = { signal: AbortSignal.abort(reason) };
+		await expect(client.query(BookQuery, { id: '1' }, call)).rejects.toBe(
+			reason,
+		);
+		expect(api.calls).toEqual(['Book']);
+	});
+
+	test('cache-only: a hit and a miss both reject with the signal’s reason', async () => {
+		const { client } = setup(() => ({ book: book('Dune') }));
+		const reason = new Error('navigated away');
+		const call = {
+			signal: AbortSignal.abort(reason),
+			fetchPolicy: 'cache-only',
+		} as const;
+		await expect(client.query(BookQuery, { id: '2' }, call)).rejects.toBe(
+			reason,
+		);
+		await client.query(BookQuery, { id: '1' });
+		await expect(client.query(BookQuery, { id: '1' }, call)).rejects.toBe(
+			reason,
+		);
 	});
 });
 

@@ -1,6 +1,7 @@
 import type { GraphQLCache } from './cache/types';
 import type { GraphQLDocument } from './document';
 import { CacheMissError } from './errors';
+import { writeToCache } from './report';
 
 /**
  * Where a query's result comes from, with a cache:
@@ -23,13 +24,18 @@ export const noCache =
 
 type AnyDocument = GraphQLDocument<unknown, never>;
 
-/** What the network returned is what the caller gets: the cache only keeps a copy. */
+/**
+ * What the network returned is what the caller gets: the cache only keeps a
+ * copy, and a write that throws is reported, not thrown. A signal already
+ * aborted wins over a cache hit.
+ */
 export async function queryThrough(
 	cache: GraphQLCache | undefined,
 	request: {
 		readonly document: AnyDocument;
 		readonly variables: unknown;
 		readonly operationName: string | undefined;
+		readonly signal: AbortSignal | undefined;
 	},
 	policy: FetchPolicy | undefined,
 	network: () => Promise<unknown>,
@@ -41,13 +47,13 @@ export async function queryThrough(
 	const { document, variables } = request;
 	const chosen = policy ?? 'cache-first';
 	if (chosen === 'cache-first' || chosen === 'cache-only') {
+		request.signal?.throwIfAborted();
 		const cached = cache.read(document, variables as never);
 		if (cached !== undefined) return cached;
 		if (chosen === 'cache-only')
 			throw new CacheMissError(request.operationName);
 	}
 	const data = await network();
-	if (chosen !== 'no-cache')
-		cache.write(document, variables as never, data as never);
+	if (chosen !== 'no-cache') writeToCache(cache, document, variables, data);
 	return data;
 }

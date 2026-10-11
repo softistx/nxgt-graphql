@@ -1,27 +1,29 @@
-import { type GraphQLDocument, operationOf } from '../document';
+import { fragmentNodeOf, type GraphQLDocument, operationOf } from '../document';
+import { Dependencies } from './changes';
 import { identify } from './identity';
-import { readResult } from './read';
+import { type ReadResult, readEntity, readResult } from './read';
 import {
 	type CacheDocument,
 	cacheDocumentOf,
+	fragmentDocumentOf,
 	variablesOf,
 	type Walk,
 } from './selection';
-import { EntityStore } from './store';
+import { EntityStore, StagedWrites } from './store';
 import { type TypeMatcher, typeMatcher } from './type-match';
 import { withTypename } from './typename';
 import type {
 	CacheKeys,
 	EntityRef,
 	FieldModifier,
+	FragmentOptions,
 	GraphQLCache,
 	NormalizedCacheOptions,
+	VariablesThen,
 } from './types';
-import type { Watch } from './watchers';
-import { Watchers } from './watchers';
+import { equal } from './values';
+import { type Watch, Watchers } from './watchers';
 import { writeResult } from './write';
-
-type AnyDocument = GraphQLDocument<unknown, never>;
 
 /**
  * A normalized cache for `createGraphQLClient({ cache })`: each object with
@@ -40,10 +42,10 @@ type AnyDocument = GraphQLDocument<unknown, never>;
 export function normalizedCache(
 	options: NormalizedCacheOptions = {},
 ): GraphQLCache {
-	return new NormalizedCache(options) as unknown as GraphQLCache;
+	return new NormalizedCache(options);
 }
 
-class NormalizedCache {
+class NormalizedCache implements GraphQLCache {
 	readonly #store = new EntityStore();
 	readonly #watchers = new Watchers();
 	readonly #keys: CacheKeys | undefined;
@@ -54,34 +56,65 @@ class NormalizedCache {
 		this.#matches = typeMatcher(possibleTypes);
 	}
 
-	read(document: AnyDocument, variables?: unknown): unknown {
-		return readResult(this.#walk(document, variables), this.#store).data;
+	read<TResult, TVariables>(
+		document: GraphQLDocument<TResult, TVariables>,
+		...[variables]: Record<string, never> extends TVariables
+			? [variables?: NoInfer<TVariables>]
+			: [variables: NoInfer<TVariables>]
+	): TResult | undefined {
+		return readResult(this.#walk(document, variables), this.#store).data as
+			| TResult
+			| undefined;
 	}
 
-	write(document: AnyDocument, variables: unknown, data: unknown): void {
+	/** Staged, then applied whole: a write that throws changes nothing. */
+	write<TResult, TVariables>(
+		document: GraphQLDocument<TResult, TVariables>,
+		...args: VariablesThen<NoInfer<TVariables>, NoInfer<TResult>>
+	): void {
+		const [variables, data] = split(args);
+		const staged = new StagedWrites(this.#store);
 		const walk = this.#walk(document, variables);
-		try {
-			writeResult({ ...walk, store: this.#store, keys: this.#keys }, data);
-		} finally {
-			this.#flush();
-		}
+		writeResult({ ...walk, store: staged, keys: this.#keys }, data);
+		staged.commit();
+		this.#flush();
 	}
 
-	watch(
-		document: AnyDocument,
-		variables: unknown,
-		callback: (data: unknown) => void,
+	watch<TResult, TVariables>(
+		document: GraphQLDocument<TResult, TVariables>,
+		...args: VariablesThen<
+			NoInfer<TVariables>,
+			(data: NoInfer<TResult> | undefined) => void
+		>
 	): () => void {
+		const [variables, callback] = split(args);
 		const walk = this.#walk(document, variables);
-		const watch: Watch = {
-			deps: readResult(walk, this.#store).deps,
-			refresh: () => {
-				const { data, deps } = readResult(walk, this.#store);
-				watch.deps = deps;
-				callback(data);
-			},
-		};
-		return this.#watchers.add(watch);
+		return this.#watchRead(
+			() => readResult(walk, this.#store),
+			callback as (data: unknown) => void,
+		);
+	}
+
+	readFragment<TResult>(
+		fragment: GraphQLDocument<TResult, never>,
+		ref: EntityRef,
+		options?: FragmentOptions,
+	): TResult | undefined {
+		return this.#fragmentRead(fragment, ref, options)().data as
+			| TResult
+			| undefined;
+	}
+
+	watchFragment<TResult>(
+		fragment: GraphQLDocument<TResult, never>,
+		ref: EntityRef,
+		callback: (data: NoInfer<TResult> | undefined) => void,
+		options?: FragmentOptions,
+	): () => void {
+		return this.#watchRead(
+			this.#fragmentRead(fragment, ref, options),
+			callback as (data: unknown) => void,
+		);
 	}
 
 	evict(ref: EntityRef): boolean {
@@ -112,7 +145,7 @@ class NormalizedCache {
 		return typeof ref === 'string' ? ref : identify(ref, this.#keys);
 	}
 
-	#walk(document: AnyDocument, variables: unknown): Walk {
+	#walk(document: GraphQLDocument<unknown, never>, variables: unknown): Walk {
 		const cacheDocument = documentOf(document);
 		return {
 			document: cacheDocument,
@@ -121,13 +154,65 @@ class NormalizedCache {
 		};
 	}
 
+	/** The read a fragment stands for: its entity through its selection set. */
+	#fragmentRead(
+		fragment: GraphQLDocument<unknown, never>,
+		ref: EntityRef,
+		options: FragmentOptions = {},
+	): () => ReadResult {
+		const node = withTypename(fragmentNodeOf(fragment));
+		const document = fragmentDocumentOf(node, options.fragmentName);
+		const walk = {
+			document,
+			variables: { ...options.variables },
+			matches: this.#matches,
+		};
+		const key = this.#keyOf(ref);
+		const set = document.fragment.selectionSet;
+		return () =>
+			key === undefined
+				? { data: undefined, deps: new Dependencies() }
+				: readEntity(walk, this.#store, key, set);
+	}
+
+	/**
+	 * A watch over a read: called back only when what it reads changed. The
+	 * last result is kept as a copy, so a callback that changes the object
+	 * it got does not change what the next read is compared with.
+	 */
+	#watchRead(
+		read: () => ReadResult,
+		callback: (data: unknown) => void,
+	): () => void {
+		const first = read();
+		let last: unknown = structuredClone(first.data);
+		const watch: Watch = {
+			deps: first.deps,
+			refresh: () => {
+				const { data, deps } = read();
+				watch.deps = deps;
+				if (equal(data, last)) return;
+				last = structuredClone(data);
+				callback(data);
+			},
+		};
+		return this.#watchers.add(watch);
+	}
+
 	/** Calls back the watches the batch of changes just made touched. */
 	#flush(): void {
 		this.#watchers.notify(this.#store.takeChanges());
 	}
 }
 
+/** The variables and the last argument, the variables left out or not. */
+function split<TVariables, TLast>(
+	args: VariablesThen<TVariables, TLast>,
+): [TVariables | undefined, TLast] {
+	return args.length === 1 ? [undefined, args[0]] : args;
+}
+
 /** The document as the client sends it to a cache: `__typename` everywhere. */
-function documentOf(document: AnyDocument): CacheDocument {
+function documentOf(document: GraphQLDocument<unknown, never>): CacheDocument {
 	return cacheDocumentOf(withTypename(operationOf(document).node));
 }

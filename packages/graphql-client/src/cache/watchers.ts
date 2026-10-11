@@ -1,3 +1,4 @@
+import { reportError } from '../report';
 import type { Changes, Dependencies } from './changes';
 
 /** One watch: what its last read used, and how to read again and call back. */
@@ -18,12 +19,21 @@ export class Watchers {
 		};
 	}
 
+	/**
+	 * Refreshes each watch the changes touched. One that throws is reported,
+	 * not thrown: the others still run, and the write that caused it stands.
+	 */
 	notify(changes: Changes): void {
 		if (changes.empty) return;
 		for (const watch of [...this.#watches]) {
 			// Stopped by an earlier callback of this same batch.
 			if (!this.#watches.has(watch)) continue;
-			if (watch.deps.touchedBy(changes)) watch.refresh();
+			if (!watch.deps.touchedBy(changes)) continue;
+			try {
+				watch.refresh();
+			} catch (error) {
+				reportError(error);
+			}
 		}
 	}
 }

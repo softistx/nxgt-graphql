@@ -1,7 +1,12 @@
 import type { FieldNode, SelectionSetNode } from 'graphql';
 import { Dependencies } from './changes';
 import { fieldKey } from './field-key';
-import { collectFields, subSelections, type Walk } from './selection';
+import {
+	collectFields,
+	type Definitions,
+	subSelections,
+	type Walk,
+} from './selection';
 import type { EntityStore } from './store';
 import {
 	deepMerge,
@@ -10,7 +15,7 @@ import {
 	type StoreObject,
 } from './values';
 
-interface Reader extends Walk {
+interface Reader extends Walk<Definitions> {
 	readonly store: EntityStore;
 	readonly deps: Dependencies;
 }
@@ -31,12 +36,22 @@ export interface ReadResult {
  * is a fresh object; any field missing makes it `undefined`.
  */
 export function readResult(walk: Walk, store: EntityStore): ReadResult {
-	const reader: Reader = { ...walk, store, deps: new Dependencies() };
 	const { rootKey, operation } = walk.document;
-	reader.deps.entity(rootKey);
-	const root = store.get(rootKey);
-	if (!root) return { data: undefined, deps: reader.deps };
-	const data = readObject(reader, root, rootKey, [operation.selectionSet]);
+	return readEntity(walk, store, rootKey, operation.selectionSet);
+}
+
+/** One entity read through a selection set: an operation's root, or a fragment's entity. */
+export function readEntity(
+	walk: Walk<Definitions>,
+	store: EntityStore,
+	key: string,
+	set: SelectionSetNode,
+): ReadResult {
+	const reader: Reader = { ...walk, store, deps: new Dependencies() };
+	reader.deps.entity(key);
+	const source = store.get(key);
+	if (!source) return { data: undefined, deps: reader.deps };
+	const data = readObject(reader, source, key, [set]);
 	return { data: data === missing ? undefined : data, deps: reader.deps };
 }
 

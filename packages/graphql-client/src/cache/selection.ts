@@ -8,20 +8,30 @@ import {
 	type SelectionSetNode,
 	valueFromASTUntyped,
 } from 'graphql';
+import { noFragment } from '../document';
 import type { Variables } from './field-key';
 import type { TypeMatcher } from './type-match';
 
-/** A document as the cache walks it: its operation, its fragments, its root entity. */
-export interface CacheDocument {
-	readonly operation: OperationDefinitionNode;
+/** The fragments a document defines, by name: what its spreads read. */
+export interface Definitions {
 	readonly fragments: ReadonlyMap<string, FragmentDefinitionNode>;
+}
+
+/** A document as the cache walks it: its operation, its fragments, its root entity. */
+export interface CacheDocument extends Definitions {
+	readonly operation: OperationDefinitionNode;
 	/** `ROOT_QUERY`, `ROOT_MUTATION` or `ROOT_SUBSCRIPTION`. */
 	readonly rootKey: string;
 }
 
+/** A fragment document as the cache reads it: the fragment chosen, and all of them. */
+export interface FragmentDocument extends Definitions {
+	readonly fragment: FragmentDefinitionNode;
+}
+
 /** One walk of a document: the variables, defaults applied, and the type matcher. */
-export interface Walk {
-	readonly document: CacheDocument;
+export interface Walk<TDocument extends Definitions = CacheDocument> {
+	readonly document: TDocument;
 	readonly variables: Variables;
 	readonly matches: TypeMatcher;
 }
@@ -34,6 +44,10 @@ export interface Collected {
 }
 
 const documents = new WeakMap<DocumentNode, CacheDocument>();
+const fragmentMaps = new WeakMap<
+	DocumentNode,
+	ReadonlyMap<string, FragmentDefinitionNode>
+>();
 
 export function cacheDocumentOf(node: DocumentNode): CacheDocument {
 	let document = documents.get(node);
@@ -42,14 +56,41 @@ export function cacheDocumentOf(node: DocumentNode): CacheDocument {
 		(definition) => definition.kind === Kind.OPERATION_DEFINITION,
 	);
 	if (!operation) throw new TypeError('The document holds no operation');
-	const fragments = new Map<string, FragmentDefinitionNode>();
-	for (const definition of node.definitions)
-		if (definition.kind === Kind.FRAGMENT_DEFINITION)
-			fragments.set(definition.name.value, definition);
 	const rootKey = `ROOT_${operation.operation.toUpperCase()}`;
-	document = { operation, fragments, rootKey };
+	document = { operation, fragments: fragmentsOf(node), rootKey };
 	documents.set(node, document);
 	return document;
+}
+
+/**
+ * A fragment document, as the client preset writes one for `useFragment`:
+ * the fragment named, else the document's first (the preset puts the
+ * fragment itself first, and the fragments it spreads after it).
+ */
+export function fragmentDocumentOf(
+	node: DocumentNode,
+	fragmentName: string | undefined,
+): FragmentDocument {
+	const fragments = fragmentsOf(node);
+	const name = fragmentName ?? fragments.keys().next().value;
+	if (name === undefined) throw new TypeError(noFragment);
+	const fragment = fragments.get(name);
+	if (!fragment) throw new TypeError(`The document has no fragment ${name}`);
+	return { fragments, fragment };
+}
+
+function fragmentsOf(
+	node: DocumentNode,
+): ReadonlyMap<string, FragmentDefinitionNode> {
+	let fragments = fragmentMaps.get(node);
+	if (fragments) return fragments;
+	const map = new Map<string, FragmentDefinitionNode>();
+	for (const definition of node.definitions)
+		if (definition.kind === Kind.FRAGMENT_DEFINITION)
+			map.set(definition.name.value, definition);
+	fragments = map;
+	fragmentMaps.set(node, fragments);
+	return fragments;
 }
 
 /** The variables given, each one left out taking its declared default. */
@@ -76,7 +117,7 @@ export function variablesOf(
 export function collectFields(
 	sets: readonly SelectionSetNode[],
 	typename: string | undefined,
-	walk: Walk,
+	walk: Walk<Definitions>,
 	undecidedApply: boolean,
 ): Collected {
 	const collected: Collected = { fields: new Map(), undecided: [] };
@@ -113,7 +154,7 @@ export function subSelections(
 
 function fragmentOf(
 	selection: Exclude<SelectionNode, FieldNode>,
-	walk: Walk,
+	walk: Walk<Definitions>,
 	seen: Set<string>,
 ): { condition: string | undefined; set: SelectionSetNode } | undefined {
 	if (selection.kind === Kind.INLINE_FRAGMENT)

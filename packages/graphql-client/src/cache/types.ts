@@ -41,6 +41,23 @@ export type EntityRef =
 export type FieldModifier = (current: unknown) => unknown;
 
 /**
+ * The variables then one more argument (the data, the callback): the
+ * variables may be left out when the document requires none.
+ */
+export type VariablesThen<TVariables, TLast> =
+	Record<string, never> extends TVariables
+		? [last: TLast] | [variables: TVariables | undefined, last: TLast]
+		: [variables: TVariables, last: TLast];
+
+/** Which fragment of a fragment document, and its variables, if it reads any. */
+export interface FragmentOptions {
+	/** The fragment to read. Default: the document's first, the one the client preset defines. */
+	readonly fragmentName?: string;
+	/** The variables its fields' arguments read. */
+	readonly variables?: Readonly<Record<string, unknown>>;
+}
+
+/**
  * Where results are kept between calls, entity by entity. The client
  * writes every query's and mutation's result to it, and serves
  * `cache-first` queries from it.
@@ -55,23 +72,44 @@ export interface GraphQLCache {
 	): TResult | undefined;
 	/**
 	 * Stores a result for the document, as the server would send it: every
-	 * object carries its `__typename`.
+	 * object carries its `__typename`. All or nothing: a write that throws
+	 * (a `keys` function) changes nothing.
 	 */
 	write<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
-		variables: NoInfer<TVariables>,
-		data: NoInfer<TResult>,
+		...args: VariablesThen<NoInfer<TVariables>, NoInfer<TResult>>
 	): void;
 	/**
 	 * Calls `callback` with the document's result read afresh (`undefined`
-	 * when incomplete) after each write, evict, modify or reset that changed
-	 * a field the last read used: once per change, never for another
-	 * entity. Returns the function that stops it. The hook for UI bindings.
+	 * when incomplete) after a write, evict, modify or reset that changed
+	 * it: once per change, never for another entity, nor when the fields it
+	 * reads came out equal. A callback that throws is reported
+	 * (`reportError`), not thrown into the write. Returns the function that
+	 * stops it. The hook for UI bindings.
 	 */
 	watch<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
-		variables: NoInfer<TVariables>,
-		callback: (data: TResult | undefined) => void,
+		...args: VariablesThen<
+			NoInfer<TVariables>,
+			(data: NoInfer<TResult> | undefined) => void
+		>
+	): () => void;
+	/**
+	 * One entity's fields through a fragment document (`fragment BookCard on
+	 * Book { title }`), or `undefined` when any is missing or the ref names
+	 * no entity.
+	 */
+	readFragment<TResult>(
+		fragment: GraphQLDocument<TResult, never>,
+		ref: EntityRef,
+		options?: FragmentOptions,
+	): TResult | undefined;
+	/** `watch` for a fragment on one entity: the hook for `useFragment`. */
+	watchFragment<TResult>(
+		fragment: GraphQLDocument<TResult, never>,
+		ref: EntityRef,
+		callback: (data: NoInfer<TResult> | undefined) => void,
+		options?: FragmentOptions,
 	): () => void;
 	/** Removes an entity; `false` when the cache did not hold it. */
 	evict(ref: EntityRef): boolean;
@@ -84,6 +122,6 @@ export interface GraphQLCache {
 		ref: EntityRef,
 		fields: Readonly<Record<string, FieldModifier>>,
 	): boolean;
-	/** Empties the cache: every watcher is called back. */
+	/** Empties the cache: every watch whose result was whole is called back. */
 	reset(): void;
 }

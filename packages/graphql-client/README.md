@@ -167,6 +167,7 @@ await client.query(BookQuery, { id: '1' }, { fetchPolicy: 'network-only' }); // 
 await client.mutate(RenameBook, { id: '1', title: 'Dune' });              // updates Book:1
 
 const stop = client.cache!.watch(BookQuery, { id: '1' }, (data) => render(data));
+const card = client.cache!.readFragment(BookCard, 'Book:1');            // one entity, by a fragment
 client.cache!.evict({ __typename: 'Book', id: '1' });
 ```
 
@@ -175,13 +176,19 @@ Off by default. Each object with a `__typename` and an `id` (or `_id`, or its
 sets it sends, leaving your documents as they are. `fetchPolicy` is
 `cache-first` (default), `network-only`, `cache-only` (throws
 `CacheMissError` on a miss) or `no-cache`. `client.cache` offers `read`,
-`write`, `watch` (the hook for UI bindings), `evict`, `modify` and `reset`.
+`write`, `watch` (the hook for UI bindings, called only when the result
+changed), `readFragment` and `watchFragment` (one entity through a fragment
+document), `evict`, `modify` and `reset`. A watch callback or a `keys` function
+that throws is reported, never thrown into the call.
 See [Normalized cache](docs/guide/cache.md).
 
 ## Traps
 
 - **Never share a client between users on a server.** Headers carry the user's
-  token; create one client per incoming request, and keep `cache` off there.
+  token; create one client per incoming request.
+- **Keep `cache` off on a server.** One client serves one request there, so a
+  cache would hold one user's data for one request and nothing more. The
+  client does not enforce it.
 - **With a cache and `persisted: { mode: 'documentId' }`, the documents must
   carry `__typename`**: add the client preset's
   `addTypenameSelectionDocumentTransform`, or the call throws a `TypeError`

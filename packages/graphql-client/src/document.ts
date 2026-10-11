@@ -48,6 +48,30 @@ export function operationOf(
 	return operation;
 }
 
+export const noFragment = 'The document holds no fragment';
+
+const fragmentNodes = new Map<string, DocumentNode>();
+
+/**
+ * A fragment's document, for the cache's `readFragment` and
+ * `watchFragment`: the `DocumentNode`, or a `TypedDocumentString`'s text,
+ * parsed once. It holds no operation, so `operationOf` cannot read it.
+ */
+export function fragmentNodeOf(
+	document: GraphQLDocument<unknown, never>,
+): DocumentNode {
+	if (isDocumentNode(document)) return document;
+	if (typeof document !== 'string' && !(document instanceof String))
+		throw new TypeError(noFragment);
+	const text = String(document);
+	let node = fragmentNodes.get(text);
+	if (!node) {
+		node = parse(text, { noLocation: true });
+		fragmentNodes.set(text, node);
+	}
+	return node;
+}
+
 /** The preset's `persistedDocuments` puts `__meta__: { hash }` on each operation. */
 function withHash(operation: Operation, document: object): Operation {
 	const meta = (document as { __meta__?: unknown }).__meta__;

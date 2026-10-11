@@ -22,6 +22,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`With a cache, a persisted document needs __typename in every selection set: add the client preset's addTypenameSelectionDocumentTransform to its documentTransforms`](#with-a-cache-a-persisted-document-needs-__typename-in-every-selection-set-add-the-client-presets-addtypenameselectiondocumenttransform-to-its-documenttransforms)
 - [`The cache stores an operation's data: an object`](#the-cache-stores-an-operations-data-an-object)
 - [`The document has no fragment <name>`](#the-document-has-no-fragment-name)
+- [`The document holds no fragment`](#the-document-holds-no-fragment)
 - [A `cache-first` query that always goes to the network](#a-cache-first-query-that-always-goes-to-the-network)
 
 ## `query() was given a mutation`
@@ -348,11 +349,32 @@ cache.write(BookQuery, { id: '1' }, { book: { __typename: 'Book', id: '1', title
 ## `The document has no fragment <name>`
 
 **When:** with a cache, a document spreads `...<name>` but does not define that
-fragment. A `TypeError` from the cache's read or write.
+fragment; or `readFragment`/`watchFragment` is given a `fragmentName` the
+document does not define. A `TypeError` from the cache.
 **Why:** a document built by hand, or a fragment left out of a hand-written
-string. The client preset always includes the fragments a document spreads.
+string. The client preset always includes the fragments a document spreads. A
+`fragmentName` must name one of the document's own fragments.
 **Fix:** use the preset's document, or append the fragment's definition to the
-document.
+document; check the `fragmentName`:
+
+```ts
+cache.readFragment(BookCard, 'Book:1', { fragmentName: 'BookCard' });
+```
+
+## `The document holds no fragment`
+
+**When:** `cache.readFragment` or `cache.watchFragment` is given a document
+that defines no fragment: an operation (`BookQuery`), or the client preset's
+hash-only object. A `TypeError`.
+**Why:** these read one entity through a fragment's selection set; an
+operation reads from the root instead.
+**Fix:** pass the fragment's document, or read the operation with `read`:
+
+```ts
+const BookCard = graphql(`fragment BookCard on Book { title }`);
+cache.readFragment(BookCard, 'Book:1');
+cache.read(BookQuery, { id: '1' }); // an operation
+```
 
 ## A `cache-first` query that always goes to the network
 

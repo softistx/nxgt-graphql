@@ -99,6 +99,24 @@ describe('readResult', () => {
 		});
 	});
 
+	test('without possibleTypes, a list read twice is merged item by item', () => {
+		const store = new EntityStore();
+		const source =
+			'{ box { __typename id items { a } ... on Thing { items { b } } } }';
+		const data = {
+			box: {
+				__typename: 'Box',
+				id: '1',
+				items: [
+					{ a: 1, b: 2 },
+					{ a: 3, b: 4 },
+				],
+			},
+		};
+		write(store, walkOf(source), data);
+		expect(readResult(walkOf(source), store).data).toEqual(data);
+	});
+
 	test('a skipped field is not needed; an included one is', () => {
 		const store = new EntityStore();
 		write(store, walkOf('{ book { __typename id } }'), {

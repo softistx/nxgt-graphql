@@ -71,3 +71,42 @@ export class EntityStore {
 		return changes;
 	}
 }
+
+/** What a write reads and merges into: the store, or a staging over it. */
+export interface EntityWrites {
+	get(key: string): StoreObject | undefined;
+	merge(key: string, fields: StoreObject): void;
+}
+
+/**
+ * A write held aside, then applied whole: a write that throws halfway (a
+ * `keys` function) leaves the store, and its watchers, as they were.
+ */
+export class StagedWrites implements EntityWrites {
+	readonly #store: EntityStore;
+	readonly #pending = new Map<string, StoreObject>();
+
+	constructor(store: EntityStore) {
+		this.#store = store;
+	}
+
+	/** The entity as the store holds it, with what this write merged so far. */
+	get(key: string): StoreObject | undefined {
+		const stored = this.#store.get(key);
+		const pending = this.#pending.get(key);
+		if (!pending) return stored;
+		return stored ? { ...stored, ...pending } : pending;
+	}
+
+	merge(key: string, fields: StoreObject): void {
+		const pending = this.#pending.get(key);
+		if (pending) Object.assign(pending, fields);
+		else this.#pending.set(key, { ...fields });
+	}
+
+	/** Applies every merge to the store, which records what changed. */
+	commit(): void {
+		for (const [key, fields] of this.#pending) this.#store.merge(key, fields);
+		this.#pending.clear();
+	}
+}

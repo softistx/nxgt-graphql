@@ -36,12 +36,25 @@ export function equal(a: unknown, b: unknown): boolean {
 	);
 }
 
-/** `extra`'s fields added into `target`, objects merged field by field. */
+/**
+ * `extra`'s fields added into `target`: objects merged field by field, and
+ * two lists of the same length item by item; otherwise `extra`'s value wins.
+ */
 export function deepMerge(target: StoreObject, extra: StoreObject): void {
-	for (const [key, value] of Object.entries(extra)) {
-		const current = target[key];
-		if (isPlainObject(current) && isPlainObject(value))
-			deepMerge(current, value);
-		else target[key] = value;
+	for (const [key, value] of Object.entries(extra))
+		target[key] = merged(target[key], value);
+}
+
+function merged(current: unknown, value: unknown): unknown {
+	if (isPlainObject(current) && isPlainObject(value)) {
+		deepMerge(current, value);
+		return current;
 	}
+	if (
+		Array.isArray(current) &&
+		Array.isArray(value) &&
+		current.length === value.length
+	)
+		return current.map((item, index) => merged(item, value[index]));
+	return value;
 }

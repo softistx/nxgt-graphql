@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
+import { stubReportError } from '../../test/report-error';
 import { normalizedCache } from './normalized-cache';
 
 type Book = { __typename: 'Book'; id: string; title: string };
@@ -177,8 +178,72 @@ describe('watch', () => {
 		expect(callback).toHaveBeenLastCalledWith({ book: book('1', 'Dune!') });
 		cache.evict('Book:1');
 		expect(callback).toHaveBeenLastCalledWith(undefined);
+		// Already incomplete: a reset leaves its result as it was.
 		cache.reset();
-		expect(callback).toHaveBeenCalledTimes(3);
+		expect(callback).toHaveBeenCalledTimes(2);
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+		cache.reset();
+		expect(callback).toHaveBeenCalledTimes(4);
+		expect(callback).toHaveBeenLastCalledWith(undefined);
+	});
+
+	test('not called when the fields it reads came out equal', () => {
+		const Theme = parse('{ settings { theme } }') as TypedDocumentNode<
+			{ settings: { theme: string } },
+			Record<string, never>
+		>;
+		const Lang = parse('{ settings { lang } }') as TypedDocumentNode<
+			{ settings: { lang: string } },
+			Record<string, never>
+		>;
+		const cache = normalizedCache();
+		cache.write(Theme, {
+			settings: { __typename: 'Settings', theme: 'dark' } as never,
+		});
+		const callback = mock();
+		cache.watch(Theme, callback);
+		cache.write(Lang, {
+			settings: { __typename: 'Settings', lang: 'fr' } as never,
+		});
+		expect(callback).not.toHaveBeenCalled();
+		cache.write(Theme, {
+			settings: { __typename: 'Settings', theme: 'light' } as never,
+		});
+		expect(callback).toHaveBeenCalledTimes(1);
+	});
+
+	test('a callback that changes its data does not change what the next read is compared with', () => {
+		const cache = normalizedCache();
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+		const seen: string[] = [];
+		cache.watch(BookQuery, { id: '1' }, (data) => {
+			if (!data?.book) return;
+			seen.push(data.book.title);
+			data.book.title = 'changed by the callback';
+		});
+		cache.modify('Book:1', { title: () => 'Emma' });
+		cache.modify('Book:1', { title: () => 'changed by the callback' });
+		expect(seen).toEqual(['Emma', 'changed by the callback']);
+	});
+
+	test('a callback that throws is reported; the other watches still run and the write stands', () => {
+		const reported = stubReportError();
+		try {
+			const cache = normalizedCache();
+			cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+			const failure = new Error('render failed');
+			cache.watch(BookQuery, { id: '1' }, () => {
+				throw failure;
+			});
+			const second = mock();
+			cache.watch(BookQuery, { id: '1' }, second);
+			cache.write(BookQuery, { id: '1' }, { book: book('1', 'Emma') });
+			expect(second).toHaveBeenCalledWith({ book: book('1', 'Emma') });
+			expect(reported.errors).toEqual([failure]);
+			expect(cache.read(BookQuery, { id: '1' })?.book?.title).toBe('Emma');
+		} finally {
+			reported.restore();
+		}
 	});
 
 	test('the function returned stops it, even from within a callback of the same batch', () => {
@@ -195,5 +260,154 @@ describe('watch', () => {
 		cache.watch(BookQuery, { id: '1' }, third)();
 		cache.modify('Book:1', { title: () => 'Persuasion' });
 		expect(third).not.toHaveBeenCalled();
+	});
+});
+
+describe('write', () => {
+	test('variables may be left out when the document requires none', () => {
+		const cache = normalizedCache();
+		cache.write(BooksQuery, { books: [book('1', 'Dune')] });
+		cache.write(BooksQuery, undefined, { books: [book('1', 'Emma')] });
+		expect(cache.read(BooksQuery)).toEqual({ books: [book('1', 'Emma')] });
+	});
+
+	test('all or nothing: a keys function that throws halfway changes nothing and calls no watch', () => {
+		const cache = normalizedCache({
+			keys: {
+				Book: (b) => {
+					if (b['id'] === '2') throw new Error('no identity');
+					return String(b['id']);
+				},
+			},
+		});
+		cache.write(BooksQuery, { books: [book('1', 'Dune')] });
+		const callback = mock();
+		cache.watch(BooksQuery, callback);
+		expect(() =>
+			cache.write(BooksQuery, {
+				books: [book('1', 'Dune Messiah'), book('2', 'Emma')],
+			}),
+		).toThrow('no identity');
+		expect(cache.read(BooksQuery)).toEqual({ books: [book('1', 'Dune')] });
+		expect(callback).not.toHaveBeenCalled();
+	});
+
+	test('an entity met twice in one result is merged, and its watch called once', () => {
+		const Pair = parse(
+			'{ first: book(id: "1") { id title } second: book(id: "1") { id pages } }',
+		) as TypedDocumentNode<
+			{
+				first: Book;
+				second: { __typename: 'Book'; id: string; pages: number };
+			},
+			Record<string, never>
+		>;
+		const cache = normalizedCache();
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+		const callback = mock();
+		cache.watch(BookQuery, { id: '1' }, callback);
+		cache.write(Pair, {
+			first: book('1', 'Emma'),
+			second: { __typename: 'Book', id: '1', pages: 412 },
+		});
+		expect(callback).toHaveBeenCalledTimes(1);
+		expect(cache.read(BookQuery, { id: '1' })).toEqual({
+			book: book('1', 'Emma'),
+		});
+	});
+});
+
+describe('readFragment and watchFragment', () => {
+	const BookCard = parse(
+		'fragment BookCard on Book { title author { ...AuthorName } } fragment AuthorName on Author { name }',
+	) as TypedDocumentNode<{ title: string; author: { name: string } }, unknown>;
+	const BookWithAuthor = parse(
+		'query { book(id: "1") { id title author { id name } } }',
+	) as TypedDocumentNode<{ book: unknown }, Record<string, never>>;
+	const dune = {
+		book: {
+			__typename: 'Book',
+			id: '1',
+			title: 'Dune',
+			author: { __typename: 'Author', id: 'a', name: 'Herbert' },
+		},
+	};
+
+	test('reads one entity through a fragment document, its spreads followed', () => {
+		const cache = normalizedCache();
+		cache.write(BookWithAuthor, dune);
+		const expected = {
+			__typename: 'Book',
+			title: 'Dune',
+			author: { __typename: 'Author', name: 'Herbert' },
+		};
+		expect(cache.readFragment(BookCard, 'Book:1')).toEqual(expected);
+		expect(
+			cache.readFragment(BookCard, { __typename: 'Book', id: '1' }),
+		).toEqual(expected);
+		expect(
+			cache.readFragment(BookCard, 'Author:a', { fragmentName: 'AuthorName' }),
+		).toEqual({ __typename: 'Author', name: 'Herbert' } as never);
+	});
+
+	test('undefined for an entity not held, a field missing, or a ref with no identity', () => {
+		const cache = normalizedCache();
+		cache.write(BookWithAuthor, dune);
+		expect(cache.readFragment(BookCard, 'Book:2')).toBeUndefined();
+		const Pages = parse(
+			'fragment Pages on Book { pages }',
+		) as TypedDocumentNode<{ pages: number }, unknown>;
+		expect(cache.readFragment(Pages, 'Book:1')).toBeUndefined();
+		expect(
+			cache.readFragment(BookCard, { __typename: 'Book' }),
+		).toBeUndefined();
+	});
+
+	test('a TypedDocumentString fragment, and its variables', () => {
+		const cache = normalizedCache();
+		cache.write(
+			parse('{ book(id: "1") { id cover(size: 2) } }') as TypedDocumentNode<
+				unknown,
+				Record<string, never>
+			>,
+			{ book: { __typename: 'Book', id: '1', cover: 'c2.png' } },
+		);
+		const Cover = new String(
+			'fragment Cover on Book { cover(size: $size) }',
+		) as unknown as TypedDocumentNode<{ cover: string }, unknown>;
+		expect(
+			cache.readFragment(Cover, 'Book:1', { variables: { size: 2 } }),
+		).toEqual({ __typename: 'Book', cover: 'c2.png' } as never);
+	});
+
+	test('a document with no fragment, or not the one named, is refused', () => {
+		const cache = normalizedCache();
+		expect(() => cache.readFragment(BooksQuery, 'Book:1')).toThrow(
+			'The document holds no fragment',
+		);
+		expect(() =>
+			cache.readFragment(BookCard, 'Book:1', { fragmentName: 'Nope' }),
+		).toThrow('The document has no fragment Nope');
+	});
+
+	test('watchFragment calls back when the entity’s fields it reads change, not for another', () => {
+		const cache = normalizedCache();
+		cache.write(BookWithAuthor, dune);
+		const callback = mock();
+		const stop = cache.watchFragment(BookCard, 'Book:1', callback);
+		cache.modify('Book:1', { pages: () => 412 });
+		cache.write(BookQuery, { id: '2' }, { book: book('2', 'Emma') });
+		expect(callback).not.toHaveBeenCalled();
+		cache.modify('Author:a', { name: () => 'Frank Herbert' });
+		expect(callback).toHaveBeenLastCalledWith({
+			__typename: 'Book',
+			title: 'Dune',
+			author: { __typename: 'Author', name: 'Frank Herbert' },
+		});
+		cache.evict('Book:1');
+		expect(callback).toHaveBeenLastCalledWith(undefined);
+		stop();
+		cache.write(BookWithAuthor, dune);
+		expect(callback).toHaveBeenCalledTimes(2);
 	});
 });
