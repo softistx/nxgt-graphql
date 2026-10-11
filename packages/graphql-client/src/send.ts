@@ -8,7 +8,7 @@ import {
 	type PersistedQueries,
 	withQuery,
 } from './persisted';
-import { dataOf, transportError } from './response';
+import { dataOf, statusTextOf, transportError } from './response';
 
 /** Where operations go and how they are named: data only, shared by every call of a client. */
 export interface Transport {
@@ -64,7 +64,7 @@ async function sendBody(
 	sending: Sending,
 ): Promise<unknown> {
 	const reply = await post(transport, body, sending, operation.operationName);
-	return dataOf(reply.data, reply.status);
+	return dataOf(reply.data, reply.status, statusTextOf(reply));
 }
 
 /** One POST of a body, or of a batch's array; the transport's errors mapped. */

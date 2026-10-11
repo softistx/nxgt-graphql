@@ -53,6 +53,14 @@ export const providerProps: GraphQLProviderProps = { client };
 export const App = (props: { children?: ReactNode }) =>
 	createElement(GraphQLProvider, { client }, props.children);
 
+// A client without a cache is a provider's client too.
+export const cacheless = createGraphQLClient({
+	url: 'https://api.example.com/graphql',
+});
+export const cachelessProps: GraphQLProviderProps = { client: cacheless };
+export const CachelessApp = (props: { children?: ReactNode }) =>
+	createElement(GraphQLProvider, { client: cacheless }, props.children);
+
 export function useBook(id: string) {
 	const options: UseQueryOptions = { fetchPolicy: 'cache-first' };
 	const query = useQuery(BookQuery, { id }, options);

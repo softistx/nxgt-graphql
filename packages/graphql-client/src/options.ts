@@ -110,7 +110,15 @@ export type VariablesArgs<TVariables, TOptions> =
 		? [variables?: TVariables, options?: TOptions]
 		: [variables: TVariables, options?: TOptions];
 
-export interface GraphQLClient {
+/**
+ * A client. `TCache` is what `client.cache` holds: `createGraphQLClient`
+ * types it `GraphQLCache` when it was given a `cache` and `undefined` when it
+ * was given none. `GraphQLClient` alone, for a parameter or a provider, takes
+ * either.
+ */
+export interface GraphQLClient<
+	TCache extends GraphQLCache | undefined = GraphQLCache | undefined,
+> {
 	/**
 	 * Runs a query and returns its `data`; any GraphQL error throws. With a
 	 * cache, `fetchPolicy` says whether the cache answers it.
@@ -129,6 +137,16 @@ export interface GraphQLClient {
 		...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
 	): Promise<TResult>;
 	/**
+	 * Runs a query or a mutation, whichever the document holds, as `query` or
+	 * `mutate` would, errors included: for code that forwards any document.
+	 * The document's types do not say which it holds, so the options are what
+	 * both take. A subscription rejects with a `TypeError`: use `subscribe`.
+	 */
+	execute<TResult, TVariables>(
+		document: GraphQLDocument<TResult, TVariables>,
+		...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
+	): Promise<TResult>;
+	/**
 	 * Subscribes over server-sent events and yields each result's `data`; any
 	 * GraphQL error throws and ends it. It connects on the first iteration,
 	 * and is never retried, reconnected, deduplicated or batched.
@@ -139,6 +157,9 @@ export interface GraphQLClient {
 	): Subscription<TResult>;
 	/** The transport, for what is not GraphQL. */
 	readonly http: HttpClient;
-	/** The cache given as `cache`, for reads, writes, evictions and watches; else `undefined`. */
-	readonly cache: GraphQLCache | undefined;
+	/**
+	 * The cache given as `cache`, for reads, writes, evictions and watches;
+	 * `undefined` for a client created without one.
+	 */
+	readonly cache: TCache;
 }

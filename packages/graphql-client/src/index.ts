@@ -19,6 +19,7 @@ export {
 	type ApiErrorParams,
 	type ApiFieldError,
 	ApiStatusError,
+	type ApiStatusErrorOptions,
 	ApiUnavailableError,
 	CacheMissError,
 	isApiError,

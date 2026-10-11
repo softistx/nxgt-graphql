@@ -9,6 +9,7 @@ import {
 	type ApiErrorParams,
 	type ApiFieldError,
 	ApiStatusError,
+	type ApiStatusErrorOptions,
 	ApiUnavailableError,
 	type BatchOptions,
 	type CacheKeys,
@@ -92,7 +93,29 @@ export const fromCache = cached.query(
 	{},
 	{ fetchPolicy: 'cache-only' },
 );
-export const clientCache: GraphQLCache | undefined = cached.cache;
+export const clientCache: GraphQLCache = cached.cache;
+// Given a cache, `client.cache` needs no `!`.
+export const cachedRead = cached.cache.read(Viewer);
+export const typedCached: GraphQLClient<GraphQLCache> = cached;
+export const cacheless: GraphQLClient<undefined> = client;
+export const noCache: undefined = client.cache;
+// Options whose `cache` the types cannot tell: either.
+export const either = createGraphQLClient(options());
+export const eitherCache: GraphQLCache | undefined = either.cache;
+export function cacheRefusals() {
+	// @ts-expect-error: a client created without a cache holds none
+	client.cache.read(Viewer);
+	// @ts-expect-error: nor may a client of either kind be read without a check
+	either.cache.read(Viewer);
+	// A wrong option, cache or not: no overload matches. A wrong type rather
+	// than an unknown key: under nodenext, httpyz 0.3.3's declarations lose
+	// `HttpClientOptions` (extensionless imports), so the `url` shape takes
+	// any unknown key there, before 0.2.0 as after.
+	// @ts-expect-error: `dedupe` is a boolean
+	createGraphQLClient({ url: 'https://a.example', cache, dedupe: 'yes' });
+	// @ts-expect-error: `dedupe` is a boolean
+	createGraphQLClient({ url: 'https://a.example', dedupe: 'yes' });
+}
 export const read = cache.read(Viewer);
 export const stop = cache.watch(Rename, { name: 'a' }, (data) => data?.rename);
 export const ref: EntityRef = { __typename: 'Book', id: '1' };
@@ -144,6 +167,33 @@ export const viewer = client.query(Viewer);
 export const renamed = client.mutate(Rename, { name: 'a' });
 export const retried = client.query(Viewer, {}, { retry: false, timeout: 500 });
 
+// execute: a query or a mutation, whichever the document holds.
+export const executedQuery: Promise<{ viewer: { id: string } }> =
+	client.execute(Viewer);
+export const executedMutation = client.execute(
+	Rename,
+	{ name: 'a' },
+	{ timeout: 500, headers: { 'x-a': 'b' } },
+);
+// A generic adapter forwarding any document, as a server-side route does.
+export function forward<TResult, TVariables>(
+	document: GraphQLDocument<TResult, TVariables>,
+	...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
+): Promise<TResult> {
+	return client.execute(document, ...args);
+}
+export const forwarded: Promise<{ rename: boolean }> = forward(Rename, {
+	name: 'a',
+});
+export function executeRefusals() {
+	// @ts-expect-error: Rename requires its variables
+	client.execute(Rename);
+	// @ts-expect-error: the options are what query and mutate both take
+	client.execute(Viewer, {}, { fetchPolicy: 'network-only' });
+	// @ts-expect-error: nor a query's retries: the types cannot tell a query
+	client.execute(Viewer, {}, { retry: 1 });
+}
+
 export const ticks = client.subscribe(
 	OnTick,
 	{ room: 'a' },
@@ -159,7 +209,9 @@ export async function lastTick() {
 	return last;
 }
 
-export const options: GraphQLClientOptions = { url: 'https://api.example.com' };
+export function options(): GraphQLClientOptions {
+	return { url: 'https://api.example.com' };
+}
 export const urlOptions: UrlClientOptions = { url: 'https://api.example.com' };
 export const httpOptions: HttpClientBasedOptions = { http: client.http };
 export const call: CallOptions = { timeout: 1 };
@@ -169,6 +221,16 @@ export const args: VariablesArgs<{ name: string }, CallOptions> = [
 	{ name: 'a' },
 ];
 export const typed: GraphQLClient = client;
+export const typedCachedClient: GraphQLClient = cached;
+// The last overload is the one `ReturnType` and `Parameters` read: as before.
+export const returned: ReturnType<typeof createGraphQLClient> = cached;
+export const parameters: Parameters<typeof createGraphQLClient>[0] = options();
+export const statusOptions: ApiStatusErrorOptions = {
+	statusText: 'Not Found',
+	cause: new Error('x'),
+};
+export const statusError = new ApiStatusError(404, undefined, statusOptions);
+export const bareStatusError = new ApiStatusError(503, 'down');
 export const document: GraphQLDocument<{ ok: boolean }, never> | undefined =
 	undefined;
 
@@ -184,7 +246,10 @@ export async function failure() {
 			const fields: readonly ApiFieldError[] = error.fields;
 			return { entry, extensions, params, fields, code: error.code };
 		}
-		if (error instanceof ApiStatusError) return error.status;
+		if (error instanceof ApiStatusError) {
+			const statusText: string = error.statusText;
+			return `${error.status} ${statusText}`;
+		}
 		if (error instanceof ApiUnavailableError) {
 			const reason: UnavailableReason = error.reason;
 			return reason;

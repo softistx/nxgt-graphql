@@ -464,13 +464,20 @@ describe('connect failures', () => {
 	test('a non-2xx with a text body throws ApiStatusError, its body the text', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: server(() => new Response('Bad gateway', { status: 502 })).fetch,
+			fetch: server(
+				() =>
+					new Response('Bad gateway', {
+						status: 502,
+						statusText: 'Bad Gateway',
+					}),
+			).fetch,
 		});
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
 		);
 		expect(error).toBeInstanceOf(ApiStatusError);
 		expect((error as ApiStatusError).status).toBe(502);
+		expect((error as ApiStatusError).statusText).toBe('Bad Gateway');
 		expect((error as ApiStatusError).body).toBe('Bad gateway');
 	});
 

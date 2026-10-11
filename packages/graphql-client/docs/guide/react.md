@@ -42,6 +42,10 @@ const client = useClient();
 const onLogout = () => client.cache?.reset();
 ```
 
+`GraphQLProvider` takes a client created with a cache or without one, and
+`useClient()` returns it typed `GraphQLClient`, either kind: its `cache` is a
+`GraphQLCache | undefined`, so check it, as above.
+
 Every hook calls `useClient()`. Outside a provider it throws
 [`No GraphQL client: render this component inside <GraphQLProvider client={client}>`](../troubleshooting.md#no-graphql-client-render-this-component-inside-graphqlprovider-clientclient).
 

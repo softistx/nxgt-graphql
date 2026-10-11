@@ -5,6 +5,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`query() was given a mutation`](#query-was-given-a-mutation)
 - [`mutate() was given a query`](#mutate-was-given-a-query)
 - [`query() was given a subscription`, `mutate() was given a subscription`](#query-was-given-a-subscription-mutate-was-given-a-subscription)
+- [`execute() was given a subscription: use subscribe()`](#execute-was-given-a-subscription-use-subscribe)
 - [`subscribe() was given a query`, `subscribe() was given a mutation`](#subscribe-was-given-a-query-subscribe-was-given-a-mutation)
 - [`A subscription is read once`](#a-subscription-is-read-once)
 - [A subscription that yields nothing](#a-subscription-that-yields-nothing)
@@ -14,6 +15,9 @@ One entry per error you can hit, headed by the message you will search for.
 - [`PersistedQueryNotFound`](#persistedquerynotfound)
 - [A batch reply that is not an array of the batch's length](#a-batch-reply-that-is-not-an-array-of-the-batchs-length)
 - [`The API answered <status> with no GraphQL response`](#the-api-answered-status-with-no-graphql-response)
+- [An `ApiError` whose `status` is 400 on an HTTP 200](#an-apierror-whose-status-is-400-on-an-http-200)
+- [`client.cache` is `undefined`, or `'cache' is possibly 'undefined'`](#clientcache-is-undefined-or-cache-is-possibly-undefined)
+- [`No overload matches this call`](#no-overload-matches-this-call)
 - [`The API could not be reached`](#the-api-could-not-be-reached)
 - [`The API did not answer in time`](#the-api-did-not-answer-in-time)
 - [`The API answered with neither data nor errors`](#the-api-answered-with-neither-data-nor-errors)
@@ -58,6 +62,20 @@ subscription document. A `TypeError`.
 **Why:** a subscription yields many results over an event stream; it has its
 own method.
 **Fix:**
+
+```ts
+for await (const { message } of client.subscribe(OnMessage, { room: 'r1' })) {
+  console.log(message);
+}
+```
+
+## `execute() was given a subscription: use subscribe()`
+
+**When:** calling `client.execute(...)` with a subscription document. The
+call rejects with a `TypeError`, before anything is sent.
+**Why:** `execute` runs a query or a mutation, whichever the document holds,
+and returns one result; a subscription yields many over an event stream.
+**Fix:** subscribe, or keep subscriptions out of what you forward:
 
 ```ts
 for await (const { message } of client.subscribe(OnMessage, { room: 'r1' })) {
@@ -224,7 +242,8 @@ before the subscription starts, and for APQ's
 **Why:** a proxy, a gateway or an auth layer answered before GraphQL ran; or,
 on `subscribe`, the server put a GraphQL error in an error status's event
 stream.
-**Fix:** read `error.status` and `error.body`; for a 401, set
+**Fix:** read `error.status`, `error.statusText` (the reason phrase, `''`
+when the response had none) and `error.body`; for a 401, set
 `onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)). For an
 APQ subscription answered 404 by graphql-yoga, have the plugin answer 200, so
 the error comes as the stream's first event and the client resends the text
@@ -236,6 +255,69 @@ useAPQ({ responseConfig: { forceStatusCodeOk: true } });
 
 ```ts
 if (error instanceof ApiStatusError) console.log(error.status, error.body);
+```
+
+## An `ApiError` whose `status` is 400 on an HTTP 200
+
+**When:** the API refused on HTTP 200, with GraphQL `errors` that name no
+`extensions.http.status` (graphql-yoga does it for an error thrown in a
+resolver). `error.status` is `400`, `error.httpStatus` is `200`.
+**Why:** since 0.2.0, `status` is always a failure status: the extension's
+status, else the HTTP status when it is 400 or above, else 400. A server that
+answers its own caller with `error.status` then never answers a refusal with
+200. Before 0.2.0 it was `200`.
+**Fix:** nothing, if you answered with `status`. Code that told a refusal on
+200 apart by its `status` reads `httpStatus`; a server that means another
+status names it in `extensions.http.status`:
+
+```ts
+if (isApiError(error) && error.httpStatus === 200) console.log('refused on 200');
+```
+
+```ts
+throw new GraphQLError('Forbidden', { extensions: { http: { status: 403 } } }); // server
+```
+
+## `client.cache` is `undefined`, or `'cache' is possibly 'undefined'`
+
+**When:** at compile time, using `client.cache` on a client created without
+`cache`: `'client.cache' is possibly 'undefined'`, or `Property 'evict' does
+not exist on type 'never'` after a `!`, a `?.` or an `if (client.cache)`. At
+runtime, `client.cache` is `undefined` there.
+**Why:** since 0.2.0, the client's type follows its options: created with a
+`cache`, `client.cache` is a `GraphQLCache`; created without one, it is
+`undefined`, which it always was at runtime. A client typed `GraphQLClient`
+(a parameter, `useClient()`) may be either, so its `cache` is `GraphQLCache |
+undefined`.
+**Fix:** give the client a cache where you read it; where the client could
+be either, type it `GraphQLClient` and check:
+
+```ts
+const client = createGraphQLClient({ url, cache: normalizedCache() });
+client.cache.evict('User:42'); // a GraphQLCache: no `!`
+```
+
+```ts
+function forget(client: GraphQLClient, id: string) {
+  client.cache?.evict(`User:${id}`);
+}
+```
+
+## `No overload matches this call`
+
+**When:** at compile time, calling `createGraphQLClient` with an option of the
+wrong type.
+**Why:** `createGraphQLClient` is overloaded to type `client.cache` from its
+options, so TypeScript reports the failure as `No overload matches this call`
+rather than naming the option first.
+**Fix:** read the option named in the error's last overload, and give it the
+type it expects:
+
+```ts
+// error: No overload matches this call ... Type 'string' is not assignable to type 'QueryRetry'
+// in the last overload: the option is `retry`
+createGraphQLClient({ url, retry: 'twice' });
+createGraphQLClient({ url, retry: 2 }); // fixed
 ```
 
 ## `The API could not be reached`

@@ -10,14 +10,28 @@ export interface ApiFieldError {
 	readonly params?: ApiErrorParams;
 }
 
-/** An error's `extensions`: what an API puts there, read as it is. */
-export type ApiErrorExtensions = {
+/**
+ * An error's `extensions`: what an API puts there, read as it is. An
+ * interface, so an application types its own keys through declaration
+ * merging:
+ *
+ * ```ts
+ * declare module '@nxgt/graphql-client' {
+ *   interface ApiErrorExtensions {
+ *     field?: string;
+ *   }
+ * }
+ * ```
+ *
+ * Nothing checks them at runtime: the type says what the API sends.
+ */
+export interface ApiErrorExtensions {
 	readonly code?: string;
 	readonly http?: { readonly status?: number };
 	readonly params?: ApiErrorParams;
 	readonly fields?: readonly ApiFieldError[];
 	readonly [key: string]: unknown;
-};
+}
 
 /** One entry of a response's `errors`. */
 export interface ApiErrorEntry {
@@ -40,7 +54,7 @@ export class ApiError extends Error {
 	readonly errors: readonly ApiErrorEntry[];
 	/** The response's `data`, when the API resolved part of it. */
 	readonly data: unknown;
-	/** The HTTP status the response came with. */
+	/** The HTTP status the response came with, as it is: 200 for a refusal sent on a success. */
 	readonly httpStatus: number;
 
 	constructor(
@@ -64,9 +78,17 @@ export class ApiError extends Error {
 		return this.extensions.code;
 	}
 
-	/** `extensions.http.status`, else the HTTP status of the response. */
+	/**
+	 * A failure status unless `extensions.http.status` names another:
+	 * `extensions.http.status`, else the HTTP status when it is 400 or above,
+	 * else 400. A refusal sent on HTTP
+	 * 200 reads 400; `httpStatus` keeps the 200.
+	 */
 	get status(): number {
-		return this.extensions.http?.status ?? this.httpStatus;
+		return (
+			this.extensions.http?.status ??
+			(this.httpStatus >= 400 ? this.httpStatus : 400)
+		);
 	}
 
 	get params(): ApiErrorParams {
@@ -98,16 +120,30 @@ function fieldOfIssue(issue: unknown): ApiFieldError[] {
 	];
 }
 
+/** What an `ApiStatusError` may be given beyond its status and body. */
+export interface ApiStatusErrorOptions extends ErrorOptions {
+	/** The response's reason phrase: `Not Found`. Default: `''`. */
+	statusText?: string;
+}
+
 /** A status that is not a success, with no GraphQL body: 401, 403, 404, a gateway's 503. */
 export class ApiStatusError extends Error {
 	override name = 'ApiStatusError';
 	readonly status: number;
+	/**
+	 * The response's reason phrase, `Not Found`, as `Response.statusText`
+	 * holds it: `''` when the response had none (HTTP/2 sends none) or when
+	 * no response was read whole (a reply labelled JSON that did not parse).
+	 */
+	readonly statusText: string;
 	/** The body, read by its media type, when there was one. */
 	readonly body: unknown;
 
-	constructor(status: number, body: unknown, options?: ErrorOptions) {
-		super(`The API answered ${status} with no GraphQL response`, options);
+	constructor(status: number, body: unknown, options?: ApiStatusErrorOptions) {
+		const { statusText = '', ...errorOptions } = options ?? {};
+		super(`The API answered ${status} with no GraphQL response`, errorOptions);
 		this.status = status;
+		this.statusText = statusText;
 		this.body = body;
 	}
 }

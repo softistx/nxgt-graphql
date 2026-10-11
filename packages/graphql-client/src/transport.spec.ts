@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { createHttpClient, type Middleware } from '@nxgt/httpyz';
+import {
+	type AnyReply,
+	createHttpClient,
+	type HttpClient,
+	type Middleware,
+} from '@nxgt/httpyz';
 import { parse } from 'graphql';
 import { createGraphQLClient } from './client';
 import { ApiStatusError, ApiUnavailableError } from './errors';
+import { statusTextOf } from './response';
 
 const ViewerQuery = parse(
 	'query Viewer { viewer { id } }',
@@ -198,5 +204,23 @@ describe("a caller's own deadline", () => {
 		expect(error).toBeInstanceOf(DOMException);
 		expect(error).not.toBeInstanceOf(ApiUnavailableError);
 		expect(error).toBe(signal.reason);
+	});
+});
+
+describe('statusTextOf', () => {
+	test('a reply with no response gives an empty reason phrase', () => {
+		expect(statusTextOf({ status: 404, data: undefined } as AnyReply)).toBe('');
+	});
+
+	test('an http whose reply has no response gives ApiStatusError.statusText ""', async () => {
+		const http = {
+			post: async () => ({ status: 404, data: undefined }),
+		} as unknown as HttpClient;
+		const error = await rejection(
+			createGraphQLClient({ http }).query(ViewerQuery),
+		);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(404);
+		expect((error as ApiStatusError).statusText).toBe('');
 	});
 });

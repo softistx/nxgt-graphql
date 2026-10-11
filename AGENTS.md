@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. For an API that answers invalid input as one 400 error with a list of fields, `invalidInputError(issues, { translate })`, `fieldsError(code, issues, { status, params })` and `inputPath(path)` build that shape by hand, and `fieldIssueOf(zodIssue)` maps a Zod issue to one of its fields (a code from `FIELD_CODES`, no params). Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Published on npm. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, `execute` (either, from the document), typed errors (`ApiError` with the first error's whole `extensions`, its `ApiErrorExtensions` augmentable, and a failure `status`; `ApiStatusError` with `statusText`; `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache`, typed `GraphQLCache` or `undefined` from the options, with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Published on npm. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
 | `@nxgt/graphql-codegen-msw` | A graphql-codegen plugin writing one typed msw 3 handler per named query and mutation, `mock<Operation>(resolver, options?)` on `graphql.link(endpoint)`: msw's own resolver, `variables` and `data` typed from `typesImport` (the client preset's or typescript-operations' types), the variables checked first with codegen-zod's `z<Operation>Variables` (`schemasImport`). An invalid input is answered without calling the resolver: a value graphql-yoga refuses while coercing the variables as graphql-yoga answers it (400, plain errors in graphql 17's words, from the input types the plugin reads in the schema), whatever `invalidInput` is; a constraint by default for an API that answers invalid input as one 400 error with a list of fields (`invalidInputError`, `translate` optional), `invalidInput: 'bad-user-input'` as `withValidation`'s `BAD_USER_INPUT`, or `'<module>#<export>'`. The generated file's runtime is the `./runtime` subpath (`mockOperation`, `invalidInputRefusal`, `badUserInputRefusal`, `errorResponse`, `isGraphQLError`, the internal `InputTypes` and `InputType`), which re-exports graphql-validation's `invalidInputError`, `fieldsError`, `fieldIssueOf`, `inputPath` and the types `Translate`, `FieldIssue`, `FieldError`. Published on npm. Depends on `@nxgt/graphql-validation`, `change-case`; peers `msw` (`^3.0.3`), `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
@@ -574,17 +574,21 @@ variables and the data, and every failure is a typed error.
 ```
 packages/graphql-client/src/
   index.ts       the public barrel
-  client.ts      createGraphQLClient: the ClientContext built once, query, mutate and
-                 subscribe over it, the hook, the transport choice
+  client.ts      createGraphQLClient (three overloads: with a cache, without, either): the
+                 ClientContext built once, query, mutate, execute and subscribe over it,
+                 the hook, the transport choice
   run.ts         run (a query through the cache, a mutation then its write, the hook on
-                 failure), sendQuery (dedupe, then batch) and operationFor (the kind check):
-                 plain functions over the data-only ClientContext
+                 failure), sendQuery (dedupe, then batch), operationFor (the kind check) and
+                 executedKind (execute's choice, a subscription refused): plain functions
+                 over the data-only ClientContext
   report.ts      logError (the default onError: console.error) and writeToCache (a
                  result written, a throw to the cache's onError, never the caller's)
-  options.ts     the option and client types (url or http shape, QueryRetry, NoInfer variables)
+  options.ts     the option and client types (url or http shape, QueryRetry, NoInfer variables,
+                 GraphQLClient<TCache>)
   send.ts        one operation sent (APQ's register resend included), and post: one POST of a
                  body or a batch's array, its headers, signal, timeout, retry; errors mapped
-  response.ts    dataOf (errors, status, data), replyError (a whole reply), refusedError (a
+  response.ts    dataOf (errors, status, data), replyError (a whole reply), statusTextOf (a
+                 reply's reason phrase, read by shape), refusedError (a
                  non-2xx stream reply, its body read), transportError (timeout, network,
                  unparsable body) and isHttpyzError (httpyz's errors by name, any copy)
   persisted.ts   the body for each persisted mode, the documentId check, the APQ hash (SHA-256,
@@ -600,7 +604,8 @@ packages/graphql-client/src/
                  with the preset's __meta__.hash and the parsed node; fragmentNodeOf: a
                  fragment document's node (no operation needed); the only place that
                  reads the preset's documents (the cache walks the DocumentNode they return)
-  errors.ts      ApiError, ApiStatusError, ApiUnavailableError, isApiError, CacheMissError
+  errors.ts      ApiError, ApiErrorExtensions (an interface: apps merge into it),
+                 ApiStatusError, ApiUnavailableError, isApiError, CacheMissError
   fetch-policy.ts  FetchPolicy and queryThrough: a query through the cache as its policy says,
                  an aborted signal checked before the cache is read
   cache/
@@ -645,7 +650,8 @@ packages/graphql-client/src/
     use-subscription.ts useSubscription: one connection per effect, closed in its cleanup
     use-fragment.ts     useFragment: readFragment and watchFragment through useWatched
 packages/graphql-client/test/
-  declarations/         client.ts and react.ts: the consumer fixtures verify:artifacts emits
+  declarations/         client.ts, react.ts and extensions.ts (an app's ApiErrorExtensions
+                        augmentation): the consumer fixtures verify:artifacts emits
   dom.ts                happy-dom for the React specs only: registered while one runs, the
                         runtime's fetch, Request, AbortSignal, streams and timers kept
   react.ts              the React specs' fetch doubles (a held answer, an event stream) and wrapper
@@ -711,6 +717,47 @@ packages/graphql-client/test/
   HTTP status** (httpyz replays only on an HTTP 401). It runs once per caller,
   deduplicated callers included, and is awaited; what it throws is what the
   caller gets.
+- **An `ApiError`'s `status` is a failure status unless `extensions.http.status` names another**:
+  `extensions.http.status`, else the HTTP status when it is ≥ 400, else 400.
+  `httpStatus` is the HTTP status as it came. A refusal on HTTP 200 reads 400
+  (`errors.spec.ts`, `client.spec.ts`: 200 gives 400 and `httpStatus` 200, 502
+  gives 502, an extension's status wins on any HTTP status). Breaking in 0.2.0;
+  a change to it is breaking again. `isUnauthenticated` reads `status`, so a
+  401 hook never runs for a 200 or a 400.
+- **`ApiStatusError(status, body, options?)` keeps its two- and three-argument
+  forms**: `statusText` is an option beside `cause` (`ApiStatusErrorOptions`),
+  default `''`, never a fourth positional argument. It comes from the
+  `Response` (`statusTextOf` reads httpyz's `reply.response` by shape: an
+  application's own httpyz copy may lack it); httpyz's `ValidationError`
+  carries no `Response`, so a non-2xx that did not parse has `''`.
+- **`ApiErrorExtensions` is an interface with an index signature**, never a
+  type alias: an application merges its keys into it
+  (`declare module '@nxgt/graphql-client'`), through the re-export of the
+  published `.d.ts`, under `bundler` and `nodenext`
+  (`test/declarations/extensions.ts`). A key the package declares must keep a
+  type an augmentation can repeat.
+- **`execute` is `query` or `mutate`, nothing of its own**: `executedKind`
+  reads the operation, refuses a subscription with `TypeError: execute() was
+  given a subscription: use subscribe()`, and `run` does the rest, so the
+  retries, deduplication, batching, cache, hook and errors are theirs. It is
+  `async`, so every refusal is a rejection, as `query`'s. Its options are
+  `CallOptions`: a `TypedDocumentNode` does not carry its operation type, so
+  `retry` and `fetchPolicy` are not accepted (a cast still reaches `run`,
+  which a query honours).
+- **`client.cache` is typed from the options, by overloads, never by a type
+  parameter inferred from `cache`**: `createGraphQLClient` returns
+  `GraphQLClient<GraphQLCache>` with a `cache`, `GraphQLClient<undefined>`
+  with none, and `GraphQLClient` (its parameter defaulting to `GraphQLCache |
+  undefined`) for options typed `GraphQLClientOptions`. An inferred
+  `TCache` read `GraphQLCache` from an optional `cache?: GraphQLCache` without
+  `exactOptionalPropertyTypes`, which lies for options typed
+  `GraphQLClientOptions`. The wide overload stays last: `ReturnType` and
+  `Parameters` read it, as before 0.2.0. A cacheless client keeps a `cache`
+  property typed `undefined`, not absent, so it stays assignable to
+  `GraphQLClient`, `GraphQLProvider`'s `client` and `useClient()`'s type
+  unchanged, and matches the runtime object (`'cache' in client`). The cost:
+  an unknown option reads `No overload matches this call` (the fixture's
+  `@ts-expect-error` sits on the call, not the option). No runtime change.
 - **Errors surface, never swallowed**: without a hook, the error reaches the
   caller unchanged. A reply labelled JSON that does not parse is an
   `ApiStatusError` (its `cause` the parse error) on a non-2xx and an

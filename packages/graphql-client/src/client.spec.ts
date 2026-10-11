@@ -118,6 +118,85 @@ describe('query and mutate', () => {
 	});
 });
 
+describe('execute', () => {
+	test('runs a query as query() does', async () => {
+		const api = server(() => json({ data: { viewer: { id: 'u1' } } }));
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		expect(await client.execute(ViewerQuery)).toEqual({
+			viewer: { id: 'u1' },
+		});
+		expect(api.sent[0]?.body['operationName']).toBe('Viewer');
+	});
+
+	test('runs a mutation as mutate() does: never retried', async () => {
+		const api = server(() => new Response(null, { status: 503 }));
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			retry: { attempts: 3, delay: () => 0 },
+		});
+		const error = await client
+			.execute(RenameMutation, { name: 'a' }, { headers: { 'x-a': 'b' } })
+			.catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect(api.sent).toHaveLength(1);
+		expect(api.sent[0]?.body['variables']).toEqual({ name: 'a' });
+		expect(api.sent[0]?.request.headers.get('x-a')).toBe('b');
+	});
+
+	test('a query through execute() is shared with an identical one in flight', async () => {
+		const api = server(() => json({ data: { viewer: { id: 'u1' } } }));
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		await Promise.all([client.execute(ViewerQuery), client.query(ViewerQuery)]);
+		expect(api.sent).toHaveLength(1);
+	});
+
+	test('its errors are the same: an ApiError, the hook run', async () => {
+		const hooked: unknown[] = [];
+		const client = createGraphQLClient({
+			url,
+			fetch: () =>
+				json({
+					errors: [
+						{ message: 'Signed out', extensions: { http: { status: 401 } } },
+					],
+				}),
+			onUnauthenticated: (error) => {
+				hooked.push(error);
+			},
+		});
+		const error = await client
+			.execute(RenameMutation, { name: 'a' })
+			.catch((e: unknown) => e);
+		expect(isApiError(error)).toBe(true);
+		expect((error as ApiError).status).toBe(401);
+		expect(hooked).toEqual([error]);
+	});
+
+	test('a subscription rejects with a TypeError, nothing sent', async () => {
+		const api = server(() => json({}));
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		const error = await client
+			.execute(TickSubscription)
+			.catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(TypeError);
+		expect((error as TypeError).message).toBe(
+			'execute() was given a subscription: use subscribe()',
+		);
+		expect(api.sent).toHaveLength(0);
+	});
+
+	test('a document with no operation rejects, never throws', async () => {
+		const client = createGraphQLClient({ url, fetch: () => json({}) });
+		const fragment = parse('fragment F on User { id }') as TypedDocumentNode<
+			unknown,
+			Record<string, never>
+		>;
+		const result = client.execute(fragment);
+		await expect(result).rejects.toThrow('The document holds no operation');
+	});
+});
+
 describe('errors', () => {
 	test('GraphQL errors throw an ApiError with every extension', async () => {
 		const extensions = {
@@ -173,6 +252,32 @@ describe('errors', () => {
 		expect(error.httpStatus).toBe(200);
 	});
 
+	test('a 200 with errors and no status named reads 400, its httpStatus 200', async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: () => json({ errors: [{ message: 'x' }] }),
+		});
+		const error = (await client
+			.query(ViewerQuery)
+			.catch((e: unknown) => e)) as ApiError;
+		expect(error).toBeInstanceOf(ApiError);
+		expect(error.status).toBe(400);
+		expect(error.httpStatus).toBe(200);
+	});
+
+	test('a failing HTTP status with errors and no status named is the status', async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: () => json({ errors: [{ message: 'Upstream down' }] }, 502),
+		});
+		const error = (await client
+			.query(ViewerQuery)
+			.catch((e: unknown) => e)) as ApiError;
+		expect(error).toBeInstanceOf(ApiError);
+		expect(error.status).toBe(502);
+		expect(error.httpStatus).toBe(502);
+	});
+
 	test("graphql-validation's issues become fields with dotted paths", async () => {
 		const issues = [
 			{
@@ -205,11 +310,13 @@ describe('errors', () => {
 	test('a status with no GraphQL body throws an ApiStatusError', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () => new Response('Not found', { status: 404 }),
+			fetch: () =>
+				new Response('Not found', { status: 404, statusText: 'Not Found' }),
 		});
 		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(ApiStatusError);
 		expect((error as ApiStatusError).status).toBe(404);
+		expect((error as ApiStatusError).statusText).toBe('Not Found');
 		expect((error as ApiStatusError).body).toBe('Not found');
 	});
 
@@ -630,6 +737,8 @@ describe('transport failures', () => {
 		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(ApiStatusError);
 		expect((error as ApiStatusError).status).toBe(502);
+		// httpyz's ValidationError carries the status, not the reason phrase.
+		expect((error as ApiStatusError).statusText).toBe('');
 		expect((error as ApiStatusError).cause).toBeInstanceOf(Error);
 	});
 

@@ -227,11 +227,18 @@ describe('a reply that is not the batch', () => {
 	test('a non-2xx with no array: every entry gets its ApiStatusError', async () => {
 		const errors = await both(
 			{},
-			server(() => new Response('Bad gateway', { status: 502 })),
+			server(
+				() =>
+					new Response('Bad gateway', {
+						status: 502,
+						statusText: 'Bad Gateway',
+					}),
+			),
 		);
 		for (const error of errors) {
 			expect(error).toBeInstanceOf(ApiStatusError);
 			expect((error as ApiStatusError).status).toBe(502);
+			expect((error as ApiStatusError).statusText).toBe('Bad Gateway');
 		}
 	});
 

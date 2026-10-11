@@ -32,6 +32,16 @@ const callers = {
 	subscription: 'subscribe()',
 } as const;
 
+export const executeSubscription =
+	'execute() was given a subscription: use subscribe()';
+
+/** What `execute` runs a document as: its operation, a subscription refused. */
+export function executedKind(document: AnyDocument): 'query' | 'mutation' {
+	const { kind } = operationOf(document);
+	if (kind === 'subscription') throw new TypeError(executeSubscription);
+	return kind;
+}
+
 /** A query or a mutation, its failure through the hook before the caller gets it. */
 export async function run(
 	context: ClientContext,

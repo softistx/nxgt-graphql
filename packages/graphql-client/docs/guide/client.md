@@ -14,7 +14,7 @@ const { hello } = await client.query(Hello);
 
 ## Documents
 
-`query`, `mutate` and `subscribe` (see [Subscriptions](subscriptions.md)) take
+`query`, `mutate`, `execute` and `subscribe` (see [Subscriptions](subscriptions.md)) take
 what the client preset writes: a `TypedDocumentNode`
 (`documentMode: 'documentNode'`, the default) or a `TypedDocumentString`
 (`documentMode: 'string'`). Both carry the result and variables types.
@@ -110,10 +110,45 @@ still an `ApiUnavailableError`.
 import type { GraphQLClient, GraphQLClientOptions } from '@nxgt/graphql-client';
 ```
 
+### The client's type follows `cache`
+
+`createGraphQLClient` types `client.cache` from its options. Given a
+`cache`, it is a `GraphQLCache`, read without a `!`; given none, it is
+`undefined`, as it is at runtime. Nothing else changes, and nothing changes at
+runtime.
+
+```ts
+const cached = createGraphQLClient({ url, cache: normalizedCache() });
+cached.cache.evict('User:42'); // GraphQLClient<GraphQLCache>: no `!`
+
+const plain = createGraphQLClient({ url });
+plain.cache; // GraphQLClient<undefined>: `undefined`
+```
+
+`GraphQLClient` with no argument is either kind, its `cache` a `GraphQLCache |
+undefined`: type a parameter, a context or a field with it, and check
+`cache` there. Options typed `GraphQLClientOptions`, whose `cache` the types
+cannot tell, give that same `GraphQLClient`, as `ReturnType<typeof
+createGraphQLClient>` does.
+
+```ts
+function forget(client: GraphQLClient, id: string) {
+  client.cache?.evict(`User:${id}`); // either kind of client
+}
+forget(cached, '42');
+forget(plain, '42');
+```
+
+`createGraphQLClient` is overloaded for this, so an option it does not take
+is reported as `No overload matches this call`, followed by the option's
+name.
+
 ## Query and mutate
 
 ```ts
-interface GraphQLClient {
+interface GraphQLClient<
+  TCache extends GraphQLCache | undefined = GraphQLCache | undefined,
+> {
   query<TResult, TVariables>(
     document: GraphQLDocument<TResult, TVariables>,
     // NoInfer: the document alone sets the variables' type
@@ -123,8 +158,12 @@ interface GraphQLClient {
     document: GraphQLDocument<TResult, TVariables>,
     ...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
   ): Promise<TResult>;
+  execute<TResult, TVariables>( // see Execute, below
+    document: GraphQLDocument<TResult, TVariables>,
+    ...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
+  ): Promise<TResult>;
   readonly http: HttpClient;
-  readonly cache: GraphQLCache | undefined;
+  readonly cache: TCache; // see The client's type follows `cache`
 }
 ```
 
@@ -161,6 +200,37 @@ await client.query(UserQuery, { id: '42' }, {
 
 `query()` refuses a mutation document and `mutate()` a query, with a
 `TypeError` (`query() was given a mutation`).
+
+## Execute
+
+`execute` runs a query or a mutation, whichever the document holds, for code
+that forwards documents it does not choose: a server-side route passing any
+typed document on. It is `query` for a query and `mutate` for a mutation,
+the same request, retries, deduplication, batching, cache and errors.
+
+```ts
+export function run<TResult, TVariables>(
+  document: GraphQLDocument<TResult, TVariables>,
+  ...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
+): Promise<TResult> {
+  return client.execute(document, ...args);
+}
+
+await client.execute(UserQuery, { id: '42' });                    // a query
+await client.execute(RenameUser, { id: '42', name: 'Ada' }, {     // a mutation
+  headers: { 'x-request-id': 'r1' },
+});
+```
+
+Its options are what `query` and `mutate` both take: `signal`, `headers`
+and `timeout`. A document's types carry its result and variables, not
+whether it is a query, so `retry` and `fetchPolicy`, a query's only, are not
+accepted; a query through `execute` gets the client's `retry` and the default
+fetch policy. Call `query` when you need them.
+
+A subscription document rejects with a `TypeError`, `execute() was given a
+subscription: use subscribe()`, before anything is sent. Like `query` and
+`mutate`, `execute` never throws: every refusal is a rejected promise.
 
 ## Retry
 
