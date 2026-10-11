@@ -125,7 +125,8 @@ describe('useSubscription', () => {
 	test('StrictMode leaves one open connection', async () => {
 		const { api, client } = setup();
 		renderHook(() => useSubscription(TickSubscription, { room: 'a' }), {
-			wrapper: withClient(client, { strict: true }),
+			wrapper: withClient(client),
+			reactStrictMode: true,
 		});
 		await waitFor(() =>
 			expect(api.streams.filter((s) => !s.signal.aborted)).toHaveLength(1),

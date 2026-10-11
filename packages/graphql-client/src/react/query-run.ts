@@ -14,10 +14,11 @@ export interface QueryRequest {
 	/** Each refetch in flight, aborted with the request. */
 	readonly refetches: Set<AbortController>;
 	/**
-	 * False when the request is created, set by the effect's cleanup and
-	 * cleared when the effect runs (StrictMode runs it again on the same
-	 * object): a disposed request sends and records nothing. A refetch sent
-	 * before the effect runs (a child's mount effect) is not refused.
+	 * False when the request is created, set by `useQuery`'s layout effect's
+	 * cleanup and cleared when that layout effect runs (StrictMode runs it
+	 * again on the same object, before any passive effect): a disposed request
+	 * sends and records nothing. A refetch sent before the effects run (a
+	 * child's mount effect) is not refused.
 	 */
 	disposed: boolean;
 }
@@ -48,7 +49,6 @@ export function startQuery(
 	request: QueryRequest,
 	setState: SetQueryState,
 ): () => void {
-	request.disposed = false;
 	const controller = new AbortController();
 	if (!request.skip) {
 		const { signal } = controller;
@@ -56,7 +56,6 @@ export function startQuery(
 		settle(request, call, signal, setState).catch(() => {});
 	}
 	return () => {
-		request.disposed = true;
 		controller.abort();
 		for (const refetch of request.refetches) refetch.abort();
 		request.refetches.clear();
@@ -111,7 +110,7 @@ function queryOnce(
 }
 
 /**
- * The answer recorded, unless the call was aborted or the request is not
+ * The answer recorded, unless the call was aborted or the request is
  * disposed; the promise settles as the call did.
  */
 async function settle(

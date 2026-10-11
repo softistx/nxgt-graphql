@@ -143,7 +143,13 @@ does, and records the error too: catch it, or the rejection is unhandled.
   `AbortError`, sends nothing and changes nothing shown: an old callback
   (a timer, a closure) cannot overwrite the current variables' data. Before
   that, it works at any time, including from a child's mount effect or a
-  `useLayoutEffect`, which run before the hook's own effect.
+  `useLayoutEffect`, which run before the hook's own effect, and under
+  StrictMode, where the replayed call's answer is the one shown.
+- **One limit, in development under StrictMode:** a child's
+  `useLayoutEffect` calling the parent's `refetch` is refused on StrictMode's
+  replay (an `AbortError`), because React replays the children's layout
+  effects before the parent's. Call it from the child's `useEffect`, or from
+  the component that calls `useQuery`. A production build replays nothing.
 - **While `skip` is `true`, `refetch()` rejects at once** with
   [`refetch() was called while skip is true: set skip to false to send the query`](../troubleshooting.md#refetch-was-called-while-skip-is-true-set-skip-to-false-to-send-the-query)
   and sends nothing: `skip` means no request. Set `skip` to `false` instead.

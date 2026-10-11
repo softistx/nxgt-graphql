@@ -138,7 +138,8 @@ describe('useQuery without a cache', () => {
 	test('StrictMode’s second effect leaves one live request, the first aborted', async () => {
 		const { api, client } = setup();
 		const { result } = renderHook(() => useQuery(BookQuery, { id: '1' }), {
-			wrapper: withClient(client, { strict: true }),
+			wrapper: withClient(client),
+			reactStrictMode: true,
 		});
 		await waitFor(() => expect(result.current.loading).toBe(false));
 		expect(result.current.data).toEqual({ book: book('Dune 1') });
@@ -414,77 +415,110 @@ describe('useQuery with a cache', () => {
 });
 
 describe('useQuery refetch called by an effect', () => {
-	/** The first answer is `Dune 1`; any later one is `Refetched`. */
-	function counting() {
-		let calls = 0;
-		const api = server(() => ({
-			book: book(++calls === 1 ? 'Dune 1' : 'Refetched', '1'),
-		}));
+	type Outcome = { ok: unknown } | { error: unknown };
+	type Refetch = () => Promise<unknown>;
+	/** Where the refetch is called from. */
+	type Caller = 'child effect' | 'child layout effect' | 'own layout effect';
+
+	/**
+	 * A held server and a component whose `refetch` is called from `caller`
+	 * on mount; what it saw: each refetch's outcome (StrictMode's first pass
+	 * is aborted by its cleanup) and the title shown last.
+	 */
+	function mount(caller: Caller, strict: boolean) {
+		const api = server(() => ({}), { hold: true });
 		const client = createGraphQLClient({
 			url,
 			fetch: api.fetch,
 			dedupe: false,
 		});
-		return { api, client };
+		const seen: { title?: string | undefined; outcomes: Promise<Outcome>[] } = {
+			outcomes: [],
+		};
+		const call = (refetch: Refetch) => {
+			seen.outcomes.push(
+				refetch().then(
+					(ok) => ({ ok }),
+					(error: unknown) => ({ error }),
+				),
+			);
+		};
+		function Child({ refetch }: { refetch: Refetch }) {
+			const useMountEffect =
+				caller === 'child layout effect' ? useLayoutEffect : useEffect;
+			useMountEffect(() => call(refetch), []);
+			return null;
+		}
+		function Parent() {
+			const { data, refetch } = useQuery(BookQuery, { id: '1' });
+			useLayoutEffect(() => {
+				if (caller === 'own layout effect') call(refetch);
+			}, []);
+			seen.title = data?.book.title;
+			return caller === 'own layout effect'
+				? null
+				: createElement(Child, { refetch });
+		}
+		render(createElement(Parent), {
+			wrapper: withClient(client),
+			reactStrictMode: strict,
+		});
+		const live = () => api.received.filter((r) => !r.signal.aborted);
+		return { seen, live };
 	}
 
-	for (const strict of [false, true]) {
-		const label = strict ? 'with StrictMode' : 'without StrictMode';
-
-		test(`a child's mount effect refetches the parent's query ${label}`, async () => {
-			const { api, client } = counting();
-			const seen: { title?: string | undefined; settled: Promise<unknown>[] } =
-				{
-					settled: [],
-				};
-			function Child({ refetch }: { refetch: () => Promise<unknown> }) {
-				useEffect(() => {
-					seen.settled.push(refetch().catch(() => {}));
-				}, []);
-				return null;
-			}
-			function Parent() {
-				const { data, refetch } = useQuery(BookQuery, { id: '1' });
-				seen.title = (
-					data as { book: { title: string } } | undefined
-				)?.book.title;
-				return createElement(Child, { refetch });
-			}
-			const wrapper = withClient(client, { strict });
-			render(createElement(Parent), { wrapper });
+	const cases: [Caller, boolean][] = [
+		['child effect', false],
+		['child effect', true],
+		['own layout effect', false],
+		['own layout effect', true],
+		['child layout effect', false],
+	];
+	test.each(cases)(
+		'a refetch on mount from the %s is shown (StrictMode: %p)',
+		async (caller, strict) => {
+			const { seen, live } = mount(caller, strict);
+			// The refetch is live[0], the hook's own query live[1].
+			await waitFor(() => expect(live()).toHaveLength(2));
+			const [refetch, query] = live();
 			await act(async () => {
-				await Promise.all(seen.settled);
+				query?.answer({ data: { book: book('Initial') } });
 				await flush();
 			});
-			expect(api.received.some((r) => !r.signal.aborted)).toBe(true);
-			expect(seen.title).toBe('Refetched');
-		});
-
-		test(`a parent's layout effect refetches its own query ${label}`, async () => {
-			const { api, client } = counting();
-			const seen: { title?: string | undefined; settled: Promise<unknown>[] } =
-				{
-					settled: [],
-				};
-			function Parent() {
-				const { data, refetch } = useQuery(BookQuery, { id: '1' });
-				useLayoutEffect(() => {
-					seen.settled.push(refetch().catch(() => {}));
-				}, []);
-				seen.title = (
-					data as { book: { title: string } } | undefined
-				)?.book.title;
-				return null;
-			}
-			render(createElement(Parent), {
-				wrapper: withClient(client, { strict }),
-			});
 			await act(async () => {
-				await Promise.all(seen.settled);
+				refetch?.answer({ data: { book: book('Refetched') } });
 				await flush();
 			});
-			expect(api.received.some((r) => !r.signal.aborted)).toBe(true);
+			const outcomes = await Promise.all(seen.outcomes);
+			expect(outcomes).toHaveLength(strict ? 2 : 1);
+			if (strict)
+				expect((outcomes[0] as { error: DOMException }).error.name).toBe(
+					'AbortError',
+				);
+			expect(outcomes.at(-1)).toEqual({ ok: { book: book('Refetched') } });
+			expect(live()).toHaveLength(2);
 			expect(seen.title).toBe('Refetched');
+		},
+	);
+
+	test("a child's useLayoutEffect refetch is refused on StrictMode's replay: the documented limit", async () => {
+		const { seen, live } = mount('child layout effect', true);
+		await waitFor(() => expect(live()).toHaveLength(1));
+		await act(async () => {
+			live()[0]?.answer({ data: { book: book('Initial') } });
+			await flush();
 		});
-	}
+		const outcomes = await Promise.all(seen.outcomes);
+		// The first pass aborted by its cleanup, the replay refused at once.
+		expect(outcomes).toHaveLength(2);
+		for (const outcome of outcomes)
+			expect((outcome as { error: DOMException }).error.name).toBe(
+				'AbortError',
+			);
+		expect((outcomes[1] as { error: DOMException }).error.message).toContain(
+			'no longer shown',
+		);
+		expect(live()).toHaveLength(1);
+		expect(seen.title).toBe('Initial');
+	});
 });

@@ -197,34 +197,49 @@ describe('useMutation', () => {
 		});
 	});
 
-	test('a call from a child’s mount effect records loading', async () => {
-		const api = server(renamed, { hold: true });
-		const client = createGraphQLClient({ url, fetch: api.fetch });
-		let state: MutationState<unknown> | undefined;
-		const Child = ({ run }: { run: () => void }) => {
-			useEffect(run, []);
-			return null;
-		};
-		const Parent = () => {
-			const [rename, current] = useMutation(RenameMutation);
-			state = current;
-			return createElement(Child, {
-				run: () => {
-					rename({ id: '1', title: 'Dune' }).catch(() => {});
-				},
+	test.each([false, true])(
+		'a call from a child’s mount effect records loading, then its result (StrictMode: %p)',
+		async (strict) => {
+			const api = server(renamed, { hold: true });
+			const client = createGraphQLClient({ url, fetch: api.fetch });
+			let state: MutationState<unknown> | undefined;
+			const Child = ({ run }: { run: () => void }) => {
+				useEffect(run, []);
+				return null;
+			};
+			const Parent = () => {
+				const [rename, current] = useMutation(RenameMutation);
+				state = current;
+				return createElement(Child, {
+					run: () => {
+						rename({ id: '1', title: 'Dune' }).catch(() => {});
+					},
+				});
+			};
+			render(createElement(Parent), {
+				wrapper: withClient(client),
+				reactStrictMode: strict,
 			});
-		};
-		const Wrapper = withClient(client);
-		render(createElement(Wrapper, { children: createElement(Parent) }));
-		expect(state?.loading).toBe(true);
-		await waitFor(() => expect(api.received).toHaveLength(1));
-		await act(async () => {
-			api.received[0]?.answer({ data: { rename: book('Dune') } });
-			await flush();
-		});
-		expect(state).toMatchObject({
-			data: { rename: book('Dune') },
-			loading: false,
-		});
-	});
+			expect(state?.loading).toBe(true);
+			// StrictMode replays the child's effect: a mutation is never aborted,
+			// so both calls are sent, and the replay's is the one recorded.
+			const calls = strict ? 2 : 1;
+			await waitFor(() => expect(api.received).toHaveLength(calls));
+			await act(async () => {
+				api.received[0]?.answer({ data: { rename: book('First') } });
+				await flush();
+			});
+			if (strict) {
+				expect(state?.loading).toBe(true);
+				await act(async () => {
+					api.received[1]?.answer({ data: { rename: book('Replayed') } });
+					await flush();
+				});
+			}
+			expect(state).toMatchObject({
+				data: { rename: book(strict ? 'Replayed' : 'First') },
+				loading: false,
+			});
+		},
+	);
 });

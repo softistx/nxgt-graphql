@@ -4,7 +4,7 @@
  */
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
-import { createElement, type ReactNode, StrictMode } from 'react';
+import { createElement, type ReactNode } from 'react';
 import type { GraphQLClient } from '../src/options';
 import { GraphQLProvider } from '../src/react/context';
 
@@ -69,12 +69,15 @@ export function server(
 	return { fetch, received };
 }
 
-/** The `wrapper` of `renderHook`: the client, and StrictMode when asked. */
-export function withClient(client: GraphQLClient, { strict = false } = {}) {
-	return ({ children }: { children: ReactNode }) => {
-		const provided = createElement(GraphQLProvider, { client }, children);
-		return strict ? createElement(StrictMode, null, provided) : provided;
-	};
+/**
+ * The `wrapper` of `render` and `renderHook`: the client. For StrictMode,
+ * pass RTL's `reactStrictMode: true`, never a `<StrictMode>` in the wrapper:
+ * React double-invokes effects only below a root that is strict, so one
+ * inside RTL's wrapper runs each effect once.
+ */
+export function withClient(client: GraphQLClient) {
+	return ({ children }: { children: ReactNode }) =>
+		createElement(GraphQLProvider, { client }, children);
 }
 
 /** Lets the promises already settled run their callbacks. */

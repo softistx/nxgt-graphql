@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useState,
+} from 'react';
 import type { GraphQLDocument } from '../document';
 import type { FetchPolicy } from '../fetch-policy';
 import type { VariablesArgs } from '../options';
@@ -76,6 +82,14 @@ export function useQuery<TResult, TVariables>(
 	);
 	const cached = useWatched(useMemo(() => cacheRead(request), [request]));
 	const [state, setState] = useState(idle);
+	// Before the effect: StrictMode's replay runs layout effects again before
+	// passive ones, so `disposed` is clear when a child's mount effect replays.
+	useLayoutEffect(() => {
+		request.disposed = false;
+		return () => {
+			request.disposed = true;
+		};
+	}, [request]);
 	useEffect(() => startQuery(request, setState), [request]);
 	const refetch = useCallback(
 		() => refetchQuery(request, setState) as Promise<TResult>,

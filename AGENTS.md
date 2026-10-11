@@ -773,16 +773,27 @@ packages/graphql-client/test/
   behind; the specs assert on the signal `fetch` received. An abort is never
   recorded as `error`, and nothing is recorded after a cleanup.
 - **A stale `refetch` changes nothing.** Each `QueryRequest` carries
-  `disposed`, `false` when the request is created, set by the effect's
-  cleanup and cleared when the effect runs (StrictMode, on the same object),
-  as in `useMutation`. `refetchQuery` on a disposed request rejects at once
-  with a `DOMException` `AbortError`, sends nothing and sets nothing; `settle`
-  records only while the request is not disposed. A refetch is refused only
-  once its query is no longer shown (unmounted or variables changed), so a
-  child's mount effect or a `useLayoutEffect` may call it before the hook's
-  effect runs: it is in `request.refetches`, and the cleanup aborts it. A
-  `refetch` kept past new variables or an unmount cannot overwrite what the
-  current request shows.
+  `disposed`, `false` when the request is created, set by the cleanup of a
+  `useLayoutEffect` placed before the query's `useEffect`, and cleared when
+  that layout effect runs. It is a layout effect because StrictMode's
+  development replay runs every layout effect again before any passive one:
+  `disposed` is clear again before a child's `useEffect` replays and calls
+  `refetch`; with the flag in the passive effect, that replayed refetch was
+  refused and its answer lost. `refetchQuery` on a disposed request rejects
+  at once with a `DOMException` `AbortError`, sends nothing and sets nothing;
+  `settle` records only while the request is not disposed. A refetch is
+  refused only once its query is no longer shown (unmounted or variables
+  changed), so a child's mount effect or a `useLayoutEffect` may call it
+  before the hook's effect runs: it is in `request.refetches`, and
+  `startQuery`'s cleanup aborts it. A `refetch` kept past new variables or an
+  unmount cannot overwrite what the current request shows. **Known limit:** a
+  child's `useLayoutEffect` calling the parent's `refetch` is refused on
+  StrictMode's replay (children's layout effects reappear before the
+  parent's), development only; the spec pins it.
+- **StrictMode specs pass RTL's `reactStrictMode: true`**, never a
+  `<StrictMode>` inside the `wrapper`: React double-invokes effects only from
+  a root that is strict, so a `<StrictMode>` below RTL's wrapper runs each
+  effect once and proves nothing.
 - **`refetch()` while `skip` is true rejects at once** with an `Error`
   (`skipRefetch`, a troubleshooting entry headed by it) and sends nothing:
   `skip` means no request.
