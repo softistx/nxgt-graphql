@@ -1,5 +1,13 @@
 # @nxgt/graphql-codegen-msw
 
+## 0.1.1
+
+### Patch Changes
+
+- [#99](https://github.com/softistx/nxgt-graphql/pull/99) [`cd7e615`](https://github.com/softistx/nxgt-graphql/commit/cd7e6157b7ae7dfebef718772a984826ebaccf66) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Docs: a known difference with graphql-yoga. From zod 4.6.6, a list of a custom scalar longer than `maxItems` is answered `too-many` even when an item is one the scalar refuses, since zod stops an oversized array before its items; graphql-yoga answers the scalar's coercion error.
+- Updated dependencies [[`f04d08c`](https://github.com/softistx/nxgt-graphql/commit/f04d08c9fc179efd259ab38cfe7dc8c5ca84f254)]:
+  - @nxgt/graphql-validation@0.4.1
+
 ## 0.1.0
 
 ### Minor Changes
