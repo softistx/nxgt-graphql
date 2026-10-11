@@ -326,10 +326,17 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   built-in format (typed `never` by `OwnFormats`, refused at startup too); each
   value's definition is `type: 'string'` (`z.string()` or a string format,
   never a pipe, so no transform or codec), read from `_zod.def` so another zod
-  copy passes, and none of its checks is `check: 'overwrite'` (`.trim()`,
-  `.toLowerCase()`, `.toUpperCase()`, `.normalize()`, `.overwrite()` keep
-  `type: 'string'` but rewrite the value, which a client chaining rules on the
-  schema would check in place of what was sent). An unknown format lists the
+  copy passes, and nothing in it rewrites the value though it keeps
+  `type: 'string'` (`rewrites`, from an audit of zod 4.6.5's string schemas):
+  no `coerce` (`z.coerce.string()`), no `format: 'url'` on the schema or a
+  check (`z.url()`, `z.httpUrl()`, `.url()` trim, drop tabs and newlines, or
+  normalise), no `check: 'overwrite'` (`.trim()`, `.toLowerCase()`,
+  `.toUpperCase()`, `.normalize()`, `.slugify()`, `.overwrite()`). A client
+  chaining rules on such a schema would check the rewritten value in place of
+  what was sent. What no definition shows (a `.check()` setting `ctx.value`)
+  `marked` catches as it runs: a parse whose output differs from its input
+  throws a plain `Error` naming the format, a programming error like a
+  resolver's bug, never a `BAD_USER_INPUT`. A zod upgrade re-runs the audit. An unknown format lists the
   application's after the built-in ones. Its entry has no `toCode`: the generator writes it, through
   `InputCodeOptions.format(name)` (threaded to the rule as
   `RuleContext.formatCode`), the other rules chained on that source; without
