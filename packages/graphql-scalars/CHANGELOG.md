@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.6.2
+
+### Patch Changes
+
+- [#78](https://github.com/softistx/nxgt-graphql/pull/78) [`b5dc6dd`](https://github.com/softistx/nxgt-graphql/commit/b5dc6dda4682c6d9782af4baed89f4bc52479be1) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Requires `@nxgt/zod` ^0.1.3, whose `typescript` peer takes TypeScript 7: a TypeScript 7 install no longer warns about it.
+
 ## 0.6.1
 
 ### Patch Changes

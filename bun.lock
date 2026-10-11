@@ -50,7 +50,7 @@
       },
       "devDependencies": {
         "@nxgt/graphql-scalars": "workspace:^",
-        "@nxgt/zod": "^0.1.2",
+        "@nxgt/zod": "^0.1.3",
         "@types/bun": "^1.4.0",
         "graphql": "16.11.0",
         "zod": "4.6.5",
@@ -63,12 +63,12 @@
     },
     "packages/graphql-scalars": {
       "name": "@nxgt/graphql-scalars",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "bin": {
         "nxgt-graphql-scalars": "./dist/cli.js",
       },
       "dependencies": {
-        "@nxgt/zod": "^0.1.2",
+        "@nxgt/zod": "^0.1.3",
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
@@ -186,7 +186,7 @@
 
     "@nxgt/httpyz": ["@nxgt/httpyz@0.3.3", "", { "peerDependencies": { "typescript": "^6.0.3 || ^7.0.0" } }, "sha512-wWQPCs9TuFgFewbZsH+jvTGeawzR+ZZAsyZ4LJNXuwmIvw3zCimPDkIKbBLI6genCdz3bcPLvxgY9eJwJar2JA=="],
 
-    "@nxgt/zod": ["@nxgt/zod@0.1.2", "", { "peerDependencies": { "typescript": "^6.0.3", "zod": ">=4.6.5 <5" } }, "sha512-9WAyRMlEZJAtTsnayMItC6vZrep1/8IUayGQZn8D15SmEKTlkufSOwGmgKMwP32VYZFDkd+SBLovoFdn1/BhDQ=="],
+    "@nxgt/zod": ["@nxgt/zod@0.1.3", "", { "peerDependencies": { "typescript": "^6.0.3 || ^7.0.0", "zod": ">=4.6.5 <5" } }, "sha512-/u8xhbw4iKnvsborY0lVp7ThmHfam5b+5nRkZNEvH76TVX9CSH3rAIkF5S6rmpMebqapIu1OwK+lQv83SAgHtA=="],
 
     "@pnpm/deps.graph-sequencer": ["@pnpm/deps.graph-sequencer@1100.0.1", "", {}, "sha512-pOr5+q1fLYKwFN3LAJuGZEnfXDcQ73zqgDHMtGy+K+uIoUqyY+6MeDCWFwfu+4EFuq76I5EPFofoNAI+Bmmq4A=="],
 

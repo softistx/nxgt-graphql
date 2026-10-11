@@ -51,7 +51,7 @@
 	},
 	"devDependencies": {
 		"@nxgt/graphql-scalars": "workspace:^",
-		"@nxgt/zod": "^0.1.2",
+		"@nxgt/zod": "^0.1.3",
 		"@types/bun": "^1.4.0",
 		"graphql": "16.11.0",
 		"zod": "4.6.5"
