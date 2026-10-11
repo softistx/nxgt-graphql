@@ -18,6 +18,7 @@ are public.
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. For an API that answers invalid input as one 400 error with a list of fields, `invalidInputError(issues, { translate })`, `fieldsError(code, issues, { status, params })` and `inputPath(path)` build that shape by hand. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Published on npm. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
+| `@nxgt/graphql-codegen-msw` | A graphql-codegen plugin writing one typed msw 3 handler per named query and mutation, `mock<Operation>(resolver, options?)` on `graphql.link(endpoint)`: msw's own resolver, `variables` and `data` typed from `typesImport` (the client preset's or typescript-operations' types), the variables checked first with codegen-zod's `z<Operation>Variables` (`schemasImport`). An invalid input is answered without calling the resolver: a value graphql-yoga refuses while coercing the variables as graphql-yoga answers it (400, plain errors in graphql 17's words, from the input types the plugin reads in the schema), whatever `invalidInput` is; a constraint by default for an API that answers invalid input as one 400 error with a list of fields (`invalidInputError`, `translate` optional), `invalidInput: 'bad-user-input'` as `withValidation`'s `BAD_USER_INPUT`, or `'<module>#<export>'`. The generated file's runtime is the `./runtime` subpath (`mockOperation`, `invalidInputRefusal`, `badUserInputRefusal`, `fieldIssueOf`, `errorResponse`, `isGraphQLError`, the internal `InputTypes` and `InputType`). Depends on `@nxgt/graphql-validation`, `change-case`; peers `msw` (`^3.0.3`), `graphql`, `zod`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -112,7 +113,11 @@ exactly as a devDependency at the oldest end of its range
 nxgt-data's (`@nxgt/mongo`, `@nxgt/redis`): one range is one zod in an
 application's tree. Siblings, when there are some, depend on each other by
 `workspace:^`. `@nxgt/graphql-client` sits on `@nxgt/httpyz` and depends on no
-sibling package.
+sibling package. `@nxgt/graphql-codegen-msw` depends on `@nxgt/graphql-validation` (its
+root: the refusals the generated file answers with) and `change-case`; `msw`
+is a peer, pinned as a devDependency at the oldest end of its range (`3.0.3`),
+and `@nxgt/graphql-codegen-zod` a devDependency only: the generated file
+imports codegen-zod's output by the path its config gives, never the plugin.
 
 ## Invariants
 
@@ -827,6 +832,155 @@ packages/graphql-client/test/
   `DOMException` never matches; the #130 body-read timeout is its own check.
   `transport.spec.ts` throws look-alike plain errors from an httpyz middleware (`use`).
 
+## @nxgt/graphql-codegen-msw
+
+The msw codegen plugin: it writes, per operation, a handler that checks the
+variables as the client's codegen-zod schema does, then hands msw's resolver
+info to the application's resolver.
+
+### Layout
+
+```
+packages/graphql-codegen-msw/src/
+  index.ts                 plugin(schema, documents, config): checked options, then the file
+  config.ts                CodegenMswConfig
+  options.ts               checkedOptions: the required options and invalidInput/translate, read once
+  naming.ts                codegen-zod's naming.ts, kept as a copy, plus handler(): `mock<Name><Suffix>`
+  operations.ts            the named queries and mutations (no subscription, no anonymous)
+  input-types.ts           from the schema: each operation's `variableTypes`, the file's `inputTypes`
+  imports.ts               the generated file's imports, `import type` for a types-only module, aliases on a clash
+  runtime/                 the `./runtime` subpath, what the generated file calls
+    mock-operation.ts      mockOperation: graphql.link(endpoint)[type](name), variables checked, GraphQLError caught
+    refusals.ts            InvalidInput, invalidInputRefusal (the 400 with fields), badUserInputRefusal, fieldIssueOf
+    response.ts            errorResponse, formatted (http and unexpected stripped), isGraphQLError, statusOf
+    coercion/              graphql-yoga's answer to a variable graphql cannot coerce
+      index.ts             coercionErrors, COERCION_STATUS: each variable walked, each error located
+      validate.ts          @graphql-tools/executor 2.0.3's validateInputValue, walked over the generated input types
+      document.ts          InputTypes (internal), the type strings read, the variables' definitions in the query sent
+      issues.ts            the Zod issues with their whole paths, a union's branches included; issueAt
+      messages.ts          graphql 17's wording: built-in scalars, enums, input objects, the variable's prefix
+      suggestions.ts       graphql's suggestionList, didYouMean, naturalCompare, ported line for line
+      inspect.ts           graphql-js's inspect: what graphql's own messages print (scalars, enums)
+      cross-inspect.ts     cross-inspect: what the executor's messages print (input objects, the prefix)
+packages/graphql-codegen-msw/test/
+  fixture.ts               the SDL and operations the specs generate from
+  write-generated.ts       writes zod.ts (codegen-zod), graphql.ts (typescript-operations) and msw*.ts
+                           (one per invalidInput choice): `bun run generated:write`
+  network.ts               msw's network on the web fetch interceptor, for the specs under Bun
+  node-scenario.ts         setupServer under Node, bundled and run by src/setup-server.spec.ts
+  types.ts                 what the handlers' types say, checked by typecheck
+  declarations/            the consumer fixture verify:artifacts emits
+```
+
+### Invariants
+
+- **The resolver runs only on variables the operation's schema takes.** The
+  handler parses `info.variables` with `z<Operation>Variables`
+  (`safeParseAsync`); on a refusal it answers `{ errors: [error] }` at
+  `invalidInput`'s status and never calls the resolver. `msw.spec.ts` counts
+  the calls.
+- **The resolver receives the variables as sent**, msw's own info, never the
+  parsed output: its type is the wire type `typesImport` gives.
+- **A generator resolver is refused**, by `GraphQLMockResolver`'s type and at
+  run time (`assertNotIterator`): msw keeps the iterator and stops calling
+  the handler, so later requests would go unchecked.
+- **A coercion problem is answered first, as graphql-yoga answers it,
+  whatever `invalidInput` is.** graphql-yoga refuses a missing or `null`
+  value for a non-null type, a wrong type, an unknown enum value, an unknown
+  input field, an Int beyond 32 bits and a value a custom scalar refuses
+  while it coerces the variables, before the API's validation runs (measured
+  on graphql-yoga 5.24.2 with `@graphql-tools/executor` 2.0.3 and graphql
+  17.0.2: `execute` sets `extensions.http.status` 400 on those errors, the
+  response strips it, the Accept header changes nothing). So when the
+  variables fail their Zod schema and `coercionErrors` finds a problem,
+  `mockOperation` answers status 400 and one `{ message, locations }` error
+  per problem, no extensions, in graphql 17's wording and order (types named,
+  "Did you mean …?" included), and never calls `invalidInput`, which
+  therefore only sees the issues graphql lets through. Making this answer
+  depend on `invalidInput`, or adding `extensions` to it, is a breaking
+  change.
+- **How coercion is decided: from the declared GraphQL type, never from a
+  Zod issue's code.** The plugin reads the schema and writes, per operation,
+  `variableTypes` (`{ first: "Int = 10" }`) and, once per file, `inputTypes`:
+  every type the variables reach, each a built-in scalar, a custom scalar, an
+  enum with its values, or an input object with each field's type (a default
+  after ` = `, `oneOf` when `@oneOf`), sorted by name. `coercion/validate.ts`
+  walks the variables sent as graphql 17's `validateInputValue` does (as
+  `@graphql-tools/executor`'s `getVariableValues` calls it): a built-in
+  scalar, an enum, an input object, a list and a non-null type are judged
+  from the declared type and the value (an `Int` past 32 bits refused, an
+  `@constraint(max: 50)` exceeded not), and a custom scalar refuses exactly
+  where the Zod schema has an issue at its position (`issueAt`, the Zod path
+  taking a `0` where a single value stands for a list), worded as `zodScalar`
+  words it: `<Name> cannot represent this input: <first issue>`. A Zod issue
+  graphql would not raise (an `ID` given an integer) goes to `invalidInput`.
+  `inputTypes` and `variableTypes` are an internal shape, typed `InputTypes`
+  and documented so: the generated file and the runtime change together, and
+  a `kind` the runtime does not know throws `the generated file was written by another
+  version than the runtime; regenerate it`. Both are optional on `MockedOperation`
+  (default `{}`): a hand-written handler without them walks no variable, and
+  every refusal goes to `invalidInput`. graphql's own messages (the built-in
+  scalars', an enum's, and the value an enum suggestion is read from) print
+  values with graphql-js's `inspect` (two levels, ten items); the executor's
+  (input objects, the variable's prefix) with `cross-inspect` (three levels,
+  every item). The probe (a graphql-yoga server on the versions above, 75
+  requests) answered 74 identically. The known differences, the same list as
+  the changeset and the handlers guide's Known differences: an `ID` given an
+  integer (the probe's one difference), a custom scalar not built with
+  `zodScalar`, an application format's code, and an API on graphql 16.
+- **The default refusal is `invalidInputError`'s shape, status 400**, one
+  field per Zod issue in Zod's order: `inputPath(issue.path)` and a code the
+  API the mocks stand in for agreed on, never Zod's own: `too-short` /
+  `too-long` (a string), `out-of-range` (a number, a bigint, a multiple),
+  `too-few` / `too-many` (a list, a set), `invalid-format` (a format or a
+  pattern), `invalid` (anything else, a `startsWith`, `endsWith` or
+  `includes` included), each under `validation.errors.`. No params. Changing a code, or the issue a code is given for, is a breaking
+  change; adding params later is an addition. `'bad-user-input'` is
+  `badUserInput(operationName, zodError)`, status 200; a change to it is a
+  breaking change too.
+- **A thrown `GraphQLError` is a GraphQL answer, anything else msw's 500.**
+  Matched by name and `toJSON`, never `instanceof`.
+- **The status and the body follow graphql-yoga's `error.js` and
+  `stringify.js`.** A status is used only when a response can carry it: an
+  integer from 200 to 599 other than 204, 205 and 304 (`statusOf`); one
+  outside that, from an error's `extensions.http.status`, from
+  `errorResponse`'s `init.status` or from an `invalidInput` answer, is
+  ignored. `errorResponse` answers at `init.status`, else the highest valid
+  `extensions.http.status` among the errors (yoga's
+  `getResponseInitByRespectingErrors`), else 200. Every error in a body
+  leaves out `extensions.http` and `extensions.unexpected`, and an
+  `extensions` left empty goes too (`formatted`), as yoga's
+  `omitInternalsFromError` does.
+- **The plugin loads no module.** `schemasImport`, `typesImport`,
+  `invalidInput` and `translate` are written as given; the generated file's
+  typecheck reports a wrong path or export, and `invalidInput` is annotated
+  `InvalidInput` so a misfit function fails there.
+- **The root entry never imports msw.** graphql-codegen loads `.`; only
+  `src/runtime/` imports `msw`, `zod` at run time, `graphql` (`parse`,
+  `GraphQLError`, to locate the coercion answer's errors) and
+  `@nxgt/graphql-validation`. The coercion wording is the runtime's own,
+  never graphql's coercion functions: the application's `graphql` may be
+  16, the reference is 17.
+- **`naming.ts` names as codegen-zod's does.** The specs generate both files
+  and the msw file imports codegen-zod's schemas, so a drift fails
+  typecheck; a naming change in one is made in the other.
+- **msw/node's `setupServer` intercepts nothing under Bun** (msw 3.0.3, Bun
+  1.4.2: its fetch interceptor works through Node's sockets). `msw.spec.ts`
+  runs on `test/network.ts` (msw's `defineNetwork` with the web fetch
+  interceptor, `@mswjs/interceptors` pinned at msw's version as a
+  devDependency); `setup-server.spec.ts` bundles `test/node-scenario.ts` into
+  the package's `.cache/` (ignored by git, so Node resolves the package's
+  dependencies) and runs `setupServer` under Node 22.12 or later. Locally it is
+  skipped, saying so, without one on the PATH; when `CI` is set, a missing or
+  too-old Node fails it. The CI image currently provides Node 22.x.
+- **The generated files are typechecked and never edited**: `bun run --cwd
+  packages/graphql-codegen-msw generated:write` regenerates them, and
+  `plugin.spec.ts` fails, naming that command, when one is stale. Biome skips
+  them.
+- **Each config error has a troubleshooting entry headed by its message**:
+  `options.spec.ts` reads `docs/troubleshooting.md` for every message the
+  plugin and the runtime throw.
+
 ## The green bar
 
 ```sh
@@ -921,6 +1075,9 @@ typecheck, test and `verify:artifacts`, and restore with `git checkout -- .
 | `.github/actions/setup/action.yml`, `.github/workflows/release.yml`, `.github/workflows/deprecate.yml`, the `ci` job of `ci.yml` | nxgt-di's, which are nxgt-data's without its servers (`deprecate.yml` is nxgt-telemetry's) |
 | `CLAUDE.md`, `.claude/settings.json` | nxgt-di's, byte for byte |
 | `src/cli.ts` and `src/typedefs-command.ts` in `graphql-scalars` and `graphql-validation` | each package ships its own `typedefs` bin and no package depends on the other. `cli.ts` is the same file apart from its doc comment; `typedefs-command.ts` shares `--out` and `--help`, the usage layout, the exit codes and `--help`. A change to one bin's flags or exit codes is made in the other |
+| `naming.ts` in `graphql-codegen-zod` and `graphql-codegen-msw` | the msw plugin must name every type and schema exactly as codegen-zod does, and codegen-zod exports only `plugin`; exporting its `Naming` would widen its public API. The msw copy drops what it does not name (args, fragments, input types) and adds `handler()`. A naming change is made in both |
+| `imports.ts` in `graphql-codegen-zod` and `graphql-codegen-msw` | codegen-zod exports only `plugin`, so the msw plugin cannot reuse its `Imports`. The msw copy has drifted on purpose: it drops the `zod` import codegen-zod puts first (the msw file imports no `zod`), keeps the modules in the order they were first asked for, replaces `add()` with `value()` and `type()`, and writes `import type` for a module whose every name is a type (`type` before a type name in a mixed one). The aliasing (`<name>2`, `<name>3` past a taken name, the declared names reserved) is the same: an aliasing fix is made in both |
+| graphql 17's coercion in `graphql-codegen-msw/src/runtime/coercion/` (`validate.ts`, `messages.ts`, `suggestions.ts`, `inspect.ts`, `cross-inspect.ts`) | the mock words a refused variable exactly as graphql-yoga on graphql 17 does, and the application's own `graphql` may be 16, whose functions word it otherwise; so they are ported, not called: `validate.ts` from `@graphql-tools/executor` 2.0.3's copy of `validateInputValue` (the one the executor runs on each variable), the scalars' and enums' messages and `suggestionList`/`didYouMean`/`naturalCompare` from graphql 17.0.2, graphql-js 17.0.2's `inspect` for graphql's own messages and `cross-inspect` 1.0.1 for the executor's. Each file carries a `/*! … @license MIT */` header naming its source, version and copyright holder, and `THIRD-PARTY-NOTICES.md` (shipped) holds the full MIT texts. A graphql or `@graphql-tools/executor` release that rewords them is followed here, checked with a probe yoga server |
 | The 65 scalar names (GraphQL names and `<name>Schema` exports) | copied outside this repository: `@nxgt/typespec` (softistx/nxgt-http) declares each as a TypeSpec scalar and OpenAPI component of the same name, with `x-nxgt-scalar: <Name>`, and pins the list in its `test/scalars/index.ts` (`GRAPHQL_SCALARS`); the rules are no longer copied: they live in `@nxgt/zod` (softistx/nxgt-zod), whose schemas this package re-exports, the same instances. Adding or renaming a scalar means a PR in `@nxgt/zod` first and the same change in `@nxgt/typespec`: tell the session or open the PR in each |
 
 ## Declared divergences from nxgt-data
