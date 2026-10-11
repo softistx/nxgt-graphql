@@ -1,7 +1,6 @@
-import { z } from 'zod';
-import { RULE_PARAM } from '../rules/rule';
 import type { Format, StringSchema } from './format';
 import { formats as builtIns, type FormatName } from './index';
+import { marked } from './marked';
 
 /**
  * The application's own formats, keyed by the name `@constraint(format:
@@ -59,7 +58,7 @@ export class FormatRegistry {
 			}
 			if (!runnable(schema)) {
 				throw new Error(
-					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
+					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no safeParse, safeParseAsync or superRefine, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
 				);
 			}
 			if (rewrites(schema)) {
@@ -67,8 +66,11 @@ export class FormatRegistry {
 					`The format "${name}" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`,
 				);
 			}
-			const own = marked(name, schema, () => {
-				this.#async = name;
+			const own = marked(name, schema, {
+				async: checksAsync(schema),
+				onAsync: () => {
+					this.#async = name;
+				},
 			});
 			this.#formats.set(name, { name, toZod: () => own });
 		}
@@ -106,14 +108,28 @@ function isStringSchema(value: unknown): value is StringSchema {
 }
 
 /**
- * Whether zod can run the schema: `marked` calls its `_zod.run` on every
- * value, so a definition alone (an object that only reads `type: 'string'`)
- * would pass startup and fail each request instead.
+ * Whether zod can run the schema through the public API `marked` uses on
+ * every value, so a definition alone (an object that only reads `type:
+ * 'string'`) fails startup rather than each request.
  */
 function runnable(schema: StringSchema): boolean {
-	return (
-		typeof (schema as { _zod?: { run?: unknown } } | null)?._zod?.run ===
-		'function'
+	const api = schema as unknown as Record<string, unknown>;
+	return ['safeParse', 'safeParseAsync', 'superRefine'].every(
+		(method) => typeof api[method] === 'function',
+	);
+}
+
+/**
+ * Whether the definition shows an async check: an `async` function in a
+ * `.refine()`. A hint only, read once at startup: an async `.superRefine()`
+ * or a function that returns a promise without being `async` is learnt from
+ * the first value instead (`marked`).
+ */
+function checksAsync(schema: StringSchema): boolean {
+	return (definition(schema)?.checks ?? []).some(
+		(check) =>
+			(definition(check)?.fn as { constructor?: { name?: unknown } } | null)
+				?.constructor?.name === 'AsyncFunction',
 	);
 }
 
@@ -145,75 +161,13 @@ type Definition = {
 	coerce?: unknown;
 	format?: unknown;
 	check?: unknown;
+	fn?: unknown;
 	checks?: readonly unknown[];
 };
 
 function definition(value: unknown): Definition | undefined {
 	return (value as { _zod?: { def?: Definition } } | null)?._zod?.def;
 }
-
-/**
- * The application's schema as a plain string schema the rules can narrow,
- * each of its issues re-raised as it was (code, message, and an abort that
- * stops the rules chained after it) and marked as the format's: a
- * `.regex()` inside it is the format's refusal, not `pattern`'s.
- * The value is checked, never changed: a schema that still returns another
- * value (a custom `.check()` setting `payload.value`, which `rewrites`
- * cannot see) throws, naming the format, as a resolver's bug would.
- *
- * The schema runs once per value, through its own `_zod.run` (what its
- * `safeParse` and `safeParseAsync` call) with `async: true`: a schema whose
- * checks are all synchronous returns its result at once, one with an async
- * check returns a promise, whatever zod copy it comes from. Nothing is
- * started and dropped, as a synchronous `safeParse` would drop the promise of
- * an async refine before running it again. That promise, returned to the
- * enclosing parse, gets a handler too: a synchronous parse (a default
- * value's check) throws zod's async error and drops it, and its rejection
- * must not surface as an unhandled one. `onAsync` is told before it is
- * returned.
- */
-function marked(
-	name: string,
-	schema: StringSchema,
-	onAsync: () => void,
-): StringSchema {
-	return z.string().superRefine((value, ctx) => {
-		const raise = (result: z.core.ParsePayload<unknown>) => {
-			if (result.issues.length === 0 && result.value !== value) {
-				throw new Error(
-					`The format "${name}" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().`,
-				);
-			}
-			for (const raw of result.issues) {
-				// Finalised as the schema's own parse would: its message settled.
-				const issue = z.core.util.finalizeIssue(raw, RUN, z.core.config());
-				const params = 'params' in issue ? issue.params : undefined;
-				ctx.addIssue({
-					...issue,
-					params: { ...params, [RULE_PARAM]: 'format' },
-					// finalizeIssue drops `continue`: an aborting check of the format
-					// (`.refine(…, { abort: true })`) still stops the rules after it,
-					// as it does in the generated client. Once the format has gone
-					// async, zod has already run those rules: the abort then stops
-					// nothing, on the server only.
-					...(raw.continue === false && { continue: false }),
-				} as Parameters<typeof ctx.addIssue>[0]);
-			}
-		};
-		const result = schema._zod.run({ value, issues: [] }, RUN);
-		if (!(result instanceof Promise)) {
-			raise(result);
-			return undefined;
-		}
-		const pending = result.then(raise);
-		pending.catch(() => {});
-		onAsync();
-		return pending;
-	});
-}
-
-/** How a format runs: async allowed, so an async check is never dropped. */
-const RUN: z.core.ParseContextInternal = { async: true };
 
 const builtInRegistry = new FormatRegistry();
 const registries = new WeakMap<FormatSchemas, FormatRegistry>();

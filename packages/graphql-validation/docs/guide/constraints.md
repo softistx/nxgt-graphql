@@ -322,10 +322,25 @@ What a format of your own is:
 - **An async check stays async.** `withValidation` parses asynchronously, so a
   `.refine(async …)` works in a request, from this package's zod or another
   copy. It runs once per value, and when it rejects (`db down`) the operation
-  fails with that error, as a resolver's would. A default value is checked
+  fails with that error, as a resolver's would. An async check the schema's
+  definition does not show — an async `.superRefine()`, or a `.refine()`
+  whose function returns a promise without being `async` — is learnt from the
+  first value: for that one value it runs twice (Zod tries a synchronous parse
+  first, as its own Standard Schema `validate` does), and if that first,
+  dropped run rejects, the rejection is unhandled. Write the check as
+  `.refine(async (value) => …)` and it runs once from the first value. A default value is checked
   at startup synchronously, so a field whose format is async cannot have a
   default: startup throws `The default value of Query.a(s:) cannot be checked
   at startup: the format "free" checks asynchronously, …`.
+
+- **Only Zod's public API runs it.** Your format is parsed with `safeParse`
+  and `safeParseAsync`, an abort is read from a `superRefine` chained after
+  your checks, and its issues are the ones `safeParse` returns: no Zod
+  internal is called, so a Zod 4 release that changes its internals changes
+  nothing here, and a format from another copy of Zod (another version
+  included) gets its messages from that copy's configuration
+  (`z.config()`). Startup still reads the schema's definition (`_zod.def`,
+  Zod's introspection) to refuse what rewrites the value.
 
 Call `withValidation` once, with every format. A second call on the same
 schema wraps nothing when its record has the same names, each the very same

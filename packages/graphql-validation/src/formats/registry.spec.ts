@@ -66,7 +66,7 @@ describe('FormatRegistry', () => {
 		expect(
 			() => new FormatRegistry({ code: shaped as unknown as z.ZodString }),
 		).toThrow(
-			`The format "code" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
+			`The format "code" cannot be run: its definition reads type: 'string' but it has no safeParse, safeParseAsync or superRefine, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
 		);
 	});
 

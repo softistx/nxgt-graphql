@@ -256,7 +256,8 @@ packages/graphql-validation/src/
     index.ts               `rules` keyed by argument, applyRule, constraintOf
   formats/                 one format per file, `<name>Format`; format.ts, all.ts, index.ts alike;
                            registry.ts, FormatRegistry: the built-in formats plus the
-                           application's, one Map, handed to every rule as RuleContext
+                           application's, one Map, handed to every rule as RuleContext;
+                           marked.ts, how an application's format runs (zod's public API)
   builder/                 GraphQL types to Zod: InputSchemas, argsSchemaOf, leaf, constraints;
                            check-constraints.ts, every startup check;
                            input-code.ts, the same walk written as source
@@ -268,8 +269,8 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   formats follow. `registry.spec.ts` fails a file that is unregistered, has no
   spec, exports anything else (a helper would reach the registry), or is not
   named after its argument (`minLength` in `min-length.ts`, `minLengthRule`);
-  `rule.ts`, `format.ts` and `formats/registry.ts` are its helpers, the only
-  files it skips.
+  `rule.ts`, `format.ts`, `formats/registry.ts` and `formats/marked.ts` are
+  its helpers, the only files it skips.
   Then regenerate `graphql/constraint.graphqls`: a spec fails until you do.
 - **No module-global format lookup.** A rule's `toZod`/`toCode` take a third
   argument, `RuleContext` (`{ formats: FormatRegistry }`), threaded from
@@ -343,25 +344,45 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   the option `inputCode` throws. Wrapping a schema again with other formats, or
   none after some, throws (the record is kept on the schema under a
   `Symbol.for` key); with the same names and the very same schemas it is the
-  usual no-op. A string definition with no `_zod.run` (an object shaped like
-  a schema) is refused at startup too, since every request calls it.
+  usual no-op. A string definition without `safeParse`, `safeParseAsync` and
+  `superRefine` (an object shaped like a schema, a `zod/mini` one) is refused
+  at startup too, since every request calls them.
+- **An application format runs through zod's public API only** (owner: a zod
+  4 release must not break it). `formats/marked.ts` calls the schema's
+  `safeParse`/`safeParseAsync` and `superRefine`, and reads the issues they
+  return: never `_zod.run`, `z.core.util.finalizeIssue`, `z.core.config` nor
+  a raw issue's `continue`. Startup reads `_zod.def` (zod's introspection)
+  only to refuse a schema and to hint that a check is async; what it misses
+  is caught at run time. `marked.spec.ts` runs the matrix (sync, async,
+  abort, rewriting, default value) on schemas whose `_zod.run` is gone or
+  throws (`test/public-only.ts`), and `another-zod.spec.ts` on another copy;
+  never reach into zod internals again to win back a degradation below.
 - **An application format's issue is `format`'s, whatever its code.** Its
-  schema runs inside a `z.string().superRefine` (`formats/registry.ts`,
-  `marked`) that re-raises each issue unchanged but for
-  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), keeping `continue: false`
-  (which `finalizeIssue` drops) so an aborting check stops the rules after
-  it as on the client, and `constraintOf` reads
+  schema runs inside a `z.string().superRefine` (`marked`) that re-raises
+  each issue `safeParse` returns unchanged but for
+  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), and `constraintOf` reads
   that mark before any `owns`: a `.regex()` or `.refine()` inside the format
-  is not `pattern`'s or `notContains`'. An async check stays async, from any
-  zod copy, and runs once per value: `marked` calls the schema's own
-  `_zod.run` with `async: true`, which returns at once when every check is
-  synchronous and a promise otherwise, never a `safeParse` that would start
-  an async refine, drop its promise (unhandled if it rejects) and run it
-  again. The promise `marked` returns gets a handler, so a synchronous parse
-  that drops it (a default value's check) leaves no unhandled rejection;
-  `checkDefaults` then throws naming the field and the format
-  (`FormatRegistry.takeAsync`). `_zod.run` and `z.core.util.finalizeIssue`
-  are zod internals: a zod upgrade re-runs `another-zod.spec.ts`.
+  is not `pattern`'s or `notContains`'. An aborting check stops the rules
+  after it as on the client: `marked` parses the schema with a
+  `superRefine` chained last, which zod skips only after an abort, so a
+  refusal that never reached it is re-raised with `continue: false`. Once
+  the format has gone async, zod has already run those rules: the abort then
+  stops nothing, on the server only. A successful parse whose output differs
+  from its input throws (the rewriting backstop above).
+- **An async check stays async, from any zod copy, and runs once per value
+  when it is known.** A format whose definition shows an `async` function
+  (`.refine(async …)`), or that went async once, runs `safeParseAsync` only.
+  Any other runs `safeParse` first; when that throws (zod's
+  `$ZodAsyncError`, recognised by class or by name across copies, or
+  anything else) the value runs again with `safeParseAsync`, as zod's own
+  Standard Schema `validate` does. Documented degradation (troubleshooting,
+  "runs twice, once"): for an async check the definition does not show (an
+  async `.superRefine()`, a non-`async` function returning a promise), the
+  first value runs it twice, and the dropped first run's rejection, zod's
+  promise, is unhandled. The promise `marked` returns gets a handler, so a
+  synchronous parse that drops it (a default value's check) leaves no
+  unhandled rejection; `checkDefaults` then throws naming the field and the
+  format (`FormatRegistry.takeAsync`).
 - **`uri` is http, https or ftp, scheme required; `date-time` is canonical RFC
   3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
   on purpose, each pinned by a spec.
@@ -529,7 +550,16 @@ end of every peer range: graphql 17, the latest zod 4 and TypeScript 7. A spec
 that drives TypeScript's compiler API imports TypeScript 6 as `typescript-api`
 (TypeScript 7 has no compiler API). It resolves without
 a lockfile, so an upstream release can turn it red with no change here: read
-it, do not make it a required check.
+it, do not make it a required check. `.github/workflows/newest-peers.yml` runs
+the same job weekly (Mondays 06:00 UTC) and on demand (`workflow_dispatch`),
+so an upstream release is seen without waiting for a pull request.
+
+**Before a release, or when a new zod 4.x (or graphql 17, TypeScript 7)
+appears, the newest-peers run must pass**, `another-zod.spec.ts` and
+`marked.spec.ts` included: run the workflow from the Actions tab, or locally
+`bun scripts/newest-peers.ts && rm bun.lock && bun install`, then build,
+typecheck, test and `verify:artifacts`, and restore with `git checkout -- .
+&& bun install`. A zod upgrade also re-runs the `rewrites` audit.
 
 ## Traps
 
@@ -591,6 +621,7 @@ it, do not make it a required check.
 | `scripts/artifacts/` (every module and spec), `scripts/verify-artifacts.ts` | nxgt-data's, byte for byte except two lines (see below). A check added to one copy belongs in the others; nxgt-data's AGENTS.md lists where each copy stands |
 | `scripts/workspace.ts`, `scripts/publish.ts` and their specs | byte copies of nxgt-data's (alxia's originally) |
 | `scripts/newest-peers.ts`, its spec, and the "Newest peers" job in `ci.yml` | byte copies of nxgt-data's script and spec; the job is nxgt-data's without its four server caches and `REDISMS_DISABLE_POSTINSTALL`, and its comment names TypeScript 7, which these peers accept. The script reads `examples/*` too, which matches nothing here |
+| The "Newest peers" job, in `ci.yml` and in `.github/workflows/newest-peers.yml` | this repository's own: the second file runs the job weekly and on `workflow_dispatch` and adds a step listing the resolved peers; it is a separate workflow so `ci.yml` stays nxgt-data's job and the `ci` job never runs on a schedule. A step changed in one is changed in the other. nxgt-data has no scheduled run |
 | `.github/actions/setup/action.yml`, `.github/workflows/release.yml`, `.github/workflows/deprecate.yml`, the `ci` job of `ci.yml` | nxgt-di's, which are nxgt-data's without its servers (`deprecate.yml` is nxgt-telemetry's) |
 | `CLAUDE.md`, `.claude/settings.json` | nxgt-di's, byte for byte |
 | `src/cli.ts` and `src/typedefs-command.ts` in `graphql-scalars` and `graphql-validation` | each package ships its own `typedefs` bin and no package depends on the other. `cli.ts` is the same file apart from its doc comment; `typedefs-command.ts` shares `--out` and `--help`, the usage layout, the exit codes and `--help`. A change to one bin's flags or exit codes is made in the other |
@@ -604,6 +635,8 @@ it, do not make it a required check.
   the owner's go-ahead, since it is the merge of a Version PR.
 - `ci.yml` has no service caches and does not run on `push` to `develop`
   (nothing is cached). The timeouts are 15 minutes, against nxgt-data's 25.
+- `.github/workflows/newest-peers.yml`, the "Newest peers" job on a weekly
+  schedule and `workflow_dispatch`, which nxgt-data does not have.
 - No `check-nxgt-versions`, `meilisearch`, `redis` or `seaweedfs` scripts, and
   no `nxgt-versions.yml`: they serve nxgt-data's servers and packages.
 - No `examples/` workspace.

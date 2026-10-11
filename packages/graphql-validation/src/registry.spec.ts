@@ -32,7 +32,7 @@ const folders = [
 		suffix: 'Format',
 		registry: formats,
 		key: 'name',
-		helpers: ['format.ts', 'registry.ts'],
+		helpers: ['format.ts', 'marked.ts', 'registry.ts'],
 	},
 ] as const;
 

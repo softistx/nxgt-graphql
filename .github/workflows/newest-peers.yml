@@ -1,0 +1,47 @@
+name: Newest peers
+
+# ci.yml's "Newest peers" job, on a schedule: a graphql 17, zod 4 or
+# TypeScript 7 release can break a peer range with no change here, and a pull
+# request is not the place to find out. Weekly, and on demand from the Actions
+# tab (before a release, or when a new zod 4.x is out). Only this job runs:
+# the `ci` job checks what a pull request changes, and nothing changed.
+# Its steps are the job's in ci.yml: change both together.
+on:
+  schedule:
+    # Mondays, 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  newest-peers:
+    # Resolves without a lockfile, so an upstream release can turn it red with
+    # no change here: read it, then fix the range or the code in a pull
+    # request.
+    name: Newest peers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup
+        uses: ./.github/actions/setup
+      # Rewrites the manifests in this checkout only, then installs what they
+      # now name. The lockfile goes: its versions satisfy the rewritten
+      # ranges, so an install that kept it would test the oldest end again.
+      - name: Use the newest peers
+        run: bun scripts/newest-peers.ts && rm bun.lock && bun install
+      # Which versions this run resolved, so a red run names the release.
+      - name: Resolved peers
+        run: bun pm ls | grep -E ' (graphql|zod|typescript)@' || true
+      - name: Build packages
+        run: bun run build
+      - name: Type checking
+        run: bun run typecheck
+      - name: Run tests
+        run: bun run test
+      - name: Verify the built artifacts load
+        run: bun run verify:artifacts

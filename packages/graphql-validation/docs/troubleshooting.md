@@ -124,15 +124,17 @@ resolver:
 const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not .transform(Number)
 ```
 
-### `The format "code" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`
+### `The format "code" cannot be run: its definition reads type: 'string' but it has no safeParse, safeParseAsync or superRefine, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`
 
 **When:** calling `withValidation` (or generating with
 `@nxgt/graphql-codegen-zod`) with `formats` whose value has a string
-schema's definition (`_zod.def.type` is `'string'`) but no `_zod.run`: an
-object built by hand or a test double shaped like a schema. A record typed
-loosely (`as never`, `any`) gets past the compiler; this check does not.
-**Why:** every request runs the format through its `_zod.run`; without it,
-each request would fail with `schema._zod.run is not a function`, a message
+schema's definition (`_zod.def.type` is `'string'`) but not the methods of
+Zod's classic API: an object built by hand, a test double shaped like a
+schema, or a `zod/mini` schema. A record typed loosely (`as never`, `any`)
+gets past the compiler; this check does not.
+**Why:** every request runs the format through `safeParse` (or
+`safeParseAsync`) and reads an abort through `superRefine`; without them,
+each request would fail with `schema.safeParse is not a function`, a message
 that reaches the client. Startup refuses it instead.
 **Fix:** pass the schema zod built, not an object shaped like one:
 
@@ -368,6 +370,26 @@ you passed (`withValidation` returns the same schema, so use either).
 ```ts
 const schema = makeExecutableSchema({ typeDefs, resolvers });
 export default withValidation(schema); // last
+```
+
+### An async check of your format runs twice, once
+
+**When:** the first value your format checks after startup runs its async
+check twice (a counter, a log line or a database query shows it), and an
+`unhandledRejection` may follow if that check rejects then; later values run
+it once.
+**Why:** your format runs through Zod's public API only. Its async check is
+an async `.superRefine()`, or a `.refine()` whose function returns a promise
+without being declared `async`, so the schema's definition does not say it is
+async: the first value is tried with `safeParse`, which starts the check,
+meets the promise and throws; the value is then checked with
+`safeParseAsync`, as Zod's own Standard Schema `validate` does. From then on
+the format is known to be async.
+**Fix:** declare the check's function `async`, and it runs once from the
+first value:
+
+```ts
+const free = z.string().refine(async (value) => !(await taken(value)), 'Taken');
 ```
 
 ### `Invalid ISO datetime` for a date-time that looks right

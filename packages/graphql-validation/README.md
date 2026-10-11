@@ -133,7 +133,9 @@ refusal reads as your schema writes it, and its issue carries
 built-in name (`email`, …) is a type error and refused at startup, and so is
 a schema that rewrites the value (a custom `.check()` that does fails the
 request, naming the format). An async check (`.refine(async …)`) works in a
-request, and runs once per value. Call `withValidation` once, with every
+request, and runs once per value. Your format runs through Zod's public API
+only (`safeParse`, `safeParseAsync`, `superRefine`), so a Zod 4 release that
+changes Zod's internals does not break it. Call `withValidation` once, with every
 format: a second call with the same record wraps nothing; with other
 formats, or none, it throws. Without `formats`, nothing changes. Details in
 [Constraints](docs/guide/constraints.md#your-own-formats).
