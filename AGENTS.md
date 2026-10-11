@@ -99,7 +99,7 @@ json, ...), live in `@nxgt/zod` (softistx/nxgt-zod, `packages/zod`).
 ## Layering
 
 `@nxgt/graphql-scalars` depends at runtime on `@nxgt/zod` only, by an npm
-range (`^0.1.2`: another repository, so never `workspace:`), for its schemas;
+range (`^0.1.3`: another repository, so never `workspace:`), for its schemas;
 `@nxgt/zod` peers the same `zod` range, so an application holds one `zod`.
 `@nxgt/graphql-validation` depends on nothing at runtime. Neither depends on
 the other. `@nxgt/graphql-codegen-zod` depends on
