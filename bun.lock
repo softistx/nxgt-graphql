@@ -12,6 +12,22 @@
         "typescript": "~6.0.3",
       },
     },
+    "packages/graphql-client": {
+      "name": "@nxgt/graphql-client",
+      "version": "0.0.0",
+      "dependencies": {
+        "@graphql-typed-document-node/core": "^3.2.0",
+        "@nxgt/httpyz": "^0.3.3",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "graphql": "16.11.0",
+      },
+      "peerDependencies": {
+        "graphql": "^16.11.0 || ^17.0.0",
+        "typescript": "^6.0.3 || ^7.0.0",
+      },
+    },
     "packages/graphql-codegen-zod": {
       "name": "@nxgt/graphql-codegen-zod",
       "version": "0.3.0",
@@ -131,17 +147,23 @@
 
     "@clack/prompts": ["@clack/prompts@1.8.1", "", { "dependencies": { "@clack/core": "1.5.1", "fast-string-width": "^3.0.2", "fast-wrap-ansi": "^0.2.0", "sisteransi": "^1.0.5" } }, "sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ=="],
 
+    "@graphql-typed-document-node/core": ["@graphql-typed-document-node/core@3.2.0", "", { "peerDependencies": { "graphql": "^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0" } }, "sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ=="],
+
     "@manypkg/find-root": ["@manypkg/find-root@3.1.0", "", { "dependencies": { "@manypkg/tools": "^2.1.0" } }, "sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA=="],
 
     "@manypkg/get-packages": ["@manypkg/get-packages@3.1.0", "", { "dependencies": { "@manypkg/find-root": "^3.1.0", "@manypkg/tools": "^2.1.0" } }, "sha512-0TbBVyvPrP7xGYBI/cP8UP+yl/z+HtbTttAD7FMAJgn/kXOTwh5/60TsqP9ZYY710forNfyV0N8P/IE/ujGZJg=="],
 
     "@manypkg/tools": ["@manypkg/tools@2.1.2", "", { "dependencies": { "jju": "^1.4.0", "tinyglobby": "^0.2.13", "yaml": "^2.9.0" } }, "sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ=="],
 
+    "@nxgt/graphql-client": ["@nxgt/graphql-client@workspace:packages/graphql-client"],
+
     "@nxgt/graphql-codegen-zod": ["@nxgt/graphql-codegen-zod@workspace:packages/graphql-codegen-zod"],
 
     "@nxgt/graphql-scalars": ["@nxgt/graphql-scalars@workspace:packages/graphql-scalars"],
 
     "@nxgt/graphql-validation": ["@nxgt/graphql-validation@workspace:packages/graphql-validation"],
+
+    "@nxgt/httpyz": ["@nxgt/httpyz@0.3.3", "", { "peerDependencies": { "typescript": "^6.0.3 || ^7.0.0" } }, "sha512-wWQPCs9TuFgFewbZsH+jvTGeawzR+ZZAsyZ4LJNXuwmIvw3zCimPDkIKbBLI6genCdz3bcPLvxgY9eJwJar2JA=="],
 
     "@nxgt/zod": ["@nxgt/zod@0.1.2", "", { "peerDependencies": { "typescript": "^6.0.3", "zod": ">=4.6.5 <5" } }, "sha512-9WAyRMlEZJAtTsnayMItC6vZrep1/8IUayGQZn8D15SmEKTlkufSOwGmgKMwP32VYZFDkd+SBLovoFdn1/BhDQ=="],
 
