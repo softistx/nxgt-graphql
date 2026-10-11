@@ -115,7 +115,11 @@ describe('bodyOf', () => {
 describe('isPersistedQueryNotFound', () => {
 	const apq = { mode: 'apq' } as const;
 	const error = (message: string, code?: string) =>
-		new ApiError([{ message, extensions: code ? { code } : {} }], null, 200);
+		new ApiError(
+			[{ message, extensions: code ? { code } : {} }],
+			undefined,
+			200,
+		);
 
 	test('by its code or its message, in apq mode only', () => {
 		expect(
@@ -125,6 +129,16 @@ describe('isPersistedQueryNotFound', () => {
 			true,
 		);
 		expect(isPersistedQueryNotFound(apq, error('Other', 'OTHER'))).toBe(false);
+		expect(
+			isPersistedQueryNotFound(
+				apq,
+				new ApiError(
+					[{ message: 'PersistedQueryNotFound' }],
+					{ rename: true },
+					200,
+				),
+			),
+		).toBe(false);
 		expect(
 			isPersistedQueryNotFound(apq, new Error('PersistedQueryNotFound')),
 		).toBe(false);
@@ -277,5 +291,52 @@ describe('apq mode', () => {
 			ApiError,
 		);
 		expect(api.sent).toHaveLength(1);
+	});
+
+	test('a mutation that ran, whatever its message, is posted once', async () => {
+		const api = server(() =>
+			json({
+				data: { rename: true },
+				errors: [{ message: 'PersistedQueryNotFound' }],
+			}),
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		const Rename = new TypedDocumentString(
+			RenameText,
+		) as unknown as TypedDocumentNode<{ rename: boolean }, { name: string }>;
+		await expect(client.mutate(Rename, { name: 'a' })).rejects.toBeInstanceOf(
+			ApiError,
+		);
+		expect(api.sent).toHaveLength(1);
+	});
+
+	test('without crypto.subtle: a clear TypeError, nothing sent', async () => {
+		const api = server(() => json({ data: { viewer: { id: 'u1' } } }));
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+		Object.defineProperty(globalThis, 'crypto', {
+			value: undefined,
+			configurable: true,
+		});
+		try {
+			const error = await client
+				.query(new TypedDocumentString(text) as unknown as typeof ViewerQuery)
+				.catch((e: unknown) => e);
+			expect(error).toBeInstanceOf(TypeError);
+			expect((error as TypeError).message).toBe(
+				'APQ needs crypto.subtle: serve the page over https or localhost',
+			);
+			expect(api.sent).toHaveLength(0);
+		} finally {
+			if (original) Object.defineProperty(globalThis, 'crypto', original);
+		}
 	});
 });

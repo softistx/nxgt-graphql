@@ -6,6 +6,9 @@ One entry per error you can hit, headed by the message you will search for.
 - [`mutate() was given a query`](#mutate-was-given-a-query)
 - [`The document holds no operation`](#the-document-holds-no-operation)
 - [`The document carries no persisted hash: enable persistedDocuments in the client preset`](#the-document-carries-no-persisted-hash-enable-persisteddocuments-in-the-client-preset)
+- [`APQ needs crypto.subtle: serve the page over https or localhost`](#apq-needs-cryptosubtle-serve-the-page-over-https-or-localhost)
+- [`PersistedQueryNotFound`](#persistedquerynotfound)
+- [A batch reply that is not an array of the batch's length](#a-batch-reply-that-is-not-an-array-of-the-batchs-length)
 - [`The API answered <status> with no GraphQL response`](#the-api-answered-status-with-no-graphql-response)
 - [`The API could not be reached`](#the-api-could-not-be-reached)
 - [`The API did not answer in time`](#the-api-did-not-answer-in-time)
@@ -78,6 +81,63 @@ const config = {
 ```
 
 Or use `persisted: { mode: 'apq' }`, which needs no codegen setup.
+
+## `APQ needs crypto.subtle: serve the page over https or localhost`
+
+**When:** the client has `persisted: { mode: 'apq' }` and runs where
+`globalThis.crypto.subtle` is missing. A `TypeError`, thrown before anything is
+sent.
+**Why:** APQ hashes the operation's text with SHA-256, and browsers expose
+`crypto.subtle` only in secure contexts.
+**Fix:** serve the page over https or from localhost, or use
+`persisted: { mode: 'documentId' }`, which hashes nothing at runtime:
+
+```ts
+const client = createGraphQLClient({
+  url,
+  persisted: { mode: 'documentId' },
+});
+```
+
+## `PersistedQueryNotFound`
+
+**When:** an `ApiError` (`code` `PERSISTED_QUERY_NOT_FOUND`) reaches the caller
+although the client resends the text once on `persisted: { mode: 'apq' }`.
+Or, in `documentId` mode, the same error for a hash the server does not know.
+**Why:** in `apq` mode the resend was answered `PersistedQueryNotFound` again:
+the server has no APQ plugin, so it never registers the text. In `documentId`
+mode the server's `persisted-documents.json` lacks the hash, or it does not read
+the `documentId` field.
+**Fix:** enable an APQ plugin on the server, or, for `documentId`, load the
+preset's `persisted-documents.json` and tell the plugin to read the field:
+
+```ts
+import { useAPQ } from '@graphql-yoga/plugin-apq';
+
+useAPQ(); // apq mode
+
+usePersistedOperations({
+  getPersistedOperation: (id) => persistedDocuments[id] ?? null,
+  extractPersistedOperationId: (params) =>
+    (params as { documentId?: string }).documentId ?? null,
+}); // documentId mode
+```
+
+## A batch reply that is not an array of the batch's length
+
+**When:** `batch` is on and every query of a batch rejects with the same
+error: an `ApiUnavailableError('invalid-response')`, an `ApiStatusError`, or an
+`ApiError` such as `Batching is not enabled`.
+**Why:** the server answered the posted array with an object or an array of
+another length, usually because it does not accept batches, or because `max` is
+above its limit.
+**Fix:** enable batching on the server, and keep `max` at or under its limit
+(graphql-yoga's `batching: true` allows 10):
+
+```ts
+createYoga({ batching: { limit: 20 } }); // server
+createGraphQLClient({ url, batch: { max: 20 } }); // client
+```
 
 ## `The API answered <status> with no GraphQL response`
 

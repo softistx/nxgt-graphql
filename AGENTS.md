@@ -582,8 +582,9 @@ packages/graphql-client/src/
   signal through `Party`: aborted before the batch leaves, it is dropped; a sent
   batch is aborted only when every entry has left.
 - **A batch reply that is not an array of the batch's length** rejects every
-  entry with `replyError`: its own `ApiError` or `ApiStatusError` on a non-2xx,
-  `ApiUnavailableError('invalid-response')` on a 2xx. Each array entry goes
+  entry with `replyError`: its `ApiError` (any status) when the body carries
+  errors, `ApiStatusError` on a non-2xx, else
+  `ApiUnavailableError('invalid-response')`. Each array entry goes
   through `dataOf` with the reply's HTTP status.
 - **`documentId` mode refuses a document with no hash before anything is
   sent** (`checkPersistable` in `run`), so one bad document never fails a batch.

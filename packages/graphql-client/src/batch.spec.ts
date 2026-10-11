@@ -135,6 +135,32 @@ describe('batching', () => {
 		expect(api.sent.every((body) => !Array.isArray(body))).toBe(true);
 	});
 
+	test('different retry is a different batch', async () => {
+		const api = server();
+		const client = clientOf(api);
+		await Promise.all([
+			client.query(A, {}, { retry: 1 }),
+			client.query(B, {}, { retry: 2 }),
+			client.query(C, {}, { retry: 2 }),
+		]);
+		expect(api.sent).toHaveLength(2);
+		expect(
+			api.sent.map((body) => (Array.isArray(body) ? body.length : 1)),
+		).toEqual([1, 2]);
+	});
+
+	test('max is clamped: NaN is the default, 0 is 1, 2.5 is 2', async () => {
+		const sizes = async (max: number) => {
+			const api = server();
+			const client = clientOf(api, { batch: { max } });
+			await Promise.all([client.query(A), client.query(B), client.query(C)]);
+			return api.sent.map((body) => (Array.isArray(body) ? body.length : 1));
+		};
+		expect(await sizes(Number.NaN)).toEqual([3]);
+		expect(await sizes(0)).toEqual([1, 1, 1]);
+		expect(await sizes(2.5)).toEqual([2, 1]);
+	});
+
 	test('identical queries share one entry: dedupe stays above batching', async () => {
 		const api = server();
 		const client = clientOf(api);
@@ -225,6 +251,30 @@ describe('a reply that is not the batch', () => {
 		}
 	});
 
+	test('a non-2xx array of the right length: a data-only entry is an ApiStatusError', async () => {
+		const api = server((body) =>
+			Response.json((body as Body[]).map(answerOf), { status: 500 }),
+		);
+		const errors = await both({}, api);
+		for (const error of errors) {
+			expect(error).toBeInstanceOf(ApiStatusError);
+			expect((error as ApiStatusError).status).toBe(500);
+		}
+	});
+
+	test('a 2xx object with errors: every entry gets that ApiError', async () => {
+		const errors = await both(
+			{},
+			server(() =>
+				Response.json({ errors: [{ message: 'Batching is not enabled' }] }),
+			),
+		);
+		for (const error of errors) {
+			expect(error).toBeInstanceOf(ApiError);
+			expect((error as ApiError).message).toBe('Batching is not enabled');
+		}
+	});
+
 	test('an unreachable API: every entry is unreachable', async () => {
 		const errors = await both(
 			{},
@@ -234,6 +284,64 @@ describe('a reply that is not the batch', () => {
 		);
 		for (const error of errors)
 			expect((error as ApiUnavailableError).reason).toBe('unreachable');
+	});
+});
+
+describe('onUnauthenticated through a batch', () => {
+	const unauthorized = {
+		errors: [{ message: 'Signed out', extensions: { http: { status: 401 } } }],
+	};
+
+	test('a whole-batch 401 runs the hook for each caller', async () => {
+		let calls = 0;
+		const client = clientOf(
+			server(() => new Response(null, { status: 401 })),
+			{
+				onUnauthenticated: () => {
+					calls++;
+				},
+			},
+		);
+		const errors = await Promise.all([
+			client.query(A).catch((e: unknown) => e),
+			client.query(B).catch((e: unknown) => e),
+		]);
+		for (const error of errors) expect(error).toBeInstanceOf(ApiStatusError);
+		expect(calls).toBe(2);
+	});
+
+	test('one entry with a 401 runs the hook for that caller only', async () => {
+		const seen: unknown[] = [];
+		const client = clientOf(
+			server((body) =>
+				Response.json([unauthorized, answerOf((body as Body[])[1] as Body)]),
+			),
+			{ onUnauthenticated: (error) => void seen.push(error) },
+		);
+		const [a, b] = await Promise.all([
+			client.query(A).catch((e: unknown) => e),
+			client.query(B),
+		]);
+		expect(a).toBeInstanceOf(ApiError);
+		expect(b).toEqual({ b: 'B' });
+		expect(seen).toEqual([a]);
+	});
+});
+
+describe('a retried batch', () => {
+	test('503 then success: the whole array is resent once', async () => {
+		let calls = 0;
+		const api = server((body) =>
+			++calls === 1
+				? new Response(null, { status: 503 })
+				: Response.json((body as Body[]).map(answerOf)),
+		);
+		const client = clientOf(api, { retry: { attempts: 1, delay: () => 0 } });
+		const results = await Promise.all([client.query(A), client.query(B)]);
+		expect(results).toEqual([{ a: 'A' }, { b: 'B' }]);
+		expect(api.sent).toHaveLength(2);
+		expect(api.sent[1]).toEqual(api.sent[0]);
+		expect(api.sent[1]).toHaveLength(2);
 	});
 });
 

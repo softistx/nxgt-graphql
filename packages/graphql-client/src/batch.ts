@@ -45,7 +45,7 @@ export class Batcher {
 		private readonly transport: Transport,
 		{ max = 10, wait = 0 }: BatchOptions,
 	) {
-		this.#max = Math.max(1, Math.floor(max));
+		this.#max = Number.isFinite(max) ? Math.max(1, Math.floor(max)) : 10;
 		this.#wait = wait;
 	}
 

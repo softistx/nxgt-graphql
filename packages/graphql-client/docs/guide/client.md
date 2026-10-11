@@ -192,7 +192,11 @@ const [a, b] = await Promise.all([
 ## Persisted queries
 
 Off by default. Each mode sends a hash in place of the operation's text, so
-the server must be set up for it.
+the server must be set up for it. The options are typed by two exports:
+
+```ts
+import type { BatchOptions, PersistedQueries } from '@nxgt/graphql-client';
+```
 
 ### `documentId`: the client preset's hashes
 
@@ -223,8 +227,18 @@ await client.query(UserQuery, { id: '42' });
 ```
 
 - No text is sent. On the server, graphql-yoga's `usePersistedOperations`
-  (`@graphql-yoga/plugin-persisted-operations`) reads `documentId` and looks the hash up in the preset's
-  `persisted-documents.json`.
+  (`@graphql-yoga/plugin-persisted-operations`) looks the hash up in the
+  preset's `persisted-documents.json`. With its defaults it reads only
+  `extensions.persistedQuery.sha256Hash`, whereas the client sends the
+  GraphQL-over-HTTP `documentId` field, so tell it where to read:
+
+  ```ts
+  usePersistedOperations({
+    getPersistedOperation: (id) => persistedDocuments[id] ?? null,
+    extractPersistedOperationId: (params) =>
+      (params as { documentId?: string }).documentId ?? null,
+  });
+  ```
 - Both document modes work: the hash is read from the `DocumentNode` or from
   the `TypedDocumentString`.
 - Keep the preset's defaults `hashPropertyName: 'hash'` and
@@ -256,6 +270,10 @@ const client = createGraphQLClient({
   posted twice.
 - No codegen setup is needed. On the server, enable an APQ plugin, such as
   graphql-yoga's `useAPQ` from `@graphql-yoga/plugin-apq`.
+- **The hash needs `crypto.subtle`**, which browsers expose only in secure
+  contexts (https or localhost). Without it the call throws a `TypeError` before
+  anything is sent
+  ([troubleshooting](../troubleshooting.md#apq-needs-cryptosubtle-serve-the-page-over-https-or-localhost)).
 
 ## Batching
 
@@ -276,10 +294,12 @@ const [user, settings] = await Promise.all([
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `max` | `10` | the most queries in one request; a full batch leaves at once, the next query starts another |
+| `max` | `10` | the most queries in one request; a full batch leaves at once, the next query starts another. Rounded down, at least `1`; a non-finite value (`NaN`) is the default |
 | `wait` | `0` | milliseconds a batch waits for more queries; `0` collects what is issued in the same macrotask |
 
-- **The server must accept batches**: graphql-yoga's `batching: true`.
+- **The server must accept batches**: graphql-yoga's `batching: true`, which
+  allows 10 queries per request; `batching: { limit }` sets another. `max` must
+  not exceed the server's limit, or a full batch is refused.
 - **Queries only.** A mutation is always posted alone.
 - **Only queries with the same per-call `headers`, `timeout` and `retry` share
   a batch**; the others go in batches of their own.
@@ -287,8 +307,9 @@ const [user, settings] = await Promise.all([
 - **Each query gets its own result or error.** An entry with `errors` rejects
   that query alone, with an `ApiError` carrying the reply's HTTP status. A
   reply that is not an array of the batch's length rejects every query with
-  the error the whole reply stands for: its `ApiError` or `ApiStatusError` on a
-  non-2xx, an `ApiUnavailableError('invalid-response')` on a 2xx.
+  the error the whole reply stands for: its `ApiError` (any status) when the
+  body carries `errors`, an `ApiStatusError` on a non-2xx, else an
+  `ApiUnavailableError('invalid-response')`.
 - **Each query keeps its own `signal`.** Aborted before the batch leaves, it
   rejects with its reason and is dropped from the batch; once the batch is
   sent, the request is aborted only when every query in it has left.

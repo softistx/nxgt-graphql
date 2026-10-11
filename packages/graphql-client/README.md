@@ -97,10 +97,13 @@ Both are off by default, and both need the server set up for them.
 const client = createGraphQLClient({
   url: 'https://api.example.com/graphql',
   // { mode: 'documentId' }: the client preset's persistedDocuments hash
-  // (graphql-yoga's usePersistedOperations); { mode: 'apq' }: Automatic
+  // (graphql-yoga's usePersistedOperations, with extractPersistedOperationId
+  // reading documentId: the client sends the GraphQL-over-HTTP documentId
+  // field, which the plugin ignores by default); { mode: 'apq' }: Automatic
   // Persisted Queries, registered on first use (an APQ plugin).
   persisted: { mode: 'apq' },
-  // Queries issued together posted as one array (graphql-yoga's batching: true).
+  // Queries issued together posted as one array (graphql-yoga's batching:
+  // true); max must not exceed the server's limit (10 with batching: true).
   batch: { max: 10, wait: 0 },
 });
 ```
