@@ -1,5 +1,17 @@
 # @nxgt/graphql-client
 
+## 0.2.0
+
+### Minor Changes
+
+- [#95](https://github.com/softistx/nxgt-graphql/pull/95) [`690500c`](https://github.com/softistx/nxgt-graphql/commit/690500c0009e237619dfcccfaf06eaa3fd7e7316) Thanks [@SteveGT96](https://github.com/SteveGT96)! - **Breaking: an `ApiError`'s `status` is now a failure status unless `extensions.http.status` names another.** With no `extensions.http.status`, `status` is the HTTP status when it is 400 or above, else `400`; it used to be the HTTP status as it was, so a refusal sent on HTTP 200 (`200 {"errors":[…]}`, as graphql-yoga answers an error thrown in a resolver) read `status === 200` and now reads `400`. `httpStatus` keeps the HTTP status as it came (`200` there), and an `extensions.http.status` still wins on any HTTP status. A server answering its own caller with `error.status` no longer answers a refusal with 200; code that told a refusal on 200 apart by `status === 200` reads `httpStatus` instead. Nothing else about the errors changes: `onUnauthenticated` still runs for an extension's 401 or an HTTP 401. `ApiStatusError` gains `statusText`, the response's reason phrase (`Not Found`; `''` when the response had none, as over HTTP/2, or when a reply labelled JSON did not parse), set from the response for a query, a mutation, a batch and a refused subscription; built by hand, it takes it as an option beside `cause`, `new ApiStatusError(404, body, { statusText: 'Not Found' })`, the two- and three-argument forms unchanged (`ApiStatusErrorOptions`).
+  
+  `ApiErrorExtensions` is now an interface, so an application types the keys its API sends by declaration merging, `declare module '@nxgt/graphql-client' { interface ApiErrorExtensions { field?: string } }`: `error.extensions.field` and `error.errors[i].extensions?.field` are then `string | undefined`. Every other key stays `unknown`.
+  
+  `client.execute(document, variables?, options?)` runs a query or a mutation, whichever the document holds, exactly as `query` or `mutate` would (retries, deduplication, batching, cache, errors and the 401 hook included), for code that forwards documents it does not choose. Its options are `CallOptions` (`signal`, `headers`, `timeout`), what both take: a document's types do not say whether it is a query. A subscription rejects with `TypeError: execute() was given a subscription: use subscribe()`, before anything is sent.
+  
+  `createGraphQLClient`'s type follows its options: given a `cache`, it returns a `GraphQLClient<GraphQLCache>`, whose `client.cache` is read without a `!`; given none, a `GraphQLClient<undefined>`, whose `client.cache` is `undefined`, as it always was at runtime; given options typed `GraphQLClientOptions`, the `GraphQLClient` it returned before. `GraphQLClient` takes the cache's type as an optional parameter whose default is the former type, so `GraphQLClient`, `GraphQLProvider`'s `client`, `useClient()` and every hook take either kind of client unchanged. Nothing changes at runtime. One case that compiled before is now a type error: using `client.cache` on a client created without one (`client.cache!.read(…)`, `client.cache?.read(…)`, or `if (client.cache)`, which TypeScript now narrows to `never`); such code read a cache that was never there, and type the client `GraphQLClient` where it may be either. `createGraphQLClient` is overloaded for this: an option it does not take is now reported as `No overload matches this call`, the option still named.
+
 ## 0.1.0
 
 ### Minor Changes
