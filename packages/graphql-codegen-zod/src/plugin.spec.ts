@@ -291,6 +291,18 @@ describe('the generated file', () => {
 					},
 				},
 			],
+			// A list too long with an invalid item: zod 4.6.6 stops at its size.
+			[
+				'SignUp',
+				'zSignUpMutationVariables',
+				{
+					input: {
+						email: 'a@b.co',
+						name: 'Al',
+						skus: ['bad', 'SKU-0002', 'SKU-0003'],
+					},
+				},
+			],
 			['Reach', 'zReachQueryVariables', { c: { email: 'a@b.co' } }],
 			['Reach', 'zReachQueryVariables', { c: { phone: '123' } }],
 			[
@@ -448,6 +460,68 @@ describe('the generated file', () => {
 			issues?.[0]?.message,
 		]);
 		expect(issue?.message).toBeDefined();
+	});
+
+	test('refuses a list too long as the server does, its items included, whatever zod', async () => {
+		// The union only shapes the value; the list's own schema, the
+		// server's, parses it once. zod 4.6.6 stops an oversized array before
+		// its items (only too_big), 4.6.5 reports its items first: either
+		// way the client says what the server says.
+		const served = server();
+		for (const skus of [
+			['SKU-0001', 'SKU-0002', 'SKU-0003'],
+			['bad', 'SKU-0002', 'SKU-0003'],
+			'bad',
+		]) {
+			const input = { email: 'a@b.co', name: 'Al', skus };
+			const answer = await graphql({
+				schema: served,
+				source,
+				operationName: 'SignUp',
+				variableValues: { input },
+			});
+			const client = schemas['zSignUpMutationVariables']?.safeParse({
+				input,
+			});
+			const issues = answer.errors?.[0]?.extensions['issues'] as
+				| readonly { readonly path: PropertyKey[]; readonly message: string }[]
+				| undefined;
+			expect(issues?.length).toBeGreaterThan(0);
+			expect(
+				client?.error?.issues.map(({ path, message }) => [path, message]),
+			).toEqual(issues?.map(({ path, message }) => [path, message]));
+			expect(client?.error?.issues.map(({ code }) => code)).not.toContain(
+				'invalid_union',
+			);
+		}
+	});
+
+	test('refuses a wrong-typed item, or a single value, at its own path, as the server does', async () => {
+		// The list's own schema parses the items: a wrong-typed one is
+		// `invalid_type` at its index, a single value at `[0]`, never
+		// `Invalid input` at the list's path.
+		const served = server();
+		const cases: [unknown, (string | number)[]][] = [
+			[5, ['input', 'tags', 0]],
+			[
+				['a', 5],
+				['input', 'tags', 1],
+			],
+		];
+		for (const [tags, path] of cases) {
+			const input = { email: 'a@b.co', name: 'Al', tags };
+			const answer = await graphql({
+				schema: served,
+				source,
+				operationName: 'SignUp',
+				variableValues: { input },
+			});
+			expect(answer.errors?.length).toBeGreaterThan(0);
+			const client = schemas['zSignUpMutationVariables']?.safeParse({ input });
+			expect(
+				client?.error?.issues.map(({ code, path }) => [code, path]),
+			).toEqual([['invalid_type', path]]);
+		}
 	});
 
 	test('types the arguments a resolver receives: the server parses them through the same rules', () => {
@@ -628,7 +702,7 @@ describe('plugin, refusing what it cannot write faithfully', () => {
 			),
 		);
 		expect(await plugin(schema, [])).toContain(
-			'n: z.union([z.array(z.int32().nullish()), z.int32().transform((value): unknown[] => [value]).pipe(z.array(z.int32().nullish()))]).prefault([1]).nullable(),',
+			'n: z.union([z.array(z.custom<number | null | undefined>()), z.custom<number>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(z.int32().nullish())).prefault([1]).nullable(),',
 		);
 	});
 });

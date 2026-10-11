@@ -333,6 +333,10 @@ are identical, status and body. Where the mock differs:
   Zod format or a pattern, `validation.errors.invalid` for a refinement, a
   prefix, a suffix or a substring. The API may answer `invalid-format` for
   every format of its own.
+- **A list of a custom scalar over `maxItems`.** From zod 4.6.6, such a list
+  longer than `maxItems` is answered `too-many` even when an item is one the
+  scalar refuses, since zod stops an oversized array before its items;
+  graphql-yoga answers the scalar's coercion error.
 - **An API on graphql 16.** graphql 16 words some of these messages
   differently; the mock always words them as graphql 17 does.
 

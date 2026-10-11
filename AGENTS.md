@@ -496,9 +496,16 @@ packages/graphql-codegen-zod/test/
   coerces them, through lists and nested input literals.
 - **Every list takes a single value, as graphql does** (owner: uniform),
   through `inputCode`'s `list` option, which hands the list's named type: the
-  value is wrapped, then piped into the list's schema, so the client's issue
-  is the server's (path, message). An input object's or a custom scalar's
-  first stage is `z.custom<z.input<typeof X>>`, so it is parsed once. An Int
+  union only shapes the value, parsing nothing — `z.array(z.custom<In>())`
+  for a list, `z.custom<In>(…)` wrapped for a single value — then pipes it
+  into the list's own schema, the server's (`z.array(item).max(n)`), so the
+  client's issue is the server's (path, message) and items are parsed once.
+  Nothing that can fail sits inside an option: zod 4.6.6 aborts an
+  oversized array before its items (`capSize`), and a union with every
+  option aborted reports `invalid_union`, not `too_big` (the "Newest peers"
+  job caught it). `In`, the item's input type, is written from the GraphQL
+  type (`singleInput`, `itemInput` in `writer.ts`), so `z.input` is what it
+  was. An Int
   for an ID stays refused (owner: « on garde seulement id comme string »).
   The parity spec pins it, with a codec `DateTime` on both sides and a cycle
   through a `@oneOf`.
@@ -997,7 +1004,10 @@ packages/graphql-codegen-msw/test/
   requests) answered 74 identically. The known differences, the same list as
   the changeset and the handlers guide's Known differences: an `ID` given an
   integer (the probe's one difference), a custom scalar not built with
-  `zodScalar`, an application format's code, and an API on graphql 16.
+  `zodScalar`, an application format's code, a list of a custom scalar longer
+  than `maxItems` (from zod 4.6.6 answered `too-many` even when an item is one
+  the scalar refuses, where graphql-yoga answers the scalar's coercion
+  error), and an API on graphql 16.
 - **The default refusal is `invalidInputError`'s shape, status 400**, one
   field per Zod issue in Zod's order, each through `@nxgt/graphql-validation`'s
   `fieldIssueOf`: the codes are that package's invariant, never written here
