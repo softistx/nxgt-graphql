@@ -4,7 +4,13 @@
 import {
 	badUserInput,
 	constraintTypeDefs,
+	FIELD_CODES,
 	type FormatSchemas,
+	fieldIssueOf,
+	fieldsError,
+	inputPath,
+	invalidInputError,
+	type Translate,
 	validated,
 	withValidation,
 } from '@nxgt/graphql-validation';
@@ -60,6 +66,38 @@ export const withBuiltInName = () =>
 	});
 
 export const refused = badUserInput('Query.a', new z.ZodError([]));
+
+// An API that answers invalid input as one 400 error with a list of fields.
+const translate: Translate = (code) => code;
+export const invalid = invalidInputError(
+	[
+		{
+			path: inputPath(['input', 'name']),
+			code: 'too-short',
+			params: { min: 2 },
+		},
+	],
+	{ translate, path: ['signUp'] },
+);
+export const conflict = fieldsError(
+	'conflict',
+	[{ path: 'email', code: 'taken' }],
+	{
+		status: 409,
+		params: { name: 'Ada' },
+	},
+);
+export const translated = { translate };
+
+// A Zod parse answered as that error, with the codes for translations.
+const parsed = z.object({ name: z.string().min(2) }).safeParse({ name: 'a' });
+export const fromZod = invalidInputError(
+	parsed.success ? [] : parsed.error.issues.map(fieldIssueOf),
+	{ translate },
+);
+export const mapIssue = fieldIssueOf;
+export const codes = FIELD_CODES;
+export const symbolPath = inputPath(['input', Symbol('k'), 0]);
 
 // The ./codegen subpath, as a code generator holds its results.
 const codegenSchema = buildSchema(

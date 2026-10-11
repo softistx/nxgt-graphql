@@ -8,6 +8,7 @@ GraphQL building blocks for applications built on the nxgt packages.
 | [`@nxgt/graphql-validation`](packages/graphql-validation) | `@constraint` on arguments and input fields, checked by Zod schemas built from the directives, with one `BAD_USER_INPUT` error a form can map field by field. graphql 16 and 17. Published on npm |
 | [`@nxgt/graphql-codegen-zod`](packages/graphql-codegen-zod) | A graphql-codegen plugin that writes Zod schemas and types from your SDL — inputs, enums, field arguments, operation variables — with the `@constraint` rules of `@nxgt/graphql-validation`, so a client refuses what the server refuses. Published on npm |
 | [`@nxgt/graphql-client`](packages/graphql-client) | A typed GraphQL client for the client preset's `TypedDocumentNode` or `TypedDocumentString`, built on `@nxgt/httpyz`. Published on npm |
+| [`@nxgt/graphql-codegen-msw`](packages/graphql-codegen-msw) | A graphql-codegen plugin that writes one typed msw 3 handler per named query and mutation, its variables checked by the Zod schemas of `@nxgt/graphql-codegen-zod`, an invalid input answered as one 400 error with a list of fields, as `BAD_USER_INPUT`, or as your API answers it. Published on npm |
 
 ## Develop
 

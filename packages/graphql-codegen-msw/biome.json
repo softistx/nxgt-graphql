@@ -1,0 +1,13 @@
+{
+	"root": false,
+	"extends": "//",
+	"files": {
+		"includes": [
+			"**",
+			"!test/zod.ts",
+			"!test/graphql.ts",
+			"!test/msw.ts",
+			"!test/msw-*.ts"
+		]
+	}
+}

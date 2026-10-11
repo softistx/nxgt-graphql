@@ -188,6 +188,49 @@ const resolvers = {
 };
 ```
 
+### Answering invalid input as one error
+
+For an API that answers invalid input as one 400 error with a list of fields,
+`invalidInputError` builds that error from your own codes, translated by your
+i18n function (each message is the code itself without one). `fieldsError`
+does the same for a refusal of your own (a 409 conflict) that names the
+fields at fault. Neither changes what `withValidation` raises.
+
+```ts
+import { inputPath, invalidInputError, type Translate } from '@nxgt/graphql-validation';
+
+// Your catalogue: code and params in, the message in the request's language out.
+const t: Translate = (code, params) => i18n.t(code, params);
+
+throw invalidInputError(
+  [
+    { path: inputPath(['input', 'person', 'firstName']), code: 'validation.errors.too-short', params: { min: 2 } },
+    { path: 'person.lastName', code: 'validation.errors.required' },
+  ],
+  { translate: t },
+);
+// extensions: { code: 'validation.errors.invalid-input', http: { status: 400 },
+//   fields: [{ path: 'person.firstName', code: 'validation.errors.too-short',
+//              message: 'At least 2 characters', params: { min: 2 } }, ...] }
+```
+
+Fields keep the order given; `params` is written only when it has a key
+(never `{}`); `GraphQLError`'s options (`originalError`, `path`, …) are kept,
+but an `extensions` among them is replaced. From a Zod parse,
+`fieldIssueOf` maps each issue to a field and a code (`too-short`,
+`invalid-format`, …):
+
+```ts
+import { fieldIssueOf, invalidInputError } from '@nxgt/graphql-validation';
+
+const result = PersonInput.safeParse(input);
+if (!result.success)
+  throw invalidInputError(result.error.issues.map(fieldIssueOf), { translate: t });
+```
+
+The codes, and `fieldsError`, are in
+[Answering invalid input as one error](docs/guide/invalid-input.md).
+
 ## IDE support
 
 An IDE's GraphQL plugin (JetBrains GraphQL, VS Code GraphQL) reads your `.graphql`
@@ -231,6 +274,13 @@ the directive declared is this package's. Both at once throw
 | `withValidation(schema, options?)` | checks every `@constraint` of a schema before its resolvers run; `options.formats` adds your own formats |
 | `validated(schema \| shape, resolver)` | a resolver whose arguments a Zod schema checks |
 | `badUserInput(where, zodError)` | builds the error above, for code that validates by hand |
+| `invalidInputError(issues, options?)` | one 400 error, `extensions: { code: 'validation.errors.invalid-input', http, fields }`; `options`: `translate` and `GraphQLError`'s own |
+| `fieldsError(code, issues, options?)` | a refusal of your own naming fields, `extensions: { code, params?, http?, fields }`; `options` adds `status` and `params` |
+| `inputPath(path)` | `['input', 'person', 'firstName']` as `person.firstName`: dotted, the leading `input` argument dropped; a symbol written as `String(key)` |
+| `fieldIssueOf(issue)` | a Zod issue as a `FieldIssue`: `inputPath(issue.path)` and a code under `validation.errors.` (`too-short`, `too-long`, `out-of-range`, `too-few`, `too-many`, `invalid-format`, `invalid`), no params |
+| `FIELD_CODES` | those codes, keyed `tooShort`, `tooLong`, `outOfRange`, `tooFew`, `tooMany`, `invalidFormat`, `invalid` |
+| `INVALID_INPUT` | `'validation.errors.invalid-input'` |
+| `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
@@ -290,6 +340,6 @@ Every startup error and its fix is in [Troubleshooting](docs/troubleshooting.md)
 ## Documentation
 
 - [Documentation index](docs/README.md)
-- Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md)
+- Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md), [Answering invalid input as one error](docs/guide/invalid-input.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- [Roadmap](docs/roadmap.md): your own formats in the Zod codegen plugin, schemas that read the context
+- [Roadmap](docs/roadmap.md): schemas that read the context, emitting the invalid-input shape directly

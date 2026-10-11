@@ -1,0 +1,81 @@
+{
+	"name": "@nxgt/graphql-codegen-msw",
+	"version": "0.0.0",
+	"description": "A graphql-codegen plugin that writes one typed msw 3 handler per named query and mutation, its variables checked by the Zod schemas of @nxgt/graphql-codegen-zod and an invalid input answered as your API answers it",
+	"license": "MIT",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"docs",
+		"README.md",
+		"package.json",
+		"LICENSE",
+		"THIRD-PARTY-NOTICES.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./runtime": {
+			"types": "./dist/runtime/index.d.ts",
+			"import": "./dist/runtime/index.js",
+			"default": "./dist/runtime/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"keywords": [
+		"graphql",
+		"codegen",
+		"graphql-codegen",
+		"msw",
+		"mock",
+		"zod",
+		"validation",
+		"typescript"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/softistx/nxgt-graphql.git",
+		"directory": "packages/graphql-codegen-msw"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "bun run ../../build.ts",
+		"test": "bun test src",
+		"typecheck": "tsc --noEmit",
+		"generated:write": "bun run test/write-generated.ts"
+	},
+	"nxgt": {
+		"entrypoints": [
+			"src/index.ts",
+			"src/runtime/index.ts"
+		]
+	},
+	"dependencies": {
+		"@nxgt/graphql-validation": "workspace:^",
+		"change-case": "^5.4.4"
+	},
+	"devDependencies": {
+		"@graphql-codegen/typescript": "6.1.2",
+		"@graphql-codegen/typescript-operations": "6.1.10",
+		"@mswjs/interceptors": "0.45.7",
+		"@nxgt/graphql-codegen-zod": "workspace:^",
+		"@types/bun": "^1.4.0",
+		"graphql": "16.11.0",
+		"msw": "3.0.3",
+		"zod": "4.6.5"
+	},
+	"peerDependencies": {
+		"graphql": "^16.11.0 || ^17.0.0",
+		"msw": "^3.0.3",
+		"typescript": "^6.0.3 || ^7.0.0",
+		"zod": ">=4.6.5 <5"
+	}
+}
