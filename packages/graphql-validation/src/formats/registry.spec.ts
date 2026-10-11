@@ -61,6 +61,15 @@ describe('FormatRegistry', () => {
 		);
 	});
 
+	test('refuses a string definition zod cannot run, at startup rather than per request', () => {
+		const shaped = { _zod: { def: { type: 'string' } } };
+		expect(
+			() => new FormatRegistry({ code: shaped as unknown as z.ZodString }),
+		).toThrow(
+			`The format "code" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
+		);
+	});
+
 	test.each([
 		['.trim()', z.string().trim()],
 		['.toLowerCase()', z.string().toLowerCase()],
@@ -149,6 +158,29 @@ describe("an application format's schema", () => {
 		expect(() => schema.safeParse('ok')).toThrow(
 			'Encountered Promise during synchronous parse',
 		);
+	});
+});
+
+describe("an application format's aborting check", () => {
+	const code = z
+		.string()
+		.refine((value) => /^[A-Z]+$/.test(value), {
+			message: 'Invalid code: uppercase letters',
+			abort: true,
+		})
+		.min(2);
+
+	test('stops the rules chained after it, as the schema alone does', () => {
+		const schema = new FormatRegistry({ code }).named('code').toZod().max(3);
+		const alone = code.max(3);
+		for (const value of ['abcd1', 'AB', 'ABCDE', 'A']) {
+			const issues = schema.safeParse(value).error?.issues;
+			expect([value, issues?.map((issue) => issue.message)]).toEqual([
+				value,
+				alone.safeParse(value).error?.issues.map((issue) => issue.message),
+			]);
+		}
+		expect(schema.safeParse('abcd1').error?.issues).toHaveLength(1);
 	});
 });
 
