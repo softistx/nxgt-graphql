@@ -522,7 +522,9 @@ bun run changeset:status # on a branch cut from develop
 CI runs the same, in this order, with no service container. Its "Newest
 peers" job runs `scripts/newest-peers.ts`, deletes `bun.lock`, installs and
 runs build, typecheck, test and `verify:artifacts` again against the newest
-end of every peer range: graphql 17 and the latest zod 4. It resolves without
+end of every peer range: graphql 17, the latest zod 4 and TypeScript 7. A spec
+that drives TypeScript's compiler API imports TypeScript 6 as `typescript-api`
+(TypeScript 7 has no compiler API). It resolves without
 a lockfile, so an upstream release can turn it red with no change here: read
 it, do not make it a required check.
 
@@ -585,9 +587,10 @@ it, do not make it a required check.
 | `bunfig.toml`, `.gitignore`, `LICENSE`, `tsconfig.base.json`, `tsconfig.json`, `scripts/tsconfig.json`, `build.ts`, `biome.json` | byte copies of nxgt-data's: each repository releases on its own. Fix a drift in nxgt-data first, then carry it here |
 | `scripts/artifacts/` (every module and spec), `scripts/verify-artifacts.ts` | nxgt-data's, byte for byte except two lines (see below). A check added to one copy belongs in the others; nxgt-data's AGENTS.md lists where each copy stands |
 | `scripts/workspace.ts`, `scripts/publish.ts` and their specs | byte copies of nxgt-data's (alxia's originally) |
-| `scripts/newest-peers.ts`, its spec, and the "Newest peers" job in `ci.yml` | byte copies of nxgt-data's script and spec; the job is nxgt-data's without its four server caches and `REDISMS_DISABLE_POSTINSTALL`. The script reads `examples/*` too, which matches nothing here |
+| `scripts/newest-peers.ts`, its spec, and the "Newest peers" job in `ci.yml` | byte copies of nxgt-data's script and spec; the job is nxgt-data's without its four server caches and `REDISMS_DISABLE_POSTINSTALL`, and its comment names TypeScript 7, which these peers accept. The script reads `examples/*` too, which matches nothing here |
 | `.github/actions/setup/action.yml`, `.github/workflows/release.yml`, `.github/workflows/deprecate.yml`, the `ci` job of `ci.yml` | nxgt-di's, which are nxgt-data's without its servers (`deprecate.yml` is nxgt-telemetry's) |
 | `CLAUDE.md`, `.claude/settings.json` | nxgt-di's, byte for byte |
+| `src/cli.ts` and `src/typedefs-command.ts` in `graphql-scalars` and `graphql-validation` | each package ships its own `typedefs` bin and no package depends on the other. `cli.ts` is the same file apart from its doc comment; `typedefs-command.ts` shares `--out` and `--help`, the usage layout, the exit codes and `--help`. A change to one bin's flags or exit codes is made in the other |
 | The 65 scalar names (GraphQL names and `<name>Schema` exports) | copied outside this repository: `@nxgt/typespec` (softistx/nxgt-http) declares each as a TypeSpec scalar and OpenAPI component of the same name, with `x-nxgt-scalar: <Name>`, and pins the list in its `test/scalars/index.ts` (`GRAPHQL_SCALARS`); the rules are no longer copied: they live in `@nxgt/zod` (softistx/nxgt-zod), whose schemas this package re-exports, the same instances. Adding or renaming a scalar means a PR in `@nxgt/zod` first and the same change in `@nxgt/typespec`: tell the session or open the PR in each |
 
 ## Declared divergences from nxgt-data
