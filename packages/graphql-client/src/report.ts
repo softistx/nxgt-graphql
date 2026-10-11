@@ -2,23 +2,18 @@ import type { GraphQLCache } from './cache/types';
 import type { GraphQLDocument } from './document';
 
 /**
- * An error raised outside the call that caused it, such as a watch's
- * callback: reported as an uncaught error would be (`reportError` in a
- * browser, else thrown from a microtask), never thrown into the caller.
+ * The default `onError` for an error raised outside the call that caused
+ * it (a watch's callback, a result the cache refused): logged, never
+ * thrown, so it never ends a Bun or Node process.
  */
-export function reportError(error: unknown): void {
-	const report = (globalThis as { reportError?: (error: unknown) => void })
-		.reportError;
-	if (typeof report === 'function') report(error);
-	else
-		queueMicrotask(() => {
-			throw error;
-		});
+export function logError(error: unknown): void {
+	console.error(error);
 }
 
 /**
  * A result kept by the cache: a write that throws (a `keys` function, a
- * watch) is reported, and the caller still gets the network's data.
+ * value JSON could not hold) goes to the cache's `onError` (`logError`
+ * when it has none), and the caller still gets the network's data.
  */
 export function writeToCache(
 	cache: GraphQLCache,
@@ -29,6 +24,11 @@ export function writeToCache(
 	try {
 		cache.write(document, variables as never, data as never);
 	} catch (error) {
-		reportError(error);
+		try {
+			(cache.onError ?? logError)(error);
+		} catch (reported) {
+			// An `onError` that throws must not fail a call that succeeded.
+			logError(reported);
+		}
 	}
 }

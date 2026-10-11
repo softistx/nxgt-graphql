@@ -1,7 +1,6 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
-import { stubReportError } from '../../test/report-error';
 import { normalizedCache } from './normalized-cache';
 
 type Book = { __typename: 'Book'; id: string; title: string };
@@ -226,8 +225,24 @@ describe('watch', () => {
 		expect(seen).toEqual(['Emma', 'changed by the callback']);
 	});
 
-	test('a callback that throws is reported; the other watches still run and the write stands', () => {
-		const reported = stubReportError();
+	test('a callback that throws goes to onError; the other watches still run and the write stands', () => {
+		const reported: unknown[] = [];
+		const cache = normalizedCache({ onError: (error) => reported.push(error) });
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+		const failure = new Error('render failed');
+		cache.watch(BookQuery, { id: '1' }, () => {
+			throw failure;
+		});
+		const second = mock();
+		cache.watch(BookQuery, { id: '1' }, second);
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Emma') });
+		expect(second).toHaveBeenCalledWith({ book: book('1', 'Emma') });
+		expect(reported).toEqual([failure]);
+		expect(cache.read(BookQuery, { id: '1' })?.book?.title).toBe('Emma');
+	});
+
+	test('without onError, a callback that throws is logged with console.error, never thrown', () => {
+		const logged = spyOn(console, 'error').mockImplementation(() => {});
 		try {
 			const cache = normalizedCache();
 			cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
@@ -235,15 +250,34 @@ describe('watch', () => {
 			cache.watch(BookQuery, { id: '1' }, () => {
 				throw failure;
 			});
-			const second = mock();
-			cache.watch(BookQuery, { id: '1' }, second);
-			cache.write(BookQuery, { id: '1' }, { book: book('1', 'Emma') });
-			expect(second).toHaveBeenCalledWith({ book: book('1', 'Emma') });
-			expect(reported.errors).toEqual([failure]);
-			expect(cache.read(BookQuery, { id: '1' })?.book?.title).toBe('Emma');
+			expect(() =>
+				cache.modify('Book:1', { title: () => 'Emma' }),
+			).not.toThrow();
+			expect(logged).toHaveBeenCalledWith(failure);
 		} finally {
-			reported.restore();
+			logged.mockRestore();
 		}
+	});
+
+	test('a write from a callback: callbacks run one after the other, each whole, and end on the newest data', () => {
+		const cache = normalizedCache();
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'a') });
+		const calls: string[] = [];
+		cache.watch(BookQuery, { id: '1' }, (data) => {
+			const title = data?.book?.title ?? 'none';
+			calls.push(`start ${title}`);
+			if (title === 'b')
+				cache.write(BookQuery, { id: '1' }, { book: book('1', 'c') });
+			calls.push(`end ${title}`);
+		});
+		const other: (string | undefined)[] = [];
+		cache.watch(BookQuery, { id: '1' }, (data) =>
+			other.push(data?.book?.title),
+		);
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'b') });
+		expect(calls).toEqual(['start b', 'end b', 'start c', 'end c']);
+		expect(other.at(-1)).toBe('c');
+		expect(cache.read(BookQuery, { id: '1' })?.book?.title).toBe('c');
 	});
 
 	test('the function returned stops it, even from within a callback of the same batch', () => {
@@ -314,6 +348,88 @@ describe('write', () => {
 		expect(cache.read(BookQuery, { id: '1' })).toEqual({
 			book: book('1', 'Emma'),
 		});
+	});
+});
+
+describe('JSON only', () => {
+	const Published = parse(
+		'query { book(id: "1") { id published } }',
+	) as TypedDocumentNode<
+		{ book: { __typename: 'Book'; id: string; published: unknown } },
+		Record<string, never>
+	>;
+	const published = (value: unknown) => ({
+		book: { __typename: 'Book' as const, id: '1', published: value },
+	});
+
+	test('a Date is refused at write, even a second one with the same time, and changes nothing', () => {
+		const cache = normalizedCache();
+		cache.write(Published, published('1965-08-01'));
+		expect(() =>
+			cache.write(Published, published(new Date('1965-08-01'))),
+		).toThrow(
+			new TypeError('The cache holds JSON: field published holds a Date'),
+		);
+		expect(() =>
+			cache.write(Published, published(new Date('1965-08-01'))),
+		).toThrow(TypeError);
+		expect(cache.read(Published)).toEqual(published('1965-08-01'));
+	});
+
+	test('a Map is refused at write, nested in a JSON scalar too', () => {
+		const cache = normalizedCache();
+		expect(() => cache.write(Published, published(new Map()))).toThrow(
+			'The cache holds JSON: field published holds a Map',
+		);
+		expect(() =>
+			cache.write(Published, published({ at: [new Map()] })),
+		).toThrow('The cache holds JSON: field published holds a Map');
+		expect(cache.read(Published)).toBeUndefined();
+	});
+});
+
+describe('modify', () => {
+	test('all or nothing: a modifier that throws changes nothing, notifies nobody, and its error is thrown', () => {
+		const cache = normalizedCache();
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+		const callback = mock();
+		cache.watch(BookQuery, { id: '1' }, callback);
+		const failure = new Error('bad modifier');
+		expect(() =>
+			cache.modify('Book:1', {
+				title: () => 'Emma',
+				id: () => {
+					throw failure;
+				},
+			}),
+		).toThrow(failure);
+		expect(cache.read(BookQuery, { id: '1' })).toEqual({
+			book: book('1', 'Dune'),
+		});
+		expect(callback).not.toHaveBeenCalled();
+	});
+
+	test('a next value JSON could not hold is refused, and changes nothing', () => {
+		const cache = normalizedCache();
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+		expect(() =>
+			cache.modify('Book:1', {
+				id: () => '2',
+				title: () => new Date(0),
+			}),
+		).toThrow(new TypeError('The cache holds JSON: field title holds a Date'));
+		expect(cache.read(BookQuery, { id: '1' })).toEqual({
+			book: book('1', 'Dune'),
+		});
+	});
+
+	test('stores a copy of the next value', () => {
+		const cache = normalizedCache();
+		cache.write(BooksQuery, { books: [book('1', 'Dune')] });
+		const next = [{ __ref: 'Book:1' }];
+		cache.modify('ROOT_QUERY', { books: () => next });
+		next.push({ __ref: 'Book:2' });
+		expect(cache.read(BooksQuery)).toEqual({ books: [book('1', 'Dune')] });
 	});
 });
 
@@ -409,5 +525,14 @@ describe('readFragment and watchFragment', () => {
 		stop();
 		cache.write(BookWithAuthor, dune);
 		expect(callback).toHaveBeenCalledTimes(2);
+	});
+
+	test('watchFragment on a ref with no identity is never called back', () => {
+		const cache = normalizedCache();
+		const callback = mock();
+		cache.watchFragment(BookCard, { __typename: 'Book' }, callback);
+		cache.write(BookWithAuthor, dune);
+		cache.reset();
+		expect(callback).not.toHaveBeenCalled();
 	});
 });

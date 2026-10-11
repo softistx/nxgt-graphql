@@ -23,6 +23,13 @@ export interface NormalizedCacheOptions {
 	possibleTypes?: PossibleTypes;
 	/** Identities other than `id` (or `_id`), per `__typename`. */
 	keys?: CacheKeys;
+	/**
+	 * Gets an error raised outside the call that caused it: a watch callback
+	 * that throws, or a result the client could not write. Default:
+	 * `console.error`. It never ends the process, and the call that caused
+	 * the error still succeeds.
+	 */
+	onError?: (error: unknown) => void;
 }
 
 /**
@@ -34,9 +41,10 @@ export type EntityRef =
 	| { readonly __typename: string; readonly [field: string]: unknown };
 
 /**
- * Takes a field's stored value and returns the next one; `undefined`
- * removes the field, so the next read that needs it goes to the network.
- * A field holding an entity holds `{ __ref: '<key>' }`.
+ * Takes a copy of a field's stored value and returns the next one, as JSON
+ * (null, a boolean, a number, a string, a plain object or an array);
+ * `undefined` removes the field, so the next read that needs it goes to
+ * the network. A field holding an entity holds `{ __ref: '<key>' }`.
  */
 export type FieldModifier = (current: unknown) => unknown;
 
@@ -63,6 +71,11 @@ export interface FragmentOptions {
  * `cache-first` queries from it.
  */
 export interface GraphQLCache {
+	/**
+	 * Where the client reports a result it could not write to the cache;
+	 * `console.error` when the cache has none. Never throws.
+	 */
+	readonly onError?: (error: unknown) => void;
 	/** The document's result as the cache holds it, or `undefined` when any field is missing. */
 	read<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
@@ -72,8 +85,9 @@ export interface GraphQLCache {
 	): TResult | undefined;
 	/**
 	 * Stores a result for the document, as the server would send it: every
-	 * object carries its `__typename`. All or nothing: a write that throws
-	 * (a `keys` function) changes nothing.
+	 * object carries its `__typename`, every value is JSON (a `Date` or a
+	 * `Map` throws a `TypeError`). All or nothing: a write that throws (a
+	 * `keys` function) changes nothing.
 	 */
 	write<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
@@ -83,9 +97,10 @@ export interface GraphQLCache {
 	 * Calls `callback` with the document's result read afresh (`undefined`
 	 * when incomplete) after a write, evict, modify or reset that changed
 	 * it: once per change, never for another entity, nor when the fields it
-	 * reads came out equal. A callback that throws is reported
-	 * (`reportError`), not thrown into the write. Returns the function that
-	 * stops it. The hook for UI bindings.
+	 * reads came out equal. A callback that throws goes to the cache's
+	 * `onError`, not into the write. A write made from a callback is applied
+	 * at once, and its watches called back once the current round is over.
+	 * Returns the function that stops it. The hook for UI bindings.
 	 */
 	watch<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
@@ -104,7 +119,10 @@ export interface GraphQLCache {
 		ref: EntityRef,
 		options?: FragmentOptions,
 	): TResult | undefined;
-	/** `watch` for a fragment on one entity: the hook for `useFragment`. */
+	/**
+	 * `watch` for a fragment on one entity: the hook for `useFragment`. A
+	 * `ref` with no identity is never called back.
+	 */
 	watchFragment<TResult>(
 		fragment: GraphQLDocument<TResult, never>,
 		ref: EntityRef,
@@ -116,7 +134,9 @@ export interface GraphQLCache {
 	/**
 	 * Rewrites an entity's fields: a modifier named `books` applies to
 	 * every stored `books(…)`, one named `books({"first":10})` to that one
-	 * alone. `false` when the cache did not hold the entity.
+	 * alone. All or nothing: a modifier that throws, or returns a value JSON
+	 * could not hold, changes nothing, notifies nobody, and its error is
+	 * thrown from `modify`. `false` when the cache did not hold the entity.
 	 */
 	modify(
 		ref: EntityRef,

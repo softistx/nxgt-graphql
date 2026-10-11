@@ -148,7 +148,8 @@ try {
 ```
 
 An error thrown by the cache itself after the network answered (a watch
-callback, a `keys` function) never fails the call: it is reported, see
+callback, a `keys` function) never fails the call: it goes to the cache's
+`onError` (default `console.error`), see
 [Errors in the cache](cache.md#errors-in-the-cache).
 
 ## Aborts

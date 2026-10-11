@@ -157,8 +157,13 @@ import { createGraphQLClient, normalizedCache } from '@nxgt/graphql-client';
 const client = createGraphQLClient({
   url: 'https://api.example.com/graphql',
   // possibleTypes: graphql-codegen's fragment-matcher output, for fragments
-  // on interfaces and unions; keys: an identity other than id or _id.
-  cache: normalizedCache({ possibleTypes, keys: { Book: (b) => String(b.isbn) } }),
+  // on interfaces and unions; keys: an identity other than id or _id;
+  // onError: where a watch's error goes (default console.error).
+  cache: normalizedCache({
+    possibleTypes,
+    keys: { Book: (b) => String(b.isbn) },
+    onError: (error) => logger.error(error),
+  }),
 });
 
 await client.query(BookQuery, { id: '1' });                                // network, written
@@ -178,8 +183,10 @@ sets it sends, leaving your documents as they are. `fetchPolicy` is
 `CacheMissError` on a miss) or `no-cache`. `client.cache` offers `read`,
 `write`, `watch` (the hook for UI bindings, called only when the result
 changed), `readFragment` and `watchFragment` (one entity through a fragment
-document), `evict`, `modify` and `reset`. A watch callback or a `keys` function
-that throws is reported, never thrown into the call.
+document), `evict`, `modify` and `reset`. The cache holds JSON as the network
+sends it (a custom scalar stays a string; a `Date` written throws a
+`TypeError`). A watch callback or a `keys` function that throws goes to
+`onError`, never into the call, and never ends the process.
 See [Normalized cache](docs/guide/cache.md).
 
 ## Traps

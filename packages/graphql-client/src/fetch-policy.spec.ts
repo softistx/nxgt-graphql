@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
-import { stubReportError } from '../test/report-error';
 import { normalizedCache } from './cache/normalized-cache';
 import { createGraphQLClient } from './client';
 import { CacheMissError } from './errors';
@@ -144,60 +143,55 @@ describe('fetchPolicy with a cache', () => {
 });
 
 describe('a cache that throws never fails a call', () => {
-	test('a watch that throws after a mutation: mutate resolves, the next watch runs, the error is reported', async () => {
-		const reported = stubReportError();
-		try {
-			const { client, cache } = setup((body) =>
+	test("a watch that throws after a mutation: mutate resolves, the next watch runs, the error goes to the cache's onError", async () => {
+		const reported: unknown[] = [];
+		const { client, cache } = setup(
+			(body) =>
 				body.operationName === 'Book'
 					? { book: book('Dune') }
 					: { rename: book('Arrakis') },
-			);
-			await client.query(BookQuery, { id: '1' });
-			const failure = new Error('render failed');
-			cache.watch(BookQuery, { id: '1' }, () => {
-				throw failure;
-			});
-			const second: unknown[] = [];
-			cache.watch(BookQuery, { id: '1' }, (data) => second.push(data));
-			expect(
-				await client.mutate(RenameMutation, { id: '1', title: 'Arrakis' }),
-			).toEqual({ rename: book('Arrakis') });
-			expect(second).toEqual([{ book: book('Arrakis') }]);
-			expect(reported.errors).toEqual([failure]);
-		} finally {
-			reported.restore();
-		}
+			normalizedCache({ onError: (error) => reported.push(error) }),
+		);
+		await client.query(BookQuery, { id: '1' });
+		const failure = new Error('render failed');
+		cache.watch(BookQuery, { id: '1' }, () => {
+			throw failure;
+		});
+		const second: unknown[] = [];
+		cache.watch(BookQuery, { id: '1' }, (data) => second.push(data));
+		expect(
+			await client.mutate(RenameMutation, { id: '1', title: 'Arrakis' }),
+		).toEqual({ rename: book('Arrakis') });
+		expect(second).toEqual([{ book: book('Arrakis') }]);
+		expect(reported).toEqual([failure]);
 	});
 
 	test('a keys function that throws: the query and the mutation return the network’s data, the cache is unchanged', async () => {
-		const reported = stubReportError();
-		try {
-			const failure = new Error('no isbn');
-			const cache = normalizedCache({
-				keys: {
-					Book: () => {
-						throw failure;
-					},
+		const reported: unknown[] = [];
+		const failure = new Error('no isbn');
+		const cache = normalizedCache({
+			onError: (error) => reported.push(error),
+			keys: {
+				Book: () => {
+					throw failure;
 				},
-			});
-			const { client } = setup(
-				(body) =>
-					body.operationName === 'Book'
-						? { book: book('Dune') }
-						: { rename: book('Arrakis') },
-				cache,
-			);
-			expect(await client.query(BookQuery, { id: '1' })).toEqual({
-				book: book('Dune'),
-			});
-			expect(
-				await client.mutate(RenameMutation, { id: '1', title: 'Arrakis' }),
-			).toEqual({ rename: book('Arrakis') });
-			expect(reported.errors).toEqual([failure, failure]);
-			expect(cache.read(BookQuery, { id: '1' })).toBeUndefined();
-		} finally {
-			reported.restore();
-		}
+			},
+		});
+		const { client } = setup(
+			(body) =>
+				body.operationName === 'Book'
+					? { book: book('Dune') }
+					: { rename: book('Arrakis') },
+			cache,
+		);
+		expect(await client.query(BookQuery, { id: '1' })).toEqual({
+			book: book('Dune'),
+		});
+		expect(
+			await client.mutate(RenameMutation, { id: '1', title: 'Arrakis' }),
+		).toEqual({ rename: book('Arrakis') });
+		expect(reported).toEqual([failure, failure]);
+		expect(cache.read(BookQuery, { id: '1' })).toBeUndefined();
 	});
 });
 

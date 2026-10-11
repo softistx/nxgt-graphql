@@ -1,7 +1,7 @@
 import { Changes } from './changes';
 import { fieldNameOf } from './field-key';
 import type { FieldModifier } from './types';
-import { equal, type StoreObject } from './values';
+import { assertJson, equal, type StoreObject } from './values';
 
 /**
  * The entities by key, each a record of fields by field key, and what
@@ -37,23 +37,29 @@ export class EntityStore {
 		return true;
 	}
 
+	/**
+	 * All or nothing: every modifier runs, and each next value is checked,
+	 * before any field changes, so a modifier that throws (or returns a
+	 * value JSON could not hold) changes nothing and records no change.
+	 */
 	modify(
 		key: string,
 		modifiers: Readonly<Record<string, FieldModifier>>,
 	): boolean {
 		const entity = this.#entities.get(key);
 		if (!entity) return false;
+		const nexts: [field: string, next: unknown][] = [];
 		for (const field of Object.keys(entity)) {
-			const modifier = Object.hasOwn(modifiers, field)
-				? modifiers[field]
-				: Object.hasOwn(modifiers, fieldNameOf(field))
-					? modifiers[fieldNameOf(field)]
-					: undefined;
+			const modifier = modifierFor(modifiers, field);
 			if (!modifier) continue;
 			const next = modifier(structuredClone(entity[field]));
+			if (next !== undefined) assertJson(next, field);
+			nexts.push([field, next]);
+		}
+		for (const [field, next] of nexts) {
 			if (next === undefined) delete entity[field];
 			else if (equal(entity[field], next)) continue;
-			else entity[field] = next;
+			else entity[field] = structuredClone(next);
 			this.#changes.field(key, field);
 		}
 		return true;
@@ -70,6 +76,16 @@ export class EntityStore {
 		this.#changes = new Changes();
 		return changes;
 	}
+}
+
+/** The modifier for a field key: by the full key, else by the field's name. */
+function modifierFor(
+	modifiers: Readonly<Record<string, FieldModifier>>,
+	field: string,
+): FieldModifier | undefined {
+	if (Object.hasOwn(modifiers, field)) return modifiers[field];
+	const name = fieldNameOf(field);
+	return Object.hasOwn(modifiers, name) ? modifiers[name] : undefined;
 }
 
 /** What a write reads and merges into: the store, or a staging over it. */

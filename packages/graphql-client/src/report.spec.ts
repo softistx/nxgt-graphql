@@ -1,34 +1,52 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { reportError } from './report';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { parse } from 'graphql';
+import type { GraphQLCache } from './cache/types';
+import { logError, writeToCache } from './report';
 
-type Globals = {
-	reportError?: ((error: unknown) => void) | undefined;
-	queueMicrotask: (task: () => void) => void;
-};
-const globals = globalThis as unknown as Globals;
-const { reportError: originalReport, queueMicrotask: originalQueue } = globals;
+const Viewer = parse('{ viewer { id } }') as TypedDocumentNode<unknown, never>;
 
-afterEach(() => {
-	globals.reportError = originalReport;
-	globals.queueMicrotask = originalQueue;
-});
+/** A cache whose write always throws `failure`. */
+function failing(failure: Error, onError?: (error: unknown) => void) {
+	return {
+		onError,
+		write: () => {
+			throw failure;
+		},
+	} as unknown as GraphQLCache;
+}
 
-describe('reportError', () => {
-	test('hands the error to globalThis.reportError when there is one', () => {
-		const report = mock();
-		globals.reportError = report;
-		const error = new Error('boom');
-		reportError(error);
-		expect(report).toHaveBeenCalledWith(error);
+describe('writeToCache', () => {
+	test("a write that throws goes to the cache's onError, never to the caller", () => {
+		const failure = new Error('no isbn');
+		const onError = mock();
+		expect(() =>
+			writeToCache(failing(failure, onError), Viewer, {}, {}),
+		).not.toThrow();
+		expect(onError).toHaveBeenCalledWith(failure);
 	});
 
-	test('else throws it from a microtask, outside the caller', () => {
-		globals.reportError = undefined;
-		const tasks: (() => void)[] = [];
-		globals.queueMicrotask = (task) => tasks.push(task);
-		const error = new Error('boom');
-		expect(() => reportError(error)).not.toThrow();
-		expect(tasks).toHaveLength(1);
-		expect(() => tasks[0]?.()).toThrow(error);
+	test('a cache with no onError: logged with console.error', () => {
+		const logged = spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			const failure = new Error('no isbn');
+			writeToCache(failing(failure), Viewer, {}, {});
+			expect(logged).toHaveBeenCalledWith(failure);
+		} finally {
+			logged.mockRestore();
+		}
+	});
+});
+
+describe('logError', () => {
+	test('logs with console.error and never throws', () => {
+		const logged = spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			const failure = new Error('boom');
+			expect(() => logError(failure)).not.toThrow();
+			expect(logged).toHaveBeenCalledWith(failure);
+		} finally {
+			logged.mockRestore();
+		}
 	});
 });

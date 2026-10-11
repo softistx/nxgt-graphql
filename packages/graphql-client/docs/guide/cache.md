@@ -26,13 +26,14 @@ for one request and nothing more. The client does not enforce this.
 ## Options
 
 ```ts
-normalizedCache({ possibleTypes?, keys? }): GraphQLCache
+normalizedCache({ possibleTypes?, keys?, onError? }): GraphQLCache
 ```
 
 | Option | Type | Default | Effect |
 | --- | --- | --- | --- |
 | `possibleTypes` | `{ [interfaceOrUnion]: string[] }` | none | the object types each interface and union stands for, so a fragment on an abstract type matches exactly; see [Fragments on interfaces and unions](#fragments-on-interfaces-and-unions) |
 | `keys` | `{ [typename]: (object) => string \| null }` | none | an identity other than `id` for a type; see [Identity](#identity) |
+| `onError` | `(error: unknown) => void` | `console.error` | gets a watch callback's error and a result the client could not write; see [Errors in the cache](#errors-in-the-cache) |
 
 ## Identity
 
@@ -155,6 +156,26 @@ without a cache.
 - **A subscription's results are not written** (see the
   [roadmap](../roadmap.md)).
 
+### JSON only
+
+The cache holds JSON as the network sends it: null, booleans, numbers,
+strings, plain objects and arrays. A custom scalar arrives as a string (a
+`DateTime` as `'1965-08-01T00:00:00.000Z'`) and is stored as that string; turn
+it into a `Date` where you show it, after `read` or in a `watch` callback.
+
+A `write` (or a `modify`) given anything else, such as a `Date`, a `Map` or a
+class instance, throws a `TypeError` and changes nothing
+([troubleshooting](../troubleshooting.md#the-cache-holds-json-field-field-holds-a-type)).
+
+```ts
+cache.write(BookQuery, { id: '1' }, {
+  book: { __typename: 'Book', id: '1', published: '1965-08-01' }, // stored
+});
+cache.write(BookQuery, { id: '1' }, {
+  book: { __typename: 'Book', id: '1', published: new Date() }, // TypeError
+});
+```
+
 A mutation that creates or deletes an entity does not change the lists that
 should hold it: update them with [`modify`](#modify) or [`evict`](#evict), or
 run the query again with `network-only`.
@@ -182,15 +203,11 @@ normalizedCache({ possibleTypes: introspection.possibleTypes });
 
 Given `possibleTypes`, a type condition it does not list is taken as an object
 type, which matches only itself. Without `possibleTypes`, a fragment on another
-type is written when its fields are present, and read only when all its fields
-are in the cache; pass `possibleTypes` when your documents spread fragments on
-abstract types.
-
-Without `possibleTypes`, a fragment whose condition is another object type (a
-sibling of the object's own type, `... on Thing` on a `Box`) is undecided just
-the same: its fields are merged into the result when the entity holds them all.
-A field both select is merged too: objects field by field, and two lists of
-the same length item by item.
+type (an interface, a union, or a sibling object type: `... on Thing` on a
+`Box`) is written when its fields are present, and read only when all its
+fields are in the cache; its fields are then merged into the result, objects
+field by field and two lists of the same length item by item. Pass
+`possibleTypes` when your documents spread fragments on abstract types.
 
 `@include` and `@skip` are applied from the variables: a skipped field is not
 written, and not needed for a `cache-first` hit.
@@ -202,6 +219,7 @@ takes the client preset's documents and is typed from them.
 
 ```ts
 interface GraphQLCache {
+  onError?: (error: unknown) => void;
   read(document, variables?): TResult | undefined;
   write(document, variables?, data: TResult): void;
   watch(document, variables?, callback: (data: TResult | undefined) => void): () => void;
@@ -259,6 +277,13 @@ value and returns the next one; returning `undefined` removes the field. A
 field holding an entity holds `{ __ref: '<key>' }`, and the root fields of
 queries live on the entity `ROOT_QUERY`.
 
+`modify` is all or nothing, as `write` is: every modifier runs first, then
+the fields change together. A modifier that throws, or that returns a value
+that is not [JSON](#json-only), changes nothing, calls no watch, and its error
+is thrown from `modify`: it is your call, not the network's. The value
+returned is stored as a copy, so changing it afterwards does not reach the
+cache.
+
 ```ts
 const { addBook } = await client.mutate(AddBook, { title: 'Emma' });
 cache.modify('ROOT_QUERY', {
@@ -295,6 +320,18 @@ stop();
   callback runs when the missing fields arrive.
 - A callback that throws does not stop the others, nor the write that caused
   it: see [Errors in the cache](#errors-in-the-cache).
+- A callback may write (`write`, `modify`, `evict`, `reset`): the change
+  applies at once, and the watches it touches are called back once the current
+  round is over. Callbacks run one after the other, each to its end, and every
+  watch ends on the newest data.
+
+```ts
+cache.watch(BookQuery, { id: '1' }, (data) => {
+  // called with 'Dune', then with 'Dune (2nd ed.)', never nested
+  if (data?.book?.title === 'Dune')
+    cache.modify('Book:1', { title: (title) => `${title} (2nd ed.)` });
+});
+```
 
 ### `readFragment` and `watchFragment`
 
@@ -322,7 +359,8 @@ const stop = cache.watchFragment(BookCard, 'Book:1', (book) => render(book));
   first. `variables` are those the fragment's arguments read
   (`cover(size: $size)`).
 - `watchFragment` behaves as `watch`: called back once per batch, only when the
-  fragment's result changed.
+  fragment's result changed. A `ref` with no identity (`{ __typename: 'Book' }`
+  without its `id`) names no entity, so its watch is never called back.
 - A document with no fragment throws `The document holds no fragment`, and an
   unknown `fragmentName` `The document has no fragment <name>`
   ([troubleshooting](../troubleshooting.md#the-document-holds-no-fragment)).
@@ -338,19 +376,28 @@ cache.reset();
 
 ## Errors in the cache
 
-A call that succeeded on the network never rejects because of the cache:
+A call that succeeded on the network never rejects because of the cache, and
+an error the cache meets outside the call that caused it never ends the
+process (Bun and Node end on an uncaught error):
 
-- A watch callback that throws is **reported**, not thrown: through
-  `globalThis.reportError` where it exists (a browser logs it as an uncaught
-  error and fires the window's `error` event), else thrown from a microtask.
-  The other watches still run, and the write stands.
-- A write that throws, such as a `keys` function, changes nothing (writes are
-  all or nothing), is reported the same way, and the query or the mutation
-  still returns the network's data.
+- A watch callback that throws goes to the cache's `onError`. The other
+  watches still run, and the write that caused it stands.
+- A write the client makes after a query or a mutation that throws (a `keys`
+  function, a value that is not [JSON](#json-only)) changes nothing (writes
+  are all or nothing), goes to `onError` the same way, and the call still
+  returns the network's data.
+
+`onError` defaults to `console.error`. Pass your own to send these errors to
+your logger or error tracker:
 
 ```ts
-window.addEventListener('error', (event) => logger.error(event.error));
+const cache = normalizedCache({
+  onError: (error) => logger.error({ err: error }, 'cache'),
+});
 ```
+
+`write`, `modify`, `evict` and `reset` called by your own code are direct
+calls: what they throw is thrown to you, not to `onError`.
 
 ## Limits
 

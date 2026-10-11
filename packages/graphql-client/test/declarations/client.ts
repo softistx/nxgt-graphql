@@ -115,8 +115,26 @@ export function writeViewer() {
 	cache.write(Viewer, { viewer: { id: 'u' } });
 	// @ts-expect-error: Rename requires its variables
 	cache.write(Rename, { rename: true });
+	// @ts-expect-error: the data must have the document's shape
+	cache.write(Viewer, { viewer: { id: 1 } });
+	// @ts-expect-error: a variable the document does not declare
+	cache.write(Rename, { name: 'a', extra: 1 }, { rename: true });
 	cache.evict('User:u');
 	cache.reset();
+}
+
+// What the cache's types refuse.
+export function refusals() {
+	// @ts-expect-error: Rename requires its variables
+	cache.watch(Rename, (data) => data?.rename);
+	// @ts-expect-error: a variable the document does not declare
+	cache.watch(Rename, { name: 'a', extra: 1 }, (data) => data?.rename);
+	cache.watchFragment(
+		BookCard,
+		'Book:1',
+		// @ts-expect-error: the callback gets the fragment's data, not another shape
+		(data: { pages: number } | undefined) => data?.pages,
+	);
 }
 
 export const persisted: PersistedQueries = { mode: 'apq' };

@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -558,8 +558,8 @@ packages/graphql-client/src/
   run.ts         run (a query through the cache, a mutation then its write, the hook on
                  failure), sendQuery (dedupe, then batch) and operationFor (the kind check):
                  plain functions over the data-only ClientContext
-  report.ts      reportError (globalThis.reportError, else a microtask's throw) and
-                 writeToCache (a result written, a throw reported, never the caller's)
+  report.ts      logError (the default onError: console.error) and writeToCache (a
+                 result written, a throw to the cache's onError, never the caller's)
   options.ts     the option and client types (url or http shape, QueryRetry, NoInfer variables)
   send.ts        one operation sent (APQ's register resend included), and post: one POST of a
                  body or a batch's array, its headers, signal, timeout, retry; errors mapped
@@ -599,12 +599,15 @@ packages/graphql-client/src/
     write.ts            writeResult: normalizes a result into the store
     read.ts             readResult and readEntity (an operation's root, a fragment's entity):
                         denormalize a result and record its dependencies
-    store.ts            EntityStore: entities by key, merge, evict, modify, clear, takeChanges;
-                        StagedWrites: a write held aside, then committed whole
+    store.ts            EntityStore: entities by key, merge, evict, modify (every next computed
+                        and checked, then applied), clear, takeChanges; StagedWrites: a write
+                        held aside, then committed whole
     changes.ts          Changes (what a batch changed) and Dependencies (what a read used)
     watchers.ts         Watchers: each watch refreshed once per batch that touched it, a throw
-                        reported and the next watch still run
-    values.ts           Reference, StoreObject, equal, deepMerge
+                        to onError and the next watch still run; a batch made by a callback
+                        queued until the current one is over
+    values.ts           Reference, StoreObject, isPlainObject (prototype Object.prototype or
+                        null), assertJson, equal, deepMerge
 ```
 
 ### Invariants
@@ -679,13 +682,27 @@ packages/graphql-client/src/
   writes, is one batch; a write that leaves a value equal records no change,
   and a refresh whose result is `equal` to the last one calls nothing. A
   subscription's `next` is not written.
-- **A call that succeeded on the network never rejects because of the cache**:
-  a watch callback that throws is reported (`reportError`: `globalThis.reportError`,
-  else a microtask's throw), never thrown into the write, and the other watches
-  still run; a cache write that throws (a `keys` function) is reported and the
-  caller gets the network's data. A `write` is atomic: staged in
+- **A call that succeeded on the network never rejects because of the cache,
+  and a cache error never ends the process**: a watch callback that throws
+  goes to the cache's `onError` (`normalizedCache({ onError })`, default
+  `console.error`), never thrown into the write, and the other watches still
+  run; a write the client makes that throws (a `keys` function, a non-JSON
+  value) goes to `cache.onError` (`logError` for a cache without one) and the
+  caller gets the network's data. Never `globalThis.reportError` nor a
+  microtask's throw: Bun and Node end on those. Specs stub through the
+  `onError` option, never through globals. A `write` is atomic: staged in
   `StagedWrites`, committed whole, so one that throws changes nothing and
-  notifies nobody.
+  notifies nobody. `modify` is atomic too: every modifier runs and every next
+  is checked before a field changes; what a modifier throws is thrown from
+  `modify` (a direct call), and the next is stored as a copy.
+- **The cache holds JSON only**: a value that is not null, a boolean, a
+  number, a string, a plain object or an array is refused at `write` and
+  `modify` with `The cache holds JSON: field <field> holds a <type>`.
+  `equal` compares by content only arrays and objects whose prototype is
+  `Object.prototype` or `null`; anything else by `Object.is`.
+- **Watch callbacks never nest**: a batch made from a callback is queued by
+  `Watchers.notify` and run once the current one is over, so callbacks run
+  in order, each whole, and every watch ends on the newest data.
 - **An aborted signal wins over a cache hit**: `queryThrough` calls
   `signal.throwIfAborted()` before reading the cache, for `cache-first` and
   `cache-only` (hit or miss), so the call rejects with the signal's reason.

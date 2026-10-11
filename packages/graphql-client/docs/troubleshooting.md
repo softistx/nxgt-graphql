@@ -21,6 +21,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`fetchPolicy 'cache-only' needs a cache: pass cache: normalizedCache() to createGraphQLClient`](#fetchpolicy-cache-only-needs-a-cache-pass-cache-normalizedcache-to-creategraphqlclient)
 - [`With a cache, a persisted document needs __typename in every selection set: add the client preset's addTypenameSelectionDocumentTransform to its documentTransforms`](#with-a-cache-a-persisted-document-needs-__typename-in-every-selection-set-add-the-client-presets-addtypenameselectiondocumenttransform-to-its-documenttransforms)
 - [`The cache stores an operation's data: an object`](#the-cache-stores-an-operations-data-an-object)
+- [`The cache holds JSON: field <field> holds a <type>`](#the-cache-holds-json-field-field-holds-a-type)
 - [`The document has no fragment <name>`](#the-document-has-no-fragment-name)
 - [`The document holds no fragment`](#the-document-holds-no-fragment)
 - [A `cache-first` query that always goes to the network](#a-cache-first-query-that-always-goes-to-the-network)
@@ -344,6 +345,28 @@ object (`null`, a list, a string). A `TypeError`.
 
 ```ts
 cache.write(BookQuery, { id: '1' }, { book: { __typename: 'Book', id: '1', title: 'Dune' } });
+```
+
+## `The cache holds JSON: field <field> holds a <type>`
+
+**When:** `cache.write` (or `cache.modify`, through a modifier's return
+value) is given a value that is not null, a boolean, a number, a string, a
+plain object or an array: `holds a Date`, `holds a Map`, `holds undefined`,
+`holds a Book` for a class instance. `<field>` is the stored field it was given
+for. A `TypeError`, and the cache is left as it was. When the client itself
+writes a result, the error goes to the cache's `onError` and the call still
+returns its data.
+**Why:** the cache holds JSON as the network sends it, and compares values as
+JSON: two `Date`s, or two `Map`s, could not be told equal or different. A
+custom scalar arrives from the network as a string, and is stored as one.
+**Fix:** write the value as the server sends it, and convert it where you show
+it:
+
+```ts
+cache.write(BookQuery, { id: '1' }, {
+  book: { __typename: 'Book', id: '1', published: date.toISOString() },
+});
+const published = new Date(cache.read(BookQuery, { id: '1' })!.book.published);
 ```
 
 ## `The document has no fragment <name>`

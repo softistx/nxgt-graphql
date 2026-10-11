@@ -1,4 +1,5 @@
 import { fragmentNodeOf, type GraphQLDocument, operationOf } from '../document';
+import { logError } from '../report';
 import { Dependencies } from './changes';
 import { identify } from './identity';
 import { type ReadResult, readEntity, readResult } from './read';
@@ -46,12 +47,15 @@ export function normalizedCache(
 }
 
 class NormalizedCache implements GraphQLCache {
+	readonly onError: (error: unknown) => void;
 	readonly #store = new EntityStore();
-	readonly #watchers = new Watchers();
+	readonly #watchers: Watchers;
 	readonly #keys: CacheKeys | undefined;
 	readonly #matches: TypeMatcher;
 
-	constructor({ possibleTypes, keys }: NormalizedCacheOptions) {
+	constructor({ possibleTypes, keys, onError }: NormalizedCacheOptions) {
+		this.onError = onError ?? logError;
+		this.#watchers = new Watchers(this.onError);
 		this.#keys = keys;
 		this.#matches = typeMatcher(possibleTypes);
 	}
@@ -129,11 +133,10 @@ class NormalizedCache implements GraphQLCache {
 		fields: Readonly<Record<string, FieldModifier>>,
 	): boolean {
 		const key = this.#keyOf(ref);
-		try {
-			return key !== undefined && this.#store.modify(key, fields);
-		} finally {
-			this.#flush();
-		}
+		// All or nothing: a modifier that throws changed nothing to flush.
+		const modified = key !== undefined && this.#store.modify(key, fields);
+		this.#flush();
+		return modified;
 	}
 
 	reset(): void {

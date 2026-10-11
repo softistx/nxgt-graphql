@@ -6,8 +6,46 @@ export interface Reference {
 	readonly __ref: string;
 }
 
+/** An object as JSON makes it: its prototype `Object.prototype` or `null`. */
 export function isPlainObject(value: unknown): value is StoreObject {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
+	if (typeof value !== 'object' || value === null) return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Refuses a value JSON could not hold: the cache holds JSON as the network
+ * sends it (a custom scalar arrives as a string). `field` names the field
+ * key the value was given for, in the error.
+ */
+export function assertJson(value: unknown, field: string): void {
+	if (
+		value === null ||
+		typeof value === 'string' ||
+		typeof value === 'number' ||
+		typeof value === 'boolean'
+	)
+		return;
+	if (Array.isArray(value)) {
+		for (const item of value) assertJson(item, field);
+		return;
+	}
+	if (isPlainObject(value)) {
+		for (const item of Object.values(value)) assertJson(item, field);
+		return;
+	}
+	throw new TypeError(
+		`The cache holds JSON: field ${field} holds ${kindOf(value)}`,
+	);
+}
+
+/** What a non-JSON value is, for an error: `a Date`, `undefined`, `a function`. */
+function kindOf(value: unknown): string {
+	if (value === undefined) return 'undefined';
+	if (typeof value !== 'object') return `a ${typeof value}`;
+	const name = (value as { constructor?: { name?: unknown } }).constructor
+		?.name;
+	return typeof name === 'string' && name !== '' ? `a ${name}` : 'an object';
 }
 
 export function isReference(value: unknown): value is Reference {
@@ -18,7 +56,11 @@ export function isReference(value: unknown): value is Reference {
 	);
 }
 
-/** Two stored values alike in every field: a write that changes nothing notifies nobody. */
+/**
+ * Two stored values alike in every field: a write that changes nothing
+ * notifies nobody. Arrays and plain objects compare by content; anything
+ * else (a `Date`, a `Map`) by `Object.is`.
+ */
 export function equal(a: unknown, b: unknown): boolean {
 	if (Object.is(a, b)) return true;
 	if (Array.isArray(a)) {

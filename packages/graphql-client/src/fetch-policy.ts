@@ -26,8 +26,8 @@ type AnyDocument = GraphQLDocument<unknown, never>;
 
 /**
  * What the network returned is what the caller gets: the cache only keeps a
- * copy, and a write that throws is reported, not thrown. A signal already
- * aborted wins over a cache hit.
+ * copy, and a write that throws goes to the cache's `onError`, not to the
+ * caller. A signal already aborted wins over a cache hit.
  */
 export async function queryThrough(
 	cache: GraphQLCache | undefined,

@@ -4,7 +4,12 @@ import { identify } from './identity';
 import { collectFields, subSelections, type Walk } from './selection';
 import type { EntityWrites } from './store';
 import type { CacheKeys } from './types';
-import { isPlainObject, isReference, type StoreObject } from './values';
+import {
+	assertJson,
+	isPlainObject,
+	isReference,
+	type StoreObject,
+} from './values';
 
 interface Writer extends Walk {
 	readonly store: EntityWrites;
@@ -16,7 +21,9 @@ interface Writer extends Walk {
  * identity becomes an entity, merged field by field into what the store
  * held; the others are stored inside their parent. A query's root fields
  * are kept under its root key; a mutation's and a subscription's are not
- * (their arguments may hold secrets), only the entities they return.
+ * (their arguments may hold secrets), only the entities they return. A
+ * value JSON could not hold (a `Date`, a `Map`) is refused with a
+ * `TypeError`: the cache holds JSON as the network sends it.
  */
 export function writeResult(writer: Writer, data: unknown): void {
 	if (!isPlainObject(data))
@@ -76,23 +83,39 @@ function writeFields(
 		if (!Object.hasOwn(data, responseKey)) continue;
 		const key = fieldKey(nodes[0] as FieldNode, writer.variables);
 		const sets = subSelections(nodes);
-		entries[key] = writeValue(writer, data[responseKey], sets, previous?.[key]);
+		entries[key] = writeValue(
+			writer,
+			data[responseKey],
+			key,
+			sets,
+			previous?.[key],
+		);
 	}
 	return entries;
 }
 
+/** `field` is the field key the value is written under, for a refusal's message. */
 function writeValue(
 	writer: Writer,
 	value: unknown,
+	field: string,
 	sets: readonly SelectionSetNode[],
 	existing: unknown,
 ): unknown {
 	if (value === undefined || value === null) return null;
 	// A leaf: a scalar's value, a JSON one included, kept as it came.
-	if (sets.length === 0) return structuredClone(value);
+	if (sets.length === 0) {
+		assertJson(value, field);
+		return structuredClone(value);
+	}
 	if (Array.isArray(value))
-		return value.map((item) => writeValue(writer, item, sets, undefined));
-	if (!isPlainObject(value)) return value;
+		return value.map((item) =>
+			writeValue(writer, item, field, sets, undefined),
+		);
+	if (!isPlainObject(value)) {
+		assertJson(value, field);
+		return value;
+	}
 	return writeObject(writer, value, sets, existing);
 }
 
