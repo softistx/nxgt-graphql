@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.6.1
+
+### Patch Changes
+
+- [#72](https://github.com/softistx/nxgt-graphql/pull/72) [`c4e214e`](https://github.com/softistx/nxgt-graphql/commit/c4e214e980e10041fa987e8af1d5bf13df5dd8ea) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The `typescript` peer now accepts TypeScript 7 as well (`^6.0.3 || ^7.0.0`). The declarations are checked under both; nothing in these packages calls the TypeScript API at runtime.
+
 ## 0.6.0
 
 ### Minor Changes
