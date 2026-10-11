@@ -89,6 +89,30 @@ try {
 
 See [Errors](docs/guide/errors.md).
 
+### Persisted queries and batching
+
+Both are off by default, and both need the server set up for them.
+
+```ts
+const client = createGraphQLClient({
+  url: 'https://api.example.com/graphql',
+  // { mode: 'documentId' }: the client preset's persistedDocuments hash
+  // (graphql-yoga's usePersistedOperations); { mode: 'apq' }: Automatic
+  // Persisted Queries, registered on first use (an APQ plugin).
+  persisted: { mode: 'apq' },
+  // Queries issued together posted as one array (graphql-yoga's batching: true).
+  batch: { max: 10, wait: 0 },
+});
+```
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `persisted` | `false` | `{ mode: 'documentId' }` sends `documentId` with no text; `{ mode: 'apq' }` sends the text's SHA-256, and the text once when the server does not hold it |
+| `batch` | `false` | `{ max?: 10, wait?: 0 }`: queries with the same per-call options share one request; a mutation is sent alone |
+
+See [Persisted queries](docs/guide/client.md#persisted-queries) and
+[Batching](docs/guide/client.md#batching).
+
 ## Traps
 
 - **Never share a client between users on a server.** Headers carry the user's
@@ -97,7 +121,11 @@ See [Errors](docs/guide/errors.md).
   effects idempotent; a GraphQL-level 401 on an HTTP 200 gets no refresh (see
   [Errors](docs/guide/errors.md#onunauthenticated)).
 - **A mutation is never retried**, and `query()` refuses a mutation document
-  (and `mutate()` a query) with a `TypeError`.
+  (and `mutate()` a query) with a `TypeError`. The one second post of a
+  mutation is APQ's registration, after the server answered
+  `PersistedQueryNotFound` without running it.
+- **`documentId` mode needs the client preset's `persistedDocuments`**: a
+  document without its hash throws a `TypeError` before anything is sent.
 - **Identical in-flight queries share one request.** Pass `dedupe: false` to
   turn it off.
 

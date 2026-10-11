@@ -11,22 +11,38 @@ import {
 	ApiUnavailableError,
 } from './errors';
 
-/** A response's `data`, or the error it stands for. */
-export function dataOf(reply: AnyReply): unknown {
-	const body = isRecord(reply.data) ? reply.data : undefined;
-	const errors = body?.['errors'];
+/**
+ * A response's `data`, or the error it stands for: `body` is the reply's,
+ * or one entry of a batch's reply, and `status` the reply's HTTP status.
+ */
+export function dataOf(body: unknown, status: number): unknown {
+	const record = isRecord(body) ? body : undefined;
+	const errors = record?.['errors'];
 	if (Array.isArray(errors) && errors.length > 0) {
 		throw new ApiError(
 			errors as ApiErrorEntry[],
-			body?.['data'] ?? undefined,
-			reply.status,
+			record?.['data'] ?? undefined,
+			status,
 		);
 	}
-	if (!isSuccess(reply.status))
-		throw new ApiStatusError(reply.status, reply.data);
-	const data = body?.['data'];
+	if (!isSuccess(status)) throw new ApiStatusError(status, body);
+	const data = record?.['data'];
 	if (data == null) throw new ApiUnavailableError('invalid-response');
 	return data;
+}
+
+/**
+ * What a whole reply stands for when it is not the answer expected, such as
+ * a batch's reply that is not an array of its length: its own error, else an
+ * invalid response.
+ */
+export function replyError(reply: AnyReply): unknown {
+	try {
+		dataOf(reply.data, reply.status);
+	} catch (error) {
+		return error;
+	}
+	return new ApiUnavailableError('invalid-response');
 }
 
 /** What the transport threw, as this package's errors; anything else as it is. */
@@ -39,7 +55,7 @@ export function transportError(error: unknown): unknown {
 	if (error instanceof ValidationError && error.failure.kind === 'response') {
 		const { status } = error.failure;
 		if (status !== undefined && !isSuccess(status))
-			return new ApiStatusError(status, undefined);
+			return new ApiStatusError(status, undefined, { cause: error });
 		return new ApiUnavailableError('invalid-response', { cause: error });
 	}
 	return error;

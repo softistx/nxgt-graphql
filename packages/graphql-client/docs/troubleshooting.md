@@ -5,6 +5,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`query() was given a mutation`](#query-was-given-a-mutation)
 - [`mutate() was given a query`](#mutate-was-given-a-query)
 - [`The document holds no operation`](#the-document-holds-no-operation)
+- [`The document carries no persisted hash: enable persistedDocuments in the client preset`](#the-document-carries-no-persisted-hash-enable-persisteddocuments-in-the-client-preset)
 - [`The API answered <status> with no GraphQL response`](#the-api-answered-status-with-no-graphql-response)
 - [`The API could not be reached`](#the-api-could-not-be-reached)
 - [`The API did not answer in time`](#the-api-did-not-answer-in-time)
@@ -33,14 +34,50 @@ await client.query(UserQuery, { id: '42' });
 ## `The document holds no operation`
 
 **When:** a `TypedDocumentNode` (or a string) holds only fragments or
-definitions, no `query` or `mutation`. A `TypeError`.
+definitions, no `query` or `mutation`; or the document is the client preset's
+hash-only object (`persistedDocuments: { mode: 'replaceDocumentWithHash' }`).
+A `TypeError`.
 **Why:** the client has nothing to send. Often a fragment was passed instead of
-the operation that uses it.
+the operation that uses it. A hash-only document holds no text to read the
+operation's name and kind from.
 **Fix:**
 
 ```ts
 await client.query(UserQuery, { id: '42' }); // the operation, not UserFragment
 ```
+
+For persisted documents, keep the preset's default mode, which embeds the
+hash in the full document:
+
+```ts
+presetConfig: { persistedDocuments: true } // mode: 'embedHashInDocument'
+```
+
+## `The document carries no persisted hash: enable persistedDocuments in the client preset`
+
+**When:** the client has `persisted: { mode: 'documentId' }` and a call is
+given a document with no `__meta__.hash`. A `TypeError`, thrown before
+anything is sent.
+**Why:** `documentId` mode sends the hash the client preset's
+`persistedDocuments` writes on each document, never the text. Without that
+option, or with another `hashPropertyName` than `hash`, there is no hash to
+send.
+**Fix:** enable it in the client preset, keep `hashPropertyName` at its
+default, and regenerate:
+
+```ts
+// codegen.ts
+const config = {
+  generates: {
+    'src/gql/': {
+      preset: 'client',
+      presetConfig: { persistedDocuments: true },
+    },
+  },
+};
+```
+
+Or use `persisted: { mode: 'apq' }`, which needs no codegen setup.
 
 ## `The API answered <status> with no GraphQL response`
 

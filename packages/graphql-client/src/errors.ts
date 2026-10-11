@@ -105,8 +105,8 @@ export class ApiStatusError extends Error {
 	/** The body, read by its media type, when there was one. */
 	readonly body: unknown;
 
-	constructor(status: number, body: unknown) {
-		super(`The API answered ${status} with no GraphQL response`);
+	constructor(status: number, body: unknown, options?: ErrorOptions) {
+		super(`The API answered ${status} with no GraphQL response`, options);
 		this.status = status;
 		this.body = body;
 	}

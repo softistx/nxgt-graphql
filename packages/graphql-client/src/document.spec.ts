@@ -5,7 +5,10 @@ import { operationOf } from './document';
 /** Like the client preset's `TypedDocumentString`: a String that carries its type. */
 class TypedDocumentString<TResult, TVariables> extends String {
 	declare __apiType?: (variables: TVariables) => TResult;
-	constructor(private readonly value: string) {
+	constructor(
+		private readonly value: string,
+		public __meta__?: Record<string, unknown>,
+	) {
 		super(value);
 	}
 	override toString(): string {
@@ -69,6 +72,22 @@ describe('operationOf', () => {
 		expect(operationOf(typed as never)).toBe(operationOf(typed as never));
 		expect(operationOf('query C { c }' as never)).toBe(
 			operationOf('query C { c }' as never),
+		);
+	});
+
+	test("the client preset's persisted hash is read from __meta__", () => {
+		const node = Object.assign(parse('query H { h }'), {
+			__meta__: { hash: 'abc123' },
+		});
+		expect(operationOf(node as never).hash).toBe('abc123');
+		const typed = new TypedDocumentString('query I { i }', { hash: 'def456' });
+		expect(operationOf(typed as never).hash).toBe('def456');
+		expect(operationOf(parse('query J { j }') as never).hash).toBeUndefined();
+	});
+
+	test('a hash-only document holds no operation', () => {
+		expect(() => operationOf({ __meta__: { hash: 'abc' } } as never)).toThrow(
+			new TypeError('The document holds no operation'),
 		);
 	});
 });

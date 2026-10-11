@@ -615,6 +615,7 @@ describe('transport failures', () => {
 		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(ApiStatusError);
 		expect((error as ApiStatusError).status).toBe(502);
+		expect((error as ApiStatusError).cause).toBeInstanceOf(Error);
 	});
 
 	test('a 200 labelled JSON with a cut body is an invalid response', async () => {

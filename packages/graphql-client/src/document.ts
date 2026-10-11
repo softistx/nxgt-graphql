@@ -11,11 +11,16 @@ export type GraphQLDocument<TResult, TVariables> = DocumentTypeDecoration<
 	TVariables
 >;
 
-/** An operation ready to send: its text, and its name when it has one. */
+/**
+ * An operation ready to send: its text, its name when it has one, and the
+ * hash the client preset's `persistedDocuments` wrote, when it did.
+ */
 export interface Operation {
 	readonly query: string;
 	readonly operationName: string | undefined;
 	readonly kind: 'query' | 'mutation' | 'subscription';
+	/** `__meta__.hash`: on the `DocumentNode`, or on the `TypedDocumentString`. */
+	readonly hash?: string;
 }
 
 const operations = new WeakMap<object, Operation>();
@@ -35,12 +40,28 @@ export function operationOf(
 	}
 	let operation = operations.get(document);
 	if (!operation) {
-		operation = isDocumentNode(document)
-			? fromNode(document)
-			: fromText(String(document));
+		operation = withHash(readObject(document), document);
 		operations.set(document, operation);
 	}
 	return operation;
+}
+
+/** The preset's `persistedDocuments` puts `__meta__: { hash }` on each operation. */
+function withHash(operation: Operation, document: object): Operation {
+	const meta = (document as { __meta__?: unknown }).__meta__;
+	const hash =
+		typeof meta === 'object' && meta !== null
+			? (meta as { hash?: unknown }).hash
+			: undefined;
+	return typeof hash === 'string' ? { ...operation, hash } : operation;
+}
+
+function readObject(document: object): Operation {
+	if (isDocumentNode(document)) return fromNode(document);
+	// A `TypedDocumentString`; anything else, such as the preset's hash-only
+	// `replaceDocumentWithHash` object, holds no text to read.
+	if (document instanceof String) return fromText(String(document));
+	throw new TypeError('The document holds no operation');
 }
 
 function isDocumentNode(document: unknown): document is DocumentNode {
