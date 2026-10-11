@@ -302,8 +302,10 @@ What a format of your own is:
   then at most 64 characters. A check of yours with `abort: true`
   (`.refine(…, { message, abort: true })`) stops the rules after it, on the
   server as in a generated client: only its issue is returned. Once an async
-  check of your format is pending, the rules have already run on the server,
-  so put an aborting check before any async one.
+  check of your format is pending, the rules have already run on the server:
+  their issues come first (the error's message is then a rule's, not your
+  format's) and the abort stops nothing. Put an aborting check before any
+  async one.
 - **Its messages are yours.** A refusal reads as your schema writes it (the
   package's own messages never name the value; yours may, so keep the input
   out of them if your logs or clients should not see it). Every issue your

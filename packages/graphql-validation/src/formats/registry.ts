@@ -155,7 +155,8 @@ function definition(value: unknown): Definition | undefined {
 /**
  * The application's schema as a plain string schema the rules can narrow,
  * each of its issues re-raised as it was (code, message, and an abort that
- * stops the rules chained after it) and marked as the format's: a `.regex()` inside it is the format's refusal, not `pattern`'s.
+ * stops the rules chained after it) and marked as the format's: a
+ * `.regex()` inside it is the format's refusal, not `pattern`'s.
  * The value is checked, never changed: a schema that still returns another
  * value (a custom `.check()` setting `payload.value`, which `rewrites`
  * cannot see) throws, naming the format, as a resolver's bug would.
