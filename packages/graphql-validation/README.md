@@ -233,4 +233,4 @@ Every startup error and its fix is in [Troubleshooting](docs/troubleshooting.md)
 - [Documentation index](docs/README.md)
 - Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- [Roadmap](docs/roadmap.md): a Zod codegen plugin, your own formats, schemas that read the context
+- [Roadmap](docs/roadmap.md): your own formats, schemas that read the context
