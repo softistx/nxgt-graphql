@@ -419,7 +419,7 @@ A custom scalar needs a Zod schema from you, mapped in one of two ways:
 ```ts
 config: {
 	scalarSchemas: '@nxgt/graphql-scalars',
-	zodScalars: { Money: './money#moneySchema' },
+	zodScalars: { Money: './money#moneySchema' }, // nodenext: './money.js#moneySchema'
 }
 ```
 
@@ -471,7 +471,11 @@ later.
 - Two exports with the same name from different modules are aliased:
   `import { schema } from "./money"; import { schema as schema2 } from "./cost";`.
 - Module paths are written as they are in the generated file, so a relative
-  one (`./money`) is relative to **it**, not to `codegen.ts`.
+  one (`./money`) is relative to **it**, not to `codegen.ts`. Under
+  `moduleResolution` `nodenext` or `node16`, write a relative one with its
+  `.js` extension (`'./money.js#moneySchema'`, even for `money.ts`), or the
+  generated file fails with
+  [TS2835](../troubleshooting.md#ts2835-relative-import-paths-need-explicit-file-extensions-in-ecmascript-imports-when---moduleresolution-is-node16-or-nodenext-did-you-mean-formatsjs).
 - A custom scalar that is in neither fails generation, naming it. See
   [Troubleshooting](../troubleshooting.md).
 - The option is `zodScalars`, not `scalars`: a root `config: { scalars: {
@@ -512,8 +516,8 @@ export const formatSchemas = {
 ```ts
 // codegen.ts
 config: {
-	formatSchemas: '../formats', // relative to the generated file
-	zodFormats: { sku: '../sku#skuSchema' },
+	formatSchemas: '../formats', // relative to the generated file; nodenext: '../formats.js'
+	zodFormats: { sku: '../sku#skuSchema' }, // nodenext: '../sku.js#skuSchema'
 }
 ```
 
@@ -552,8 +556,20 @@ email: z.email(),
   string schema each, and every default value against its format. A module it
   cannot load fails generation; unlike a `scalarSchemas` record, it is never
   taken on trust, since a default could then break its format unseen. Run
-  codegen under Bun or tsx to load a TypeScript module, or point the option at
-  JavaScript.
+  codegen under Bun or tsx to load a TypeScript module (plain
+  `graphql-codegen` under Node may not load one, and never reads
+  `formats.js` as `formats.ts`), or point the option at JavaScript. A
+  format that rewrites the value (`.trim()`, `.toLowerCase()`,
+  `.toUpperCase()`, `.normalize()`, `.overwrite()`) fails generation as it
+  fails `withValidation`: the client would check the rewritten value, the
+  server the one sent.
+- **The `.js` extension under `nodenext`.** The path is written into the
+  generated import as given, so under `moduleResolution` `nodenext` or
+  `node16` a relative one needs its extension, as any relative import there:
+  `formatSchemas: '../formats.js'` and `zodFormats: { sku: '../sku.js#skuSchema' }`,
+  even when the files are `formats.ts` and `sku.ts`. Bun and tsx load them at
+  generation all the same. Without it, the generated file fails with
+  [TS2835](../troubleshooting.md#ts2835-relative-import-paths-need-explicit-file-extensions-in-ecmascript-imports-when---moduleresolution-is-node16-or-nodenext-did-you-mean-formatsjs).
 - **One record for both sides.** Hand the server the very record codegen
   reads, `zodFormats` entries included
   (`withValidation(schema, { formats: { ...formatSchemas, sku: skuSchema } })`),

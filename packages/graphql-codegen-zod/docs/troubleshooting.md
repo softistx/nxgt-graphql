@@ -118,6 +118,21 @@ the option at a compiled `.js` file or a package.
 config: { formatSchemas: '../formats' }
 ```
 
+### `The format "sku" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
+
+**When:** running codegen with `formatSchemas` or `zodFormats` naming a
+schema that rewrites the value (`z.string().trim().toUpperCase()`).
+**Why:** the generated client chains the other rules on your schema, so it
+would check the rewritten value while the server checks the one sent: with
+`@constraint(format: "sku", maxLength: 8)`, the server refuses `" sku-1234 "`
+and the client accepts it. The plugin refuses it as `withValidation` does
+([its entry](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md)).
+**Fix:** refuse what is not canonical instead:
+
+```ts
+export const skuSchema = z.string().regex(/^SKU-[0-9]{4}$/, 'Invalid SKU');
+```
+
 ### `@nxgt/graphql-codegen-zod: ./formats exports no formatSchemas record.`
 
 **When:** running codegen with `formatSchemas` set. The module path in the
@@ -242,6 +257,29 @@ query Both($e: String, $u: String) { e(v: $e) u(v: $u) }
 ```
 
 ## The generated file
+
+### `TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../formats.js'?`
+
+**When:** type-checking the generated file under `moduleResolution`
+`nodenext` or `node16`, with a relative `formatSchemas`, `zodFormats`,
+`scalarSchemas` or `zodScalars` path written without an extension
+(`formatSchemas: '../formats'`).
+**Why:** the plugin writes the path into the generated import as you give it,
+and `nodenext` requires a relative import to name its file, with the `.js`
+extension even for a `.ts` source.
+**Fix:** give the path its `.js` extension in the config. Bun and tsx load the
+`.ts` file behind it at generation; plain `graphql-codegen` under Node never
+reads `formats.js` as `formats.ts` (and, depending on its version, does not
+load a `.ts` module at all), so run it under Bun (`bunx --bun graphql-codegen`)
+or tsx.
+
+```ts
+// generating src/generated/zod.ts from src/formats.ts and src/sku.ts
+config: {
+	formatSchemas: '../formats.js',
+	zodFormats: { sku: '../sku.js#skuSchema' },
+}
+```
 
 ### `TS2305: Module '"@nxgt/graphql-scalars"' has no exported member 'scalarSchemas'`
 

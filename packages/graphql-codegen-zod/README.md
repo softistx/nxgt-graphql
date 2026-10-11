@@ -110,7 +110,7 @@ export const formatSchemas = {
 // codegen.ts, generating src/generated/zod.ts
 config: {
 	scalarSchemas: '@nxgt/graphql-scalars',
-	formatSchemas: '../formats', // relative to the generated file
+	formatSchemas: '../formats', // relative to the generated file; nodenext: '../formats.js'
 },
 ```
 
@@ -122,9 +122,20 @@ handle: formatSchemas.slug.max(40),
 ```
 
 Keep `satisfies`, not a `Record<string, …>` annotation: the generated file
-reads `formatSchemas.slug`. The module must be one graphql-codegen can import: JavaScript, or
-TypeScript when codegen runs under Bun or tsx. One it cannot load fails
-generation. See [Your own formats](docs/guide/output.md#your-own-formats).
+reads `formatSchemas.slug`. The module must be one graphql-codegen can import:
+JavaScript, or TypeScript when codegen runs under Bun or tsx (plain
+`graphql-codegen` under Node is not one: depending on its version it does not
+load a `.ts` module, and it never reads `formats.js` as `formats.ts`). One it cannot load
+fails generation. A format that rewrites the value (`.trim()`,
+`.toLowerCase()`, …) fails it too, as it fails `withValidation`.
+
+The path is written into the generated import as you give it. Under
+`moduleResolution: nodenext` (or `node16`), give it the `.js` extension, as
+any relative import there: `formatSchemas: '../formats.js'`, even for
+`formats.ts`; Bun and tsx still load it at generation. Without it the
+generated file fails to typecheck with TS2835. The same holds for a relative
+`scalarSchemas`, `zodScalars` or `zodFormats` path. See
+[Your own formats](docs/guide/output.md#your-own-formats).
 
 Run codegen, once or on every change:
 
