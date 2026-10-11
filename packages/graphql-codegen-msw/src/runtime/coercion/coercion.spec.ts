@@ -55,6 +55,19 @@ describe('coercionErrors', () => {
 			{ variableTypes, inputTypes },
 		).map((error) => error.message);
 
+	test('judges a built-in the file omits as a built-in', () => {
+		const first = z.object({ first: z.int32().nullish() });
+		expect(
+			coercionErrors(
+				issuesOf(first, { first: 'a' }),
+				{ query: 'not graphql', operationName: 'Q', variables: { first: 'a' } },
+				{ variableTypes: { first: 'Int' }, inputTypes: {} },
+			).map((error) => error.message),
+		).toEqual([
+			'Variable "$first" got invalid value "a"; Int cannot represent non-integer value: "a"',
+		]);
+	});
+
 	test("decides Int's bound from the declared type, not from a Zod issue", () => {
 		const first = z.object({ first: z.int32().lte(50).nullish() });
 		for (const value of [1e20, -1e20, 3_000_000_000])

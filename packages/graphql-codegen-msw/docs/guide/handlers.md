@@ -618,7 +618,7 @@ export const mockPing = mockOperation<{ ping: string }, { times?: number | null 
 To have the coercion answer as well, copy both from a generated file and
 regenerate that file after each upgrade: their shape is internal, and a
 `kind` the installed runtime does not know throws
-[`the generated file is older than the runtime; regenerate it`](../troubleshooting.md#at-run-time).
+[`the generated file was written by another version than the runtime; regenerate it`](../troubleshooting.md#at-run-time).
 
 ## The plugin function
 

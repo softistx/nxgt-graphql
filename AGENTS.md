@@ -916,8 +916,8 @@ packages/graphql-codegen-msw/test/
   graphql would not raise (an `ID` given an integer) goes to `invalidInput`.
   `inputTypes` and `variableTypes` are an internal shape, typed `InputTypes`
   and documented so: the generated file and the runtime change together, and
-  a `kind` the runtime does not know throws `the generated file is older than
-  the runtime; regenerate it`. Both are optional on `MockedOperation`
+  a `kind` the runtime does not know throws `the generated file was written by another
+  version than the runtime; regenerate it`. Both are optional on `MockedOperation`
   (default `{}`): a hand-written handler without them walks no variable, and
   every refusal goes to `invalidInput`. graphql's own messages (the built-in
   scalars', an enum's, and the value an enum suggestion is read from) print

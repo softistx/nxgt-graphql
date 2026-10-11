@@ -199,7 +199,7 @@ server.use(
 );
 ```
 
-### `@nxgt/graphql-codegen-msw: the generated file is older than the runtime; regenerate it`
+### `@nxgt/graphql-codegen-msw: the generated file was written by another version than the runtime; regenerate it`
 
 **When:** a request reaches a handler whose generated file describes an input
 type in a form this version of the runtime does not read (its `inputTypes`

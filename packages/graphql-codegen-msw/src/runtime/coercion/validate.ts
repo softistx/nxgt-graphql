@@ -88,10 +88,21 @@ function validateList(walk: Walk, value: unknown, item: TypeRef, at: At): void {
 	});
 }
 
+/** The spec scalars, judged as built-ins even when the file omits them. */
+const BUILT_INS: ReadonlySet<string> = new Set([
+	'String',
+	'Int',
+	'Float',
+	'Boolean',
+	'ID',
+]);
+
 function validateNamed(walk: Walk, value: unknown, name: string, at: At): void {
 	// A name the generated file does not describe is judged as a custom
 	// scalar is: refused only where the Zod schema refused it.
-	const named: InputType = walk.types[name] ?? { kind: 'scalar' };
+	const named: InputType =
+		walk.types[name] ??
+		(BUILT_INS.has(name) ? { kind: 'builtin' } : { kind: 'scalar' });
 	if (named.kind === 'input') {
 		validateObject(walk, value, name, named, at);
 		return;
@@ -123,7 +134,7 @@ function leafRefusal(
 
 /** Thrown on an input type whose `kind` this runtime does not know. */
 export const STALE_FILE =
-	'@nxgt/graphql-codegen-msw: the generated file is older than the runtime; regenerate it';
+	'@nxgt/graphql-codegen-msw: the generated file was written by another version than the runtime; regenerate it';
 
 function validateObject(
 	walk: Walk,
