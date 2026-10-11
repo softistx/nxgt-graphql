@@ -16,10 +16,15 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
   across fields, business refinements, with the same error.
 - **Formats** `byte`, `date-time`, `date`, `email`, `ipv4`, `ipv6`, `uri`,
   `uuid`.
+- **Your own formats** (in progress, on its integration branch; it moves to
+  Shipped when released). Name a Zod string schema in
+  `@constraint(format: "...")`: `withValidation(schema, { formats })`, one
+  record your module exports, checked at startup, its refusals named
+  `format`. `@nxgt/graphql-codegen-zod` will read the same record, so the
+  client refuses what the server refuses.
 
 ## Next
 
-- **Your own formats**, named in `@constraint(format: "...")`.
 - **Schemas that read the context**, `(args, context) => schema`, for checks
   that need the request (uniqueness in a database, permissions).
 

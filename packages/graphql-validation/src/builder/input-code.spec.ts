@@ -9,6 +9,7 @@ import {
 } from 'graphql';
 import { z } from 'zod';
 import { constraintTypeDefs } from '../constraint-directive';
+import { type FormatSchemas, registryOf } from '../formats/registry';
 import { constraintsOn } from './constraints';
 import { inputCode } from './input-code';
 import { InputSchemas } from './input-schema';
@@ -182,6 +183,52 @@ describe('inputCode, its list option', () => {
 		]);
 		expect(code).toBe(
 			'L(z.array(L(z.array(z.string().min(2))).nullish()).min(1)).nullish()',
+		);
+	});
+});
+
+describe('inputCode, its formats parameter', () => {
+	const withOwn = buildSchema(`${constraintTypeDefs}
+		input Company {
+			siret: String @constraint(format: "siret", maxLength: 14)
+			email: String @constraint(format: "email")
+		}
+		type Query { a: Int }`);
+	const company = (
+		withOwn.getType('Company') as GraphQLInputObjectType
+	).getFields();
+	const directive = new InputSchemas(withOwn, registryOf({ siret: z.string() }))
+		.directive;
+	const codeWith = (name: 'siret' | 'email', formats?: FormatSchemas) => {
+		const input = company[name] as GraphQLInputField;
+		return () =>
+			inputCode(
+				input.type,
+				constraintsOn(directive, input.astNode),
+				`Company.${name}`,
+				named,
+				{},
+				formats,
+			);
+	};
+	const formatSchemas = { siret: z.string().regex(/^\d{14}$/) };
+
+	test('knows an application format, whose source is the generator’s to write', () => {
+		expect(codeWith('siret')).toThrow(
+			'Unknown @constraint format "siret". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid.',
+		);
+		expect(codeWith('siret', formatSchemas)).toThrow(
+			`@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write.`,
+		);
+	});
+
+	test('still writes the built-in formats', () => {
+		expect(codeWith('email', formatSchemas)()).toBe('z.email().nullish()');
+	});
+
+	test('refuses formats the runtime refuses, with its message', () => {
+		expect(codeWith('email', { email: z.email() })).toThrow(
+			'The format "email" is built in: give yours another name.',
 		);
 	});
 });

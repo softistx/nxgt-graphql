@@ -4,3 +4,4 @@
 export { checkConstraints } from './builder/check-constraints';
 export { type Constraint, constraintsOn } from './builder/constraints';
 export { type InputCodeOptions, inputCode } from './builder/input-code';
+export type { FormatSchemas } from './formats/registry';

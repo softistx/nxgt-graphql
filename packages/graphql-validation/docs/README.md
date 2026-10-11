@@ -4,7 +4,7 @@
 
 | Page | Read it when |
 | --- | --- |
-| [Constraints](guide/constraints.md) | you write `@constraint` in your schema: setup with `withValidation`, every argument and its Zod equivalent, the formats, lists and nested inputs |
+| [Constraints](guide/constraints.md) | you write `@constraint` in your schema: setup with `withValidation`, every argument and its Zod equivalent, the formats and your own, lists and nested inputs |
 | [Errors](guide/errors.md) | you handle the `BAD_USER_INPUT` error in a client, build it yourself with `badUserInput`, or add rules a directive cannot say with `validated` |
 
 ## Reference

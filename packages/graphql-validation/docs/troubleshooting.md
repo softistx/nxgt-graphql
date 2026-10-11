@@ -73,10 +73,76 @@ example with `@nxgt/graphql-scalars`), or on a field with [`validated`](guide/er
 
 ### `Unknown @constraint format "siret". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid.`
 
-**When:** calling `withValidation`.
-**Why:** `format` takes one of the listed names. Custom formats are on the
-[roadmap](roadmap.md).
-**Fix:** use a known format, or `pattern: "..."`.
+**When:** calling `withValidation` (or a code generator running
+`checkConstraints`).
+**Why:** `format` takes a built-in name or one of the formats handed to
+`withValidation`; the message lists them all, yours after the built-in ones.
+**Fix:** use a listed name, or declare the format and hand it over (see
+[Your own formats](guide/constraints.md#your-own-formats)):
+
+```ts
+withValidation(schema, {
+  formats: { siret: z.string().regex(/^\d{14}$/) },
+});
+```
+
+### `Invalid format name "Siret": write it in lowercase letters, digits and hyphens, starting with a letter.`
+
+**When:** calling `withValidation` with `formats` (or `checkConstraints` /
+`inputCode` with them).
+**Why:** a format's name must match `/^[a-z][a-z0-9-]*$/`, as the built-in
+ones do (`date-time`).
+**Fix:** rename the key, and the `@constraint(format: "...")` that names it:
+`siret`, `work-email`, `iso-6346`.
+
+### `The format "email" is built in: give yours another name.`
+
+**When:** calling `withValidation` with `formats` holding a built-in name
+(`byte`, `date`, `date-time`, `email`, `ipv4`, `ipv6`, `uri`, `uuid`). A
+record written in place is refused by the compiler first (its value is typed
+`never`).
+**Why:** a built-in format means the same everywhere; replacing it would
+change every field that names it, in silence.
+**Fix:** give yours its own name and use it where you need it:
+
+```ts
+const formatSchemas = { 'work-email': z.email().endsWith('@example.com') };
+```
+
+### `The format "code" is not a Zod string schema: write z.string() or a string format such as z.email(), narrowed with .regex() or .refine(), never transformed.`
+
+**When:** calling `withValidation` with `formats` whose value is not a string
+schema: `z.number()`, a `.transform()` or a codec (a pipe), `.optional()`, or
+not a Zod schema at all. A record typed loosely (`as never`, `any`) gets past
+the compiler; this check does not.
+**Why:** a format checks a string and changes nothing, so the resolver
+receives what the client sent; null and absence are the field's type's.
+**Fix:** keep the string schema and its checks, and do any conversion in the
+resolver:
+
+```ts
+const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not .transform(Number)
+```
+
+### `withValidation: this schema is already wrapped with other formats. Call withValidation once, with every format.`
+
+**When:** calling `withValidation` a second time on the same schema with
+other formats than the first call (other names, other schemas, or formats
+where the first call had none).
+**Why:** the first call already wrapped the fields, checked against its own
+formats; a second set would be ignored in silence. With the same formats, a
+second call wraps nothing and does not throw.
+**Fix:** call it once, last, with every format in one record.
+
+### `@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write.`
+
+**When:** a code generator calls `inputCode` from
+`@nxgt/graphql-validation/codegen` on a field whose format is one of yours.
+**Why:** your format exists as a schema, not as source this package can
+write. `@nxgt/graphql-codegen-zod` does not write your formats yet (see the
+[roadmap](roadmap.md)).
+**Fix:** for now, generate from a schema whose fields use built-in formats
+only, or check the field with `pattern`.
 
 ### `Invalid @constraint pattern "[a-":`
 
@@ -193,6 +259,17 @@ defaults.
 ```graphql
 type Query { a(name: String = "xy" @constraint(minLength: 2)): Int }
 ```
+
+### `Encountered Promise during synchronous parse. Use .parseAsync() instead.`
+
+**When:** calling `withValidation`, on an argument or input field with a
+default value whose format is one of yours with an async check
+(`.refine(async …)`).
+**Why:** a default value is checked at startup, synchronously; Zod refuses
+to run an async check there. In a request, the arguments are parsed
+asynchronously and the check works.
+**Fix:** drop the default, or keep the async check out of the format and run
+it with [`validated`](guide/errors.md#validated).
 
 ### `@constraint on @cached(ttl:) checks nothing: a directive's argument reaches no resolver. Remove it.`
 

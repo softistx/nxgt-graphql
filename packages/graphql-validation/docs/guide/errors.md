@@ -38,7 +38,10 @@ arguments**: the argument name, then input fields, with a number for a list
 index. `code` is Zod's issue code (`too_small`, `too_big`, `invalid_format`,
 `custom`, ...). `constraint` is the `@constraint` argument that refused
 (`minLength`, `format`, `maxItems`, ...); it is absent for a refusal of a
-[`validated`](#validated) schema. `message` is Zod's, in English, and is not
+[`validated`](#validated) schema. A refusal of one of
+[your own formats](constraints.md#your-own-formats) is `format` whatever its
+`code` (a `.regex()` or `.refine()` inside it included), and its `message`
+is your schema's. Otherwise `message` is Zod's, in English, and is not
 meant for display in every language: map on `constraint` and `path` if you
 translate. Prefer `constraint` to `code`: it is the name in your schema, while
 `code` is Zod's and can change when Zod does across a major version.
