@@ -692,22 +692,24 @@ describe('types', () => {
 
 describe('races and transport', () => {
 	/** A refused connection whose JSON body sends half, then stalls. */
-	const stalledRefusal = () =>
-		new Response(
-			new ReadableStream<Uint8Array>({
-				start(controller) {
-					controller.enqueue(
-						new TextEncoder().encode('{"errors":[{"message":'),
-					);
-				},
-			}),
-			{ status: 400, headers: { 'content-type': 'application/json' } },
-		);
+	const stalledRefusal =
+		(status = 400) =>
+		() =>
+			new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(
+							new TextEncoder().encode('{"errors":[{"message":'),
+						);
+					},
+				}),
+				{ status, headers: { 'content-type': 'application/json' } },
+			);
 
 	test("an abort while a refused body is read rejects with the signal's reason", async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: server(stalledRefusal).fetch,
+			fetch: server(stalledRefusal()).fetch,
 		});
 		const controller = new AbortController();
 		const ticks = client.subscribe(
@@ -726,7 +728,7 @@ describe('races and transport', () => {
 		let hooked = false;
 		const client = createGraphQLClient({
 			url,
-			fetch: server(stalledRefusal).fetch,
+			fetch: server(stalledRefusal(401)).fetch,
 			onUnauthenticated: () => {
 				hooked = true;
 			},
