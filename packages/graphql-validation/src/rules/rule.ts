@@ -13,10 +13,12 @@ export type Target = keyof Targets;
 
 /**
  * What a rule may read besides its value: the formats `format` resolves
- * against, the built-in ones and the application's own.
+ * against, the built-in ones and the application's own, and, when writing
+ * source, how to write one of the application's (`InputCodeOptions.format`).
  */
 export interface RuleContext {
 	readonly formats: FormatRegistry;
+	readonly formatCode?: ((name: string) => string) | undefined;
 }
 
 /** What a `@constraint` argument's value can be. */

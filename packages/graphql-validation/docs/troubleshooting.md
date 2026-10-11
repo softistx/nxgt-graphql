@@ -134,15 +134,23 @@ formats; a second set would be ignored in silence. With the same formats, a
 second call wraps nothing and does not throw.
 **Fix:** call it once, last, with every format in one record.
 
-### `@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write.`
+### `@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.`
 
 **When:** a code generator calls `inputCode` from
-`@nxgt/graphql-validation/codegen` on a field whose format is one of yours.
+`@nxgt/graphql-validation/codegen` on a field whose format is one of yours,
+without `options.format`.
 **Why:** your format exists as a schema, not as source this package can
-write. `@nxgt/graphql-codegen-zod` does not write your formats yet (see the
-[roadmap](roadmap.md)).
-**Fix:** for now, generate from a schema whose fields use built-in formats
-only, or check the field with `pattern`.
+write: only the generator knows where the generated file imports it from.
+**Fix:** pass `format`, returning the source of your schema; the other rules
+are chained on it. `@nxgt/graphql-codegen-zod` 0.3 does this for you
+(`formatSchemas: './formats'`).
+
+```ts
+inputCode(type, constraints, where, named, {
+	format: (name) => `formatSchemas[${JSON.stringify(name)}]`,
+}, formatSchemas);
+// formatSchemas["siret"].max(14)
+```
 
 ### `Invalid @constraint pattern "[a-":`
 

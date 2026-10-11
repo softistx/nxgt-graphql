@@ -6,6 +6,7 @@ import {
 	isObjectType,
 } from 'graphql';
 import type { CodegenZodConfig, DocumentFile } from './config';
+import { FormatSources } from './formats';
 import { Imports } from './imports';
 import { Naming } from './naming';
 import { objectBlocks } from './objects-output';
@@ -30,12 +31,13 @@ export async function plugin(
 	config: CodegenZodConfig = {},
 	info?: { readonly outputFile?: string | undefined },
 ): Promise<string> {
-	const directive = checkConstraints(schema);
+	const formats = await FormatSources.load(config, info?.outputFile);
+	const directive = checkConstraints(schema, undefined, formats.schemas);
 	if (directive) assertSdl(schema);
 	const naming = new Naming(config);
 	const write = async (imports: Imports) => {
 		const scalars = await ScalarSources.load(config, imports, info?.outputFile);
-		const writer = new Writer(directive, naming, scalars);
+		const writer = new Writer(directive, naming, scalars, formats.for(imports));
 		return [
 			...schemaBlocks(schema, writer, naming),
 			...(config.objects === false ? [] : objectBlocks(schema, writer, naming)),

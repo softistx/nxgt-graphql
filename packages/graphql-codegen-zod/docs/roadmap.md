@@ -4,7 +4,11 @@ What `@nxgt/graphql-codegen-zod` is heading for, phrased as what you get.
 
 ## Now
 
-Nothing in progress.
+- **Your own formats** (in progress, not released yet). `formatSchemas:
+  './formats'` reads the record `withValidation(schema, { formats })` takes,
+  `zodFormats` one format; the generated schemas import your formats and
+  chain the other rules on them, so the client refuses what the server
+  refuses. Needs `@nxgt/graphql-validation` 0.3.
 
 ## Next
 
@@ -12,8 +16,6 @@ Candidates, not commitments.
 
 - **Emit only some parts**, an option to write just the arguments, or just
   the variables, of a file.
-- **Your own formats**, once `@nxgt/graphql-validation` supports custom
-  `@constraint(format: "...")` values; the plugin will carry them.
 
 ## Later
 

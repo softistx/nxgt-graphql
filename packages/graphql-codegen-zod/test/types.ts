@@ -9,7 +9,9 @@ import type {
 	Lonely,
 	Member,
 	MemberInput,
+	MutationOrderArgs,
 	MutationSignUpArgs,
+	OrderMutationVariables,
 	Post,
 	QueryUsersArgs,
 	Ring0,
@@ -48,6 +50,20 @@ holds<
 	>
 >();
 holds<Equal<SignUpInput['tags'], string[] | null>>();
+
+// An application's format is a string, its default filled on the way out,
+// and a list of one takes a single value on the way in.
+holds<Equal<SignUpInput['handle'], string | null>>();
+holds<Equal<SignUpInput['country'], string | null | undefined>>();
+holds<Equal<SignUpInput['skus'], string[] | null | undefined>>();
+holds<
+	Equal<
+		NonNullable<SignUpMutationVariables['input']['skus']>,
+		string | string[]
+	>
+>();
+holds<Equal<MutationOrderArgs['sku'], string>>();
+holds<Equal<OrderMutationVariables['sku'], string>>();
 
 // A type in a cycle is written out: one member or a list of them in, a list
 // out, at any depth.

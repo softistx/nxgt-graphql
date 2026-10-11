@@ -28,7 +28,8 @@ import { assertLeafTargets, assertObjectTargets, baseCode } from './leaf';
  * constraint that cannot apply fails as it does at startup.
  *
  * `formats` are the application's own, as `withValidation` takes them: a
- * name among them is a known format, which a built-in one is not.
+ * name among them is a known format, which a built-in one is not. Their
+ * source is `options.format`'s to write.
  */
 export function inputCode(
 	type: GraphQLInputType,
@@ -60,6 +61,14 @@ export interface InputCodeOptions {
 		readonly code: string;
 		readonly single: string;
 	}) => string;
+	/**
+	 * The source of one of the application's formats, given its name (a key
+	 * of the `formats` record): a reference to the application's own schema,
+	 * which the rules after `format` narrow (`formatSchemas.slug.max(40)`).
+	 * A built-in format is written inline and never reaches it. Without it,
+	 * a field using one of the application's formats throws.
+	 */
+	readonly format?: (name: string) => string;
 }
 
 interface Write {
@@ -110,7 +119,10 @@ function applyCode(
 	source: string,
 	constraints: readonly Constraint[],
 ): string {
-	const context = { formats: write.formats };
+	const context = {
+		formats: write.formats,
+		formatCode: write.options.format,
+	};
 	return constraints.reduce(
 		(code, { rule, value }) => applyRuleCode(rule, code, value, context),
 		source,

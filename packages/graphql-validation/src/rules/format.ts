@@ -9,11 +9,12 @@ export const formatRule = defineRule({
 	target: 'string',
 	base: true,
 	toZod: (_schema, value, { formats }) => formats.named(value).toZod(),
-	toCode: (_schema, value, { formats }) => {
+	toCode: (_schema, value, { formats, formatCode }) => {
 		const format = formats.named(value);
 		if (format.toCode) return format.toCode();
+		if (formatCode) return formatCode(value);
 		throw new Error(
-			`@constraint(format: "${value}") is one of the application's formats: its source is the code generator's to write.`,
+			`@constraint(format: "${value}") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.`,
 		);
 	},
 	// An application format's issues are marked, whatever their code

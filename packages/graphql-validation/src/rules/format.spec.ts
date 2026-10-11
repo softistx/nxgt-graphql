@@ -30,7 +30,7 @@ describe('@constraint(format: ...) with an application format', () => {
 
 	test('has no source of its own: the code generator writes it', () => {
 		expect(() => formatRule.toCode('z.string()', 'siret', own)).toThrow(
-			`@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write.`,
+			`@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.`,
 		);
 	});
 });

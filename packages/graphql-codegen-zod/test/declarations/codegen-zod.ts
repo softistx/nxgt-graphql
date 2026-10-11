@@ -9,6 +9,11 @@ export const config = {
 	zodScalars: { Money: './money#moneySchema' },
 } satisfies CodegenZodConfig;
 
+export const formats = {
+	formatSchemas: './formats',
+	zodFormats: { slug: './slug#slugSchema' },
+} satisfies CodegenZodConfig;
+
 export const output = plugin(
 	buildSchema('type Query { a(n: Int): Int }'),
 	[],

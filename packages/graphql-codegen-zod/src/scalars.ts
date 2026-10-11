@@ -1,9 +1,7 @@
-import { createRequire } from 'node:module';
-import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type { GraphQLScalarType } from 'graphql';
 import type { CodegenZodConfig } from './config';
 import type { Imports } from './imports';
+import { importModule, moduleExport } from './modules';
 
 /**
  * Where each custom scalar's schema comes from: `zodScalars` first, then the
@@ -46,13 +44,12 @@ export class ScalarSources {
 	code(type: GraphQLScalarType): string {
 		const own = this.#config.zodScalars?.[type.name];
 		if (own !== undefined) {
-			const at = own.lastIndexOf('#');
-			if (at <= 0 || at === own.length - 1) {
-				throw new Error(
-					`@nxgt/graphql-codegen-zod: zodScalars.${type.name} is "${own}"; write it '<module>#<export>', e.g. './money#moneySchema'.`,
-				);
-			}
-			return this.#imports.add(own.slice(0, at), own.slice(at + 1));
+			const { module, exported } = moduleExport(
+				`zodScalars.${type.name}`,
+				own,
+				'./money#moneySchema',
+			);
+			return this.#imports.add(module, exported);
 		}
 		const record = this.#config.scalarSchemas;
 		if (record && (!this.#recordKeys || this.#recordKeys.has(type.name))) {
@@ -72,13 +69,7 @@ async function recordKeys(
 	outputFile: string | undefined,
 ): Promise<ReadonlySet<string> | undefined> {
 	try {
-		const base = module.startsWith('.')
-			? resolve(dirname(resolve(outputFile ?? 'index.ts')), module)
-			: createRequire(resolve('package.json')).resolve(module);
-		const loaded: { scalarSchemas?: unknown } = await import(
-			pathToFileURL(base).href
-		);
-		const record = loaded.scalarSchemas;
+		const record = (await importModule(module, outputFile))['scalarSchemas'];
 		if (typeof record !== 'object' || record === null) {
 			throw new Error(
 				`@nxgt/graphql-codegen-zod: ${module} exports no scalarSchemas record.`,

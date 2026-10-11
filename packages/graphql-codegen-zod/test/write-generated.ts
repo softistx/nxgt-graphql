@@ -4,10 +4,17 @@ import { plugin } from '../src/index';
 import { documents, schema } from './fixture';
 import { generatedScalars } from './real-scalars';
 
-export const config = { scalarSchemas: './scalars' };
+export const config = {
+	scalarSchemas: './scalars',
+	formatSchemas: './formats',
+	zodFormats: { sku: './sku#skuSchema' },
+};
+
+/** Where the generated file is written: `config`'s modules are relative to it. */
+export const info = { outputFile: 'test/generated.ts' };
 
 export function generated(): Promise<string> {
-	return plugin(schema, documents, config, { outputFile: 'test/generated.ts' });
+	return plugin(schema, documents, config, info);
 }
 
 if (import.meta.main) {

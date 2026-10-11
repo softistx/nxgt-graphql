@@ -284,8 +284,10 @@ Call `withValidation` once, with every format: wrapping the same schema again
 with other formats throws, since its fields are already checked against the
 first ones. Without `formats`, nothing changes.
 
-`@nxgt/graphql-codegen-zod` does not write your formats yet: a schema that
-uses one fails generation (see the [roadmap](../roadmap.md)).
+[`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod)
+0.3 reads the same record (`config: { formatSchemas: './formats' }`): the
+generated schemas import your formats and chain the other rules on them, so
+the client refuses what the server refuses, with your messages.
 
 ## In your IDE
 

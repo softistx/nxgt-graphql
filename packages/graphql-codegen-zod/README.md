@@ -88,6 +88,43 @@ plugin's; so can its object types, interfaces and unions (`User`), or
 `scalarSchemas` supplies a Zod schema for each custom scalar of the schema;
 see [Scalars](docs/guide/output.md#scalars).
 
+### Your own formats
+
+When the server hands `withValidation` formats of its own
+(`withValidation(schema, { formats: formatSchemas })`, from
+`@nxgt/graphql-validation` 0.3), point the plugin at the module that exports
+that record. It loads it at generation, checks it as `withValidation` does,
+and the generated schemas import it:
+
+```ts
+// src/formats.ts
+import type { FormatSchemas } from '@nxgt/graphql-validation';
+import { z } from 'zod';
+
+export const formatSchemas = {
+	slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug'),
+} satisfies FormatSchemas;
+```
+
+```ts
+// codegen.ts, generating src/generated/zod.ts
+config: {
+	scalarSchemas: '@nxgt/graphql-scalars',
+	formatSchemas: '../formats', // relative to the generated file
+},
+```
+
+```ts
+// src/generated/zod.ts, for handle: String! @constraint(format: "slug", maxLength: 40)
+import { formatSchemas } from "../formats";
+
+handle: formatSchemas.slug.max(40),
+```
+
+The module must be one graphql-codegen can import: JavaScript, or
+TypeScript when codegen runs under Bun or tsx. One it cannot load fails
+generation. See [Your own formats](docs/guide/output.md#your-own-formats).
+
 Run codegen, once or on every change:
 
 ```sh
@@ -183,6 +220,8 @@ are in [Output](docs/guide/output.md).
 | --- | --- | --- | --- |
 | `scalarSchemas` | `string` | none | module exporting a `scalarSchemas` record keyed by scalar name |
 | `zodScalars` | `Record<string, string>` | none | `'<module>#<export>'` per scalar; wins over `scalarSchemas` |
+| `formatSchemas` | `string` | none | module exporting a `formatSchemas` record, your own `@constraint(format: "...")` values, as `withValidation` takes them; loaded at generation |
+| `zodFormats` | `Record<string, string>` | none | `'<module>#<export>'` per format; wins over `formatSchemas` |
 | `schemaPrefix` | `string` | `'z'` | before each schema's name |
 | `namingConvention` | `'keep' \| 'change-case-all#<case>' \| (name) => string \| { typeNames, transformUnderscore, enumValues }` | PascalCase per underscore part | how type names are cased, as the typescript plugins read it |
 | `typesPrefix`, `typesSuffix` | `string` | none | around each type's name |
@@ -212,6 +251,10 @@ Each is detailed in [Output](docs/guide/output.md).
   [validation troubleshooting](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md).
 - A custom scalar mapped nowhere fails generation, naming it, rather than
   becoming an unchecked `z.unknown()`.
+- A format of your own is loaded at generation: the module `formatSchemas`
+  or `zodFormats` names must be importable by graphql-codegen, or generation
+  fails. It must also be the very record the server hands `withValidation`,
+  or the client and the server check different things.
 - An abstract type whose possible types select different fields is a union on
   `__typename`: select it, under one key for every member, or generation
   fails. When they all select the same fields, no `__typename` is needed.
