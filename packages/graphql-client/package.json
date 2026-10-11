@@ -19,6 +19,11 @@
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./react": {
+			"types": "./dist/react/index.d.ts",
+			"import": "./dist/react/index.js",
+			"default": "./dist/react/index.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"keywords": [
@@ -26,7 +31,8 @@
 		"client",
 		"typed-document-node",
 		"httpyz",
-		"typescript"
+		"typescript",
+		"react"
 	],
 	"repository": {
 		"type": "git",
@@ -46,12 +52,35 @@
 		"@graphql-typed-document-node/core": "^3.2.0",
 		"@nxgt/httpyz": "^0.3.3"
 	},
+	"nxgt": {
+		"entrypoints": [
+			"src/index.ts",
+			"src/react/index.ts"
+		]
+	},
 	"devDependencies": {
+		"@happy-dom/global-registrator": "20.14.5",
+		"@testing-library/dom": "10.4.1",
+		"@testing-library/react": "16.3.3",
 		"@types/bun": "^1.4.0",
-		"graphql": "16.11.0"
+		"@types/react": "19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"graphql": "16.11.0",
+		"react": "19.0.0",
+		"react-dom": "^19.0.0"
 	},
 	"peerDependencies": {
+		"@types/react": "^19.0.0",
 		"graphql": "^16.11.0 || ^17.0.0",
+		"react": "^19.0.0",
 		"typescript": "^6.0.3 || ^7.0.0"
+	},
+	"peerDependenciesMeta": {
+		"@types/react": {
+			"optional": true
+		},
+		"react": {
+			"optional": true
+		}
 	}
 }

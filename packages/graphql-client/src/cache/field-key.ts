@@ -26,17 +26,36 @@ export function fieldNameOf(key: string): string {
 	return open < 0 ? key : key.slice(0, open);
 }
 
-/** JSON whose object keys are sorted, at every depth. */
+/**
+ * JSON whose object keys are sorted, at every depth, written as
+ * `JSON.stringify` writes it otherwise: `toJSON` is honoured (a `Date` is its
+ * ISO string), and a value JSON leaves out (`undefined`, a function) is left
+ * out of an object and `null` in a list. So the key is what goes on the wire.
+ */
 export function stableJson(value: unknown): string {
-	if (Array.isArray(value))
-		return `[${value.map((item) => (item === undefined ? 'null' : stableJson(item))).join(',')}]`;
-	if (typeof value === 'object' && value !== null) {
-		const record = value as Record<string, unknown>;
-		const entries = Object.keys(record)
-			.filter((key) => record[key] !== undefined)
-			.sort()
-			.map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`);
+	return written(value, '') ?? 'null';
+}
+
+function written(value: unknown, key: string): string | undefined {
+	const json = hasToJson(value) ? value.toJSON(key) : value;
+	if (Array.isArray(json))
+		return `[${json.map((item, index) => written(item, String(index)) ?? 'null').join(',')}]`;
+	if (typeof json === 'object' && json !== null) {
+		const record = json as Record<string, unknown>;
+		const entries: string[] = [];
+		for (const name of Object.keys(record).sort()) {
+			const entry = written(record[name], name);
+			if (entry !== undefined) entries.push(`${JSON.stringify(name)}:${entry}`);
+		}
 		return `{${entries.join(',')}}`;
 	}
-	return JSON.stringify(value) ?? 'null';
+	return JSON.stringify(json);
+}
+
+function hasToJson(value: unknown): value is { toJSON(key: string): unknown } {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		typeof (value as { toJSON?: unknown }).toJSON === 'function'
+	);
 }

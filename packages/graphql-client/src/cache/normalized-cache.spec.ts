@@ -92,6 +92,21 @@ describe('normalizedCache', () => {
 		).toBe(false);
 	});
 
+	test('two Date arguments are two entries: a field key is what the wire holds', () => {
+		const cache = normalizedCache();
+		const Events = parse(
+			'query Events($at: DateTime!) { events(at: $at) }',
+		) as TypedDocumentNode<{ events: string[] }, { at: Date }>;
+		const first = new Date('2026-01-01T00:00:00.000Z');
+		const second = new Date('2026-06-01T00:00:00.000Z');
+		cache.write(Events, { at: first }, { events: ['new year'] });
+		cache.write(Events, { at: second }, { events: ['summer'] });
+		expect(cache.read(Events, { at: first })).toEqual({
+			events: ['new year'],
+		});
+		expect(cache.read(Events, { at: second })).toEqual({ events: ['summer'] });
+	});
+
 	test('reset empties it', () => {
 		const cache = normalizedCache();
 		cache.write(BooksQuery, {}, { books: [book('1', 'Dune')] });

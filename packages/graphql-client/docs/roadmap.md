@@ -23,6 +23,13 @@ What `@nxgt/graphql-client` is heading for, phrased as what you get.
   `fetchPolicy`, and `client.cache`'s `read`, `write`, `watch`,
   `readFragment`, `watchFragment`, `evict`, `modify` and `reset`. Off by
   default.
+- **React bindings** (this effort, not released yet).
+  `@nxgt/graphql-client/react` for React 19: `GraphQLProvider`, `useClient`,
+  `useQuery` (variables compared by value, aborted on unmount, kept current
+  by the cache's `watch`), `useMutation`, `useSubscription` and `useFragment`
+  (over `watchFragment`). Nothing is sent during a render, so a server render
+  sends nothing. `react` is an optional peer; the root entry never imports
+  it.
 
 ## Next
 
@@ -38,8 +45,9 @@ Candidates, not commitments.
   `ApiError`**, rather than an `ApiStatusError` holding the stream's raw text.
   APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
   `forceStatusCodeOk`, which they need today.
-- **React bindings.** `useQuery`, `useMutation`, `useSubscription` and
-  `useFragment` over the cache's `watch` and `watchFragment`.
+- **Suspense for `useQuery`.** A query that suspends the component until its
+  first answer, for a `<Suspense>` boundary and streaming server rendering,
+  instead of returning `loading`.
 - **A subscription's results written to the cache**, as an option, so a live
   update reaches every query showing the same entity.
 
