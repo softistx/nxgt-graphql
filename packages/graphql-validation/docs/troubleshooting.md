@@ -124,6 +124,24 @@ resolver:
 const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not .transform(Number)
 ```
 
+### `The format "code" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`
+
+**When:** calling `withValidation` (or generating with
+`@nxgt/graphql-codegen-zod`) with `formats` whose value has a string
+schema's definition (`_zod.def.type` is `'string'`) but no `_zod.run`: an
+object built by hand or a test double shaped like a schema. A record typed
+loosely (`as never`, `any`) gets past the compiler; this check does not.
+**Why:** every request runs the format through its `_zod.run`; without it,
+each request would fail with `schema._zod.run is not a function`, a message
+that reaches the client. Startup refuses it instead.
+**Fix:** pass the schema zod built, not an object shaped like one:
+
+```ts
+import { z } from 'zod';
+
+const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not { _zod: { def: { type: 'string' } } }
+```
+
 ### `The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
 
 **When:** calling `withValidation` (or generating with

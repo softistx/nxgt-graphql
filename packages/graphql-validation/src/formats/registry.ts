@@ -35,7 +35,8 @@ export class FormatRegistry {
 
 	/**
 	 * Fails, naming the format, on a bad name, a built-in's name, a schema
-	 * that is not a string's, or one that rewrites the value.
+	 * that is not a string's, one zod cannot run, or one that rewrites the
+	 * value.
 	 */
 	constructor(own: FormatSchemas = {}) {
 		for (const format of Object.values(builtIns))
@@ -54,6 +55,11 @@ export class FormatRegistry {
 			if (!isStringSchema(schema)) {
 				throw new Error(
 					`The format "${name}" is not a Zod string schema: write z.string() or a string format such as z.email(), narrowed with .regex() or .refine(), never transformed.`,
+				);
+			}
+			if (!runnable(schema)) {
+				throw new Error(
+					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
 				);
 			}
 			if (rewrites(schema)) {
@@ -100,6 +106,18 @@ function isStringSchema(value: unknown): value is StringSchema {
 }
 
 /**
+ * Whether zod can run the schema: `marked` calls its `_zod.run` on every
+ * value, so a definition alone (an object that only reads `type: 'string'`)
+ * would pass startup and fail each request instead.
+ */
+function runnable(schema: StringSchema): boolean {
+	return (
+		typeof (schema as { _zod?: { run?: unknown } } | null)?._zod?.run ===
+		'function'
+	);
+}
+
+/**
  * Whether a string schema rewrites the value it checks, though it stays
  * `type: 'string'`: `z.coerce.string()` (`coerce: true`) turns a number
  * into a string; `z.url()`, `z.httpUrl()` and `.url()` (`format: 'url'`, as
@@ -136,8 +154,8 @@ function definition(value: unknown): Definition | undefined {
 
 /**
  * The application's schema as a plain string schema the rules can narrow,
- * each of its issues re-raised as it was (code, message) and marked as the
- * format's: a `.regex()` inside it is the format's refusal, not `pattern`'s.
+ * each of its issues re-raised as it was (code, message, and an abort that
+ * stops the rules chained after it) and marked as the format's: a `.regex()` inside it is the format's refusal, not `pattern`'s.
  * The value is checked, never changed: a schema that still returns another
  * value (a custom `.check()` setting `payload.value`, which `rewrites`
  * cannot see) throws, naming the format, as a resolver's bug would.
@@ -172,6 +190,12 @@ function marked(
 				ctx.addIssue({
 					...issue,
 					params: { ...params, [RULE_PARAM]: 'format' },
+					// finalizeIssue drops `continue`: an aborting check of the format
+					// (`.refine(…, { abort: true })`) still stops the rules after it,
+					// as it does in the generated client. Once the format has gone
+					// async, zod has already run those rules: the abort then stops
+					// nothing, on the server only.
+					...(raw.continue === false && { continue: false }),
 				} as Parameters<typeof ctx.addIssue>[0]);
 			}
 		};

@@ -44,6 +44,7 @@ input SignUpInput {
 	"The application's own formats: from the formatSchemas record, then zodFormats."
 	handle: String = "new-user" @constraint(format: "slug", maxLength: 12)
 	country: String @constraint(format: "country-code")
+	code: String @constraint(format: "code", maxLength: 3)
 	skus: [String!] @constraint(format: "sku", maxItems: 2)
 }
 

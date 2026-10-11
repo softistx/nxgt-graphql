@@ -299,7 +299,11 @@ What a format of your own is:
 
 - **Narrowed like a built-in one.** `format` comes first and the other rules
   narrow it: `@constraint(format: "work-email", maxLength: 64)` is your schema,
-  then at most 64 characters.
+  then at most 64 characters. A check of yours with `abort: true`
+  (`.refine(…, { message, abort: true })`) stops the rules after it, on the
+  server as in a generated client: only its issue is returned. Once an async
+  check of your format is pending, the rules have already run on the server,
+  so put an aborting check before any async one.
 - **Its messages are yours.** A refusal reads as your schema writes it (the
   package's own messages never name the value; yours may, so keep the input
   out of them if your logs or clients should not see it). Every issue your

@@ -29,7 +29,7 @@ describe("the generated file, the application's formats", () => {
 		type Query { a: Int }
 		type Mutation {
 			order(sku: String! @constraint(format: "sku")): Boolean
-			tag(slug: String! @constraint(format: "slug", maxLength: 12), country: String @constraint(format: "country-code")): Boolean
+			tag(slug: String! @constraint(format: "slug", maxLength: 12), country: String @constraint(format: "country-code"), code: String @constraint(format: "code", maxLength: 3)): Boolean
 		}`;
 	const served = withValidation(buildSchema(sdl), {
 		formats: { ...formatSchemas, sku: skuSchema },
@@ -68,6 +68,26 @@ describe("the generated file, the application's formats", () => {
 			expect([call, client?.message]).toEqual([call, server?.message]);
 			expect(server?.message).toBeString();
 		}
+	});
+
+	test('an aborting check of the format stops the rules after it, on both sides', async () => {
+		const result = await graphql({
+			schema: served,
+			source: 'mutation { tag(slug: "al", code: "abcd1") }',
+		});
+		const server = result.errors?.[0]?.extensions['issues'] as
+			| readonly Issue[]
+			| undefined;
+		const client = schemas['zSignUpMutationVariables']?.safeParse({
+			input: { email: 'a@b.co', name: 'Al', code: 'abcd1' },
+		}).error?.issues;
+		expect(server?.map((issue) => issue.message)).toEqual([
+			'Invalid code: uppercase letters only',
+		]);
+		expect(client?.map((issue) => issue.message)).toEqual(
+			server?.map((issue) => issue.message),
+		);
+		expect(server?.[0]?.constraint).toBe('format');
 	});
 
 	test('a refusal of the format itself is format’s on the server, whatever its Zod code', async () => {
@@ -126,7 +146,7 @@ describe("plugin, the application's formats", () => {
 				formatSchemas: './formats',
 			}),
 		).rejects.toThrow(
-			'Unknown @constraint format "slugg". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid, slug, country-code.',
+			'Unknown @constraint format "slugg". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid, slug, country-code, code.',
 		);
 		await expect(
 			generate('a(s: String @constraint(format: "slug")): Int', {}),

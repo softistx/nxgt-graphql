@@ -61,6 +61,7 @@ export const zSignUpInput = z.strictObject({
 	/** The application's own formats: from the formatSchemas record, then zodFormats. */
 	handle: formatSchemas.slug.max(12).prefault("new-user").nullable(),
 	country: formatSchemas["country-code"].nullish(),
+	code: formatSchemas.code.max(3).nullish(),
 	skus: z.union([z.array(skuSchema).max(2), z.string().transform((value): unknown[] => [value]).pipe(z.array(skuSchema).max(2))]).nullish(),
 });
 export type SignUpInput = z.output<typeof zSignUpInput>;

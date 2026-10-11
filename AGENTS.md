@@ -343,11 +343,14 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   the option `inputCode` throws. Wrapping a schema again with other formats, or
   none after some, throws (the record is kept on the schema under a
   `Symbol.for` key); with the same names and the very same schemas it is the
-  usual no-op.
+  usual no-op. A string definition with no `_zod.run` (an object shaped like
+  a schema) is refused at startup too, since every request calls it.
 - **An application format's issue is `format`'s, whatever its code.** Its
   schema runs inside a `z.string().superRefine` (`formats/registry.ts`,
   `marked`) that re-raises each issue unchanged but for
-  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), and `constraintOf` reads
+  `params.nxgtConstraint: 'format'` (`RULE_PARAM`), keeping `continue: false`
+  (which `finalizeIssue` drops) so an aborting check stops the rules after
+  it as on the client, and `constraintOf` reads
   that mark before any `owns`: a `.regex()` or `.refine()` inside the format
   is not `pattern`'s or `notContains`'. An async check stays async, from any
   zod copy, and runs once per value: `marked` calls the schema's own
