@@ -352,7 +352,10 @@ cache.write(BookQuery, { id: '1' }, { book: { __typename: 'Book', id: '1', title
 **When:** `cache.write` (or `cache.modify`, through a modifier's return
 value) is given a value that is not null, a boolean, a number, a string, a
 plain object or an array: `holds a Date`, `holds a Map`, `holds undefined`,
-`holds a Book` for a class instance. `<field>` is the stored field it was given
+`holds a Book` for a class instance, `holds NaN` or `holds Infinity` for a
+number JSON cannot write, `holds a cycle` for an object that contains itself.
+A selected field given `undefined` is not an error: it is stored as `null`
+(inside a list or an object, `undefined` is refused). `<field>` is the stored field it was given
 for. A `TypeError`, and the cache is left as it was. When the client itself
 writes a result, the error goes to the cache's `onError` and the call still
 returns its data.

@@ -698,11 +698,18 @@ packages/graphql-client/src/
 - **The cache holds JSON only**: a value that is not null, a boolean, a
   number, a string, a plain object or an array is refused at `write` and
   `modify` with `The cache holds JSON: field <field> holds a <type>`.
+  A number must be finite (`holds NaN`, `holds Infinity`) and a cycle throws
+  `holds a cycle` (a `WeakSet` of the ancestors), never a `RangeError`. A
+  selected field given `undefined` is stored as `null` (`writeValue`), kept on
+  purpose; `undefined` inside a list or object is refused.
   `equal` compares by content only arrays and objects whose prototype is
   `Object.prototype` or `null`; anything else by `Object.is`.
 - **Watch callbacks never nest**: a batch made from a callback is queued by
   `Watchers.notify` and run once the current one is over, so callbacks run
-  in order, each whole, and every watch ends on the newest data.
+  in order, each whole, and every watch ends on the newest data. One notify
+  runs at most 100 rounds: past that `#pending` is cleared and `onError` gets
+  `Watch callbacks kept writing: stopped after 100 rounds`. `onError` is
+  called guarded (`try`/`catch` to `logError`) in `Watchers` and `report.ts`.
 - **An aborted signal wins over a cache hit**: `queryThrough` calls
   `signal.throwIfAborted()` before reading the cache, for `cache-first` and
   `cache-only` (hit or miss), so the call rejects with the signal's reason.

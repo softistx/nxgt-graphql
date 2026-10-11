@@ -36,6 +36,26 @@ describe('writeToCache', () => {
 			logged.mockRestore();
 		}
 	});
+
+	test('an onError that throws: not thrown to the caller, logged with console.error', () => {
+		const logged = spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			const reporter = new Error('onError failed');
+			expect(() =>
+				writeToCache(
+					failing(new Error('no isbn'), () => {
+						throw reporter;
+					}),
+					Viewer,
+					{},
+					{},
+				),
+			).not.toThrow();
+			expect(logged).toHaveBeenCalledWith(reporter);
+		} finally {
+			logged.mockRestore();
+		}
+	});
 });
 
 describe('logError', () => {

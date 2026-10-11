@@ -164,8 +164,12 @@ strings, plain objects and arrays. A custom scalar arrives as a string (a
 it into a `Date` where you show it, after `read` or in a `watch` callback.
 
 A `write` (or a `modify`) given anything else, such as a `Date`, a `Map` or a
-class instance, throws a `TypeError` and changes nothing
+class instance, a `NaN` or an infinite number, or an object that contains
+itself (a cycle), throws a `TypeError` and changes nothing
 ([troubleshooting](../troubleshooting.md#the-cache-holds-json-field-field-holds-a-type)).
+A selected field given `undefined` is the exception: it is stored as `null`,
+as for a field the server left out. Inside a list or an object of a custom
+scalar, `undefined` is refused.
 
 ```ts
 cache.write(BookQuery, { id: '1' }, {
@@ -382,6 +386,10 @@ process (Bun and Node end on an uncaught error):
 
 - A watch callback that throws goes to the cache's `onError`. The other
   watches still run, and the write that caused it stands.
+- Watch callbacks that keep writing (each write wakes a watch that writes
+  again) are stopped after 100 rounds of one write: the rest is dropped and
+  `onError` gets `Watch callbacks kept writing: stopped after 100 rounds`. An
+  `onError` that throws is logged with `console.error`, never thrown.
 - A write the client makes after a query or a mutation that throws (a `keys`
   function, a value that is not [JSON](#json-only)) changes nothing (writes
   are all or nothing), goes to `onError` the same way, and the call still

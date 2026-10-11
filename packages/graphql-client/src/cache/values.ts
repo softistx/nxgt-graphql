@@ -16,22 +16,28 @@ export function isPlainObject(value: unknown): value is StoreObject {
 /**
  * Refuses a value JSON could not hold: the cache holds JSON as the network
  * sends it (a custom scalar arrives as a string). `field` names the field
- * key the value was given for, in the error.
+ * key the value was given for, in the error. A number must be finite, and an
+ * object or array must not contain itself.
  */
-export function assertJson(value: unknown, field: string): void {
-	if (
-		value === null ||
-		typeof value === 'string' ||
-		typeof value === 'number' ||
-		typeof value === 'boolean'
-	)
+export function assertJson(
+	value: unknown,
+	field: string,
+	seen: WeakSet<object> = new WeakSet(),
+): void {
+	if (value === null || typeof value === 'string' || typeof value === 'boolean')
 		return;
-	if (Array.isArray(value)) {
-		for (const item of value) assertJson(item, field);
-		return;
+	if (typeof value === 'number') {
+		if (Number.isFinite(value)) return;
+		throw new TypeError(`The cache holds JSON: field ${field} holds ${value}`);
 	}
-	if (isPlainObject(value)) {
-		for (const item of Object.values(value)) assertJson(item, field);
+	if (Array.isArray(value) || isPlainObject(value)) {
+		if (seen.has(value))
+			throw new TypeError(`The cache holds JSON: field ${field} holds a cycle`);
+		seen.add(value);
+		for (const item of Array.isArray(value) ? value : Object.values(value))
+			assertJson(item, field, seen);
+		// Left again: the same object twice, not nested in itself, is fine.
+		seen.delete(value);
 		return;
 	}
 	throw new TypeError(

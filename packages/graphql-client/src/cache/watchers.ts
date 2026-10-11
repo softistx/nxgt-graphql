@@ -1,4 +1,8 @@
+import { logError } from '../report';
 import type { Changes, Dependencies } from './changes';
+
+/** The most rounds one notify runs: callbacks that keep writing are stopped. */
+const MAX_ROUNDS = 100;
 
 /** One watch: what its last read used, and how to read again and call back. */
 export interface Watch {
@@ -40,12 +44,23 @@ export class Watchers {
 		if (this.#notifying) return;
 		this.#notifying = true;
 		try {
+			let rounds = 0;
 			for (
 				let next = this.#pending.shift();
 				next !== undefined;
 				next = this.#pending.shift()
-			)
+			) {
+				if (rounds++ >= MAX_ROUNDS) {
+					this.#pending.length = 0;
+					this.#report(
+						new Error(
+							`Watch callbacks kept writing: stopped after ${MAX_ROUNDS} rounds`,
+						),
+					);
+					break;
+				}
 				this.#refresh(next);
+			}
 		} finally {
 			this.#notifying = false;
 		}
@@ -59,8 +74,17 @@ export class Watchers {
 			try {
 				watch.refresh();
 			} catch (error) {
-				this.#onError(error);
+				this.#report(error);
 			}
+		}
+	}
+
+	/** To `onError`; one that throws is logged, so it never breaks a write. */
+	#report(error: unknown): void {
+		try {
+			this.#onError(error);
+		} catch (reported) {
+			logError(reported);
 		}
 	}
 }

@@ -52,4 +52,29 @@ describe('assertJson', () => {
 			'The cache holds JSON: field f holds a function',
 		);
 	});
+
+	test('refuses NaN and the infinities', () => {
+		expect(() => assertJson(Number.NaN, 'f')).toThrow(
+			new TypeError('The cache holds JSON: field f holds NaN'),
+		);
+		expect(() => assertJson({ a: [Infinity] }, 'f')).toThrow(
+			'The cache holds JSON: field f holds Infinity',
+		);
+		expect(() => assertJson(-Infinity, 'f')).toThrow(
+			'The cache holds JSON: field f holds -Infinity',
+		);
+	});
+
+	test('a cycle throws a TypeError, not a RangeError; a shared object is fine', () => {
+		const loop: Record<string, unknown> = {};
+		loop['self'] = loop;
+		expect(() => assertJson(loop, 'f')).toThrow(
+			new TypeError('The cache holds JSON: field f holds a cycle'),
+		);
+		const list: unknown[] = [];
+		list.push(list);
+		expect(() => assertJson(list, 'f')).toThrow(TypeError);
+		const shared = { a: 1 };
+		expect(() => assertJson({ x: shared, y: [shared] }, 'f')).not.toThrow();
+	});
 });

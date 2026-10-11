@@ -259,6 +259,62 @@ describe('watch', () => {
 		}
 	});
 
+	test('a selected field given undefined is stored as null', () => {
+		const cache = normalizedCache();
+		cache.write(
+			BookQuery,
+			{ id: '1' },
+			{ book: { __typename: 'Book', id: '1', title: undefined as never } },
+		);
+		expect(cache.read(BookQuery, { id: '1' })?.book?.title).toBeNull();
+	});
+
+	test('an onError that throws is logged: the write does not throw and the other watches still run', () => {
+		const logged = spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			const reporter = new Error('onError failed');
+			let first = true;
+			const cache = normalizedCache({
+				onError: () => {
+					if (!first) return;
+					first = false;
+					throw reporter;
+				},
+			});
+			cache.write(BookQuery, { id: '1' }, { book: book('1', 'Dune') });
+			cache.watch(BookQuery, { id: '1' }, () => {
+				throw new Error('render failed');
+			});
+			const seen: (string | undefined)[] = [];
+			cache.watch(BookQuery, { id: '1' }, (data) => {
+				seen.push(data?.book?.title);
+			});
+			expect(() =>
+				cache.write(BookQuery, { id: '1' }, { book: book('1', 'Emma') }),
+			).not.toThrow();
+			expect(seen).toEqual(['Emma']);
+			expect(logged).toHaveBeenCalledWith(reporter);
+		} finally {
+			logged.mockRestore();
+		}
+	});
+
+	test('callbacks that keep writing are stopped after 100 rounds, and onError gets an error', () => {
+		const reported: unknown[] = [];
+		const cache = normalizedCache({ onError: (error) => reported.push(error) });
+		cache.write(BookQuery, { id: '1' }, { book: book('1', 'a') });
+		let calls = 0;
+		cache.watch(BookQuery, { id: '1' }, () => {
+			calls++;
+			cache.modify('Book:1', { title: (title) => `${title}x` });
+		});
+		expect(() => cache.modify('Book:1', { title: () => 'b' })).not.toThrow();
+		expect(calls).toBe(100);
+		expect(reported).toEqual([
+			new Error('Watch callbacks kept writing: stopped after 100 rounds'),
+		]);
+	});
+
 	test('a write from a callback: callbacks run one after the other, each whole, and end on the newest data', () => {
 		const cache = normalizedCache();
 		cache.write(BookQuery, { id: '1' }, { book: book('1', 'a') });
