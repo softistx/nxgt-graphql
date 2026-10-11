@@ -76,8 +76,12 @@ What `withValidation` does:
 
 ```ts
 import type { GraphQLSchema } from 'graphql';
+import type { FormatSchemas } from '@nxgt/graphql-validation';
 
-declare function withValidation<S extends GraphQLSchema>(schema: S): S;
+declare function withValidation<S extends GraphQLSchema>(
+  schema: S,
+  options?: { formats?: FormatSchemas }, // your own formats, below
+): S;
 declare const constraintTypeDefs: string;
 ```
 

@@ -26,7 +26,8 @@ Peers, all **required**:
 | `typescript` | `^6.0.3` |
 
 `@nxgt/graphql-validation` is a dependency; you install it yourself only to
-run `withValidation` on a server.
+run `withValidation` on a server, or to type your formats module with its
+`FormatSchemas` (see [Your own formats](#your-own-formats)).
 
 ## Setup
 

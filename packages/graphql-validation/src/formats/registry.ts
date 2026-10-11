@@ -92,9 +92,11 @@ function isStringSchema(value: unknown): value is StringSchema {
  * newlines, or normalise it; `.trim()`, `.toLowerCase()`, `.toUpperCase()`,
  * `.normalize()`, `.slugify()` and `.overwrite()` are each a check whose
  * definition reads `check: 'overwrite'`. Every other string format of zod 4
- * only checks. The server checks the value as sent; a client chaining rules
- * on a rewriting schema would check the rewritten one. A custom check that
- * sets the value cannot be read here: `marked` catches it when it runs.
+ * only checks. `format: 'url'` is read as the format's name, so a
+ * `z.stringFormat('url', …)` of the application's is refused too. The
+ * server checks the value as sent; a client chaining rules on a rewriting
+ * schema would check the rewritten one. A custom check that sets the value
+ * cannot be read here: `marked` catches it when it runs.
  */
 function rewrites(schema: StringSchema): boolean {
 	const def = definition(schema);
