@@ -185,6 +185,56 @@ describe('inputCode, its list option', () => {
 			'L(z.array(L(z.array(z.string().min(2))).nullish()).min(1)).nullish()',
 		);
 	});
+
+	test("hands each list its array with its items' rules only, and its own rules as checks", () => {
+		const seen: string[] = [];
+		inputCode(
+			field('Probe', 'grid').type,
+			constraintsOn(inputs.directive, field('Probe', 'grid').astNode),
+			'Probe.grid',
+			named,
+			{
+				list: ({ array, checks }) => {
+					seen.push(`${array} | ${checks.join(', ')}`);
+					return `L(${array})`;
+				},
+			},
+		);
+		expect(seen).toEqual([
+			'z.array(z.string().min(2)) | ',
+			'z.array(L(z.array(z.string().min(2))).nullish()) | z.minLength(1)',
+		]);
+	});
+
+	test('its checks refuse what the rules refuse, on a union that takes a single value', () => {
+		// A list too long stays `too_big` on an array, whatever zod's union
+		// makes of an option that fails its size: zod 4.6.6 aborts it.
+		const tags = field('Probe', 'tags');
+		const list = evaluate(
+			inputCode(
+				tags.type,
+				constraintsOn(inputs.directive, tags.astNode),
+				'Probe.tags',
+				named,
+				{
+					list: ({ array, single, checks }) =>
+						`z.union([${array}, ${single}.transform((value) => [value]).pipe(${array})]).check(${checks.join(', ')})`,
+				},
+			),
+		);
+		const shapes = (value: unknown) =>
+			list
+				.safeParse(value)
+				.error?.issues.map(({ code, path, ...issue }) => [
+					code,
+					'origin' in issue ? issue.origin : undefined,
+					path.join('.'),
+				]);
+		expect(shapes(['a', 'b', 'c'])).toEqual([['too_big', 'array', '']]);
+		expect(shapes([])).toEqual([['too_small', 'array', '']]);
+		expect(shapes('abcd')).toEqual([['too_big', 'string', '0']]);
+		expect(list.parse('a')).toEqual(['a']);
+	});
 });
 
 describe('inputCode, its formats parameter', () => {

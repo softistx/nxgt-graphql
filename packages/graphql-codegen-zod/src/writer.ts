@@ -140,10 +140,17 @@ export class Writer {
  * may transform (a codec decodes): its single value goes to the pipe as it
  * was sent, and is parsed once there. Never `null`: a nullable list says
  * so with its own `.nullish()`, and graphql never wraps a null.
+ *
+ * The list's size (`minItems`, `maxItems`) is checked on the union, once
+ * its value is the array, never inside an option: an option that fails it
+ * is aborted from zod 4.6.6 on (an oversized array stops before its items),
+ * and a union with no option left to blame reports `invalid_union`, not
+ * the list too long.
  */
 const singleOrList: NonNullable<InputCodeOptions['list']> = ({
 	type,
-	code,
+	array,
+	checks,
 	single,
 }) => {
 	const named = getNamedType(type);
@@ -155,5 +162,6 @@ const singleOrList: NonNullable<InputCodeOptions['list']> = ({
 		: single;
 	// `unknown[]`: the pipe needs what it hands on to fit what the list
 	// takes, nullable items too.
-	return `z.union([${code}, ${first}.transform((value): unknown[] => [value]).pipe(${code})])`;
+	const sized = checks.length ? `.check(${checks.join(', ')})` : '';
+	return `z.union([${array}, ${first}.transform((value): unknown[] => [value]).pipe(${array})])${sized}`;
 };

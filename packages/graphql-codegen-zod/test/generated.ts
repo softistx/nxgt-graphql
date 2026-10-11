@@ -28,7 +28,7 @@ export type FilterInput = {
 /** A filter that nests. */
 export const zFilter: z.ZodType<Filter, FilterInput> = z.strictObject({
 	get and() {
-		return z.union([z.array(zFilter).max(3), z.custom<z.input<typeof zFilter>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zFilter).max(3))]).nullish();
+		return z.union([z.array(zFilter), z.custom<z.input<typeof zFilter>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zFilter))]).check(z.maxLength(3)).nullish();
 	},
 	name: z.string().startsWith("n").nullish(),
 });
@@ -47,7 +47,7 @@ export const zSignUpInput = z.strictObject({
 	name: z.string().min(2),
 	age: z.int32().lte(120).gte(13).nullish(),
 	role: zRole.prefault("USER").nullable(),
-	tags: z.union([z.array(z.string().max(8)).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().max(8)).min(1))]).prefault(["new"]).nullable(),
+	tags: z.union([z.array(z.string().max(8)), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().max(8)))]).check(z.minLength(1)).prefault(["new"]).nullable(),
 	get address() {
 		return zAddress.nullish();
 	},
@@ -56,13 +56,13 @@ export const zSignUpInput = z.strictObject({
 		return zPrefs.prefault({"tags":["x"],"grid":[[1]]}).nullable();
 	},
 	get contacts() {
-		return z.union([z.array(zContact).max(2), z.custom<z.input<typeof zContact>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zContact).max(2))]).nullish();
+		return z.union([z.array(zContact), z.custom<z.input<typeof zContact>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zContact))]).check(z.maxLength(2)).nullish();
 	},
 	/** The application's own formats: from the formatSchemas record, then zodFormats. */
 	handle: formatSchemas.slug.max(12).prefault("new-user").nullable(),
 	country: formatSchemas["country-code"].nullish(),
 	code: formatSchemas.code.max(3).nullish(),
-	skus: z.union([z.array(skuSchema).max(2), z.string().transform((value): unknown[] => [value]).pipe(z.array(skuSchema).max(2))]).nullish(),
+	skus: z.union([z.array(skuSchema), z.string().transform((value): unknown[] => [value]).pipe(z.array(skuSchema))]).check(z.maxLength(2)).nullish(),
 });
 export type SignUpInput = z.output<typeof zSignUpInput>;
 
@@ -94,7 +94,7 @@ export type GroupInput = {
 export const zGroup: z.ZodType<Group, GroupInput> = z.strictObject({
 	name: z.string().min(2),
 	get members() {
-		return z.union([z.array(zMember).max(5), z.custom<z.input<typeof zMember>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zMember).max(5))]).nullish();
+		return z.union([z.array(zMember), z.custom<z.input<typeof zMember>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value]).pipe(z.array(zMember))]).check(z.maxLength(5)).nullish();
 	},
 	role: zRole.prefault("USER").nullable(),
 	since: scalarSchemas.DateTime.nullish(),
@@ -176,7 +176,7 @@ export type MutationSignUpArgs = z.output<typeof zMutationSignUpArgs>;
 
 export const zMutationRateArgs = z.object({
 	score: z.number().multipleOf(0.5),
-	ids: z.union([z.array(z.string().min(3)).min(1), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().min(3)).min(1))]),
+	ids: z.union([z.array(z.string().min(3)), z.string().transform((value): unknown[] => [value]).pipe(z.array(z.string().min(3)))]).check(z.minLength(1)),
 });
 export type MutationRateArgs = z.output<typeof zMutationRateArgs>;
 

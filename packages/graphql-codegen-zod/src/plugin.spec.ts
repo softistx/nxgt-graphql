@@ -450,6 +450,35 @@ describe('the generated file', () => {
 		expect(issue?.message).toBeDefined();
 	});
 
+	test("refuses a list too long as the server does: the list's size, not invalid_union", async () => {
+		// The size is checked on the union, never inside an option: zod 4.6.6
+		// aborts an oversized array, and a union with no option left to blame
+		// would report invalid_union.
+		const input = {
+			email: 'a@b.co',
+			name: 'Al',
+			skus: ['SKU-0001', 'SKU-0002', 'SKU-0003'],
+		};
+		const answer = await graphql({
+			schema: server(),
+			source,
+			operationName: 'SignUp',
+			variableValues: { input },
+		});
+		const client = schemas['zSignUpMutationVariables']?.safeParse({ input });
+		const issues = answer.errors?.[0]?.extensions['issues'] as
+			| readonly { readonly message: string }[]
+			| undefined;
+		expect(issues).toHaveLength(1);
+		expect(
+			client?.error?.issues.map(({ code, path, message }) => [
+				code,
+				path,
+				message,
+			]),
+		).toEqual([['too_big', ['input', 'skus'], String(issues?.[0]?.message)]]);
+	});
+
 	test('types the arguments a resolver receives: the server parses them through the same rules', () => {
 		expect(schemas['zQueryUsersArgs']?.parse({})).toEqual({ first: 10 });
 		expect(

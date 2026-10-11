@@ -12,7 +12,7 @@ import {
 	type FormatSchemas,
 	registryOf,
 } from '../formats/registry';
-import { applyRuleCode } from '../rules';
+import { applyRuleCode, ruleCheckCode } from '../rules';
 import type { Constraint } from './constraints';
 import { assertLeafTargets, assertObjectTargets, baseCode } from './leaf';
 
@@ -54,12 +54,23 @@ export interface InputCodeOptions {
 	 * A list's schema, given its `type`, `code` (the array with every rule)
 	 * and `single` (the list's named type, non-null, without rules): to
 	 * take a single value for a list, as graphql does, `single` wrapped then
-	 * piped into `code`. Default: `code`.
+	 * piped into the array. Default: `code`.
+	 *
+	 * `array` is the array with its items' rules only, and `checks` the
+	 * list's own rules (`minItems`, `maxItems`) as Zod checks
+	 * (`z.maxLength(2)`), which hold on any schema whose value is an array.
+	 * A union taking a single value checks the size on itself, once its
+	 * value is the array (`z.union([array, …]).check(...checks)`): an
+	 * option that fails its size check is not one Zod can report alone, so
+	 * `code` inside the union would turn a list too long into
+	 * `invalid_union` (zod 4.6.6 stops an oversized array before its items).
 	 */
 	readonly list?: (list: {
 		readonly type: GraphQLList<GraphQLInputType>;
 		readonly code: string;
 		readonly single: string;
+		readonly array: string;
+		readonly checks: readonly string[];
 	}) => string;
 	/**
 	 * The source of one of the application's formats, given its name (a key
@@ -97,14 +108,12 @@ function requiredCode(
 		// minItems and maxItems are the list's; every other rule is its items'.
 		const own = constraints.filter(({ rule }) => rule.target === 'list');
 		const items = constraints.filter(({ rule }) => rule.target !== 'list');
-		const code = applyCode(
-			write,
-			`z.array(${typedCode(write, type.ofType, items)})`,
-			own,
-		);
+		const array = `z.array(${typedCode(write, type.ofType, items)})`;
+		const code = applyCode(write, array, own);
 		if (!write.options.list) return code;
 		const single = requiredCode(write, getNamedType(type), []);
-		return write.options.list({ type, code, single });
+		const checks = own.map(({ rule, value }) => ruleCheckCode(rule, value));
+		return write.options.list({ type, code, single, array, checks });
 	}
 	if (isInputObjectType(type)) {
 		assertObjectTargets(type.name, constraints, write.where);

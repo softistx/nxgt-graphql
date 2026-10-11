@@ -57,6 +57,23 @@ export function applyRuleCode(
 }
 
 /**
+ * A `list` rule as a Zod check's source (`z.maxLength(2)`), for a schema
+ * holding an array that is not a `z.array`. Throws for a rule without one,
+ * which only a rule of another target can be.
+ */
+export function ruleCheckCode(
+	rule: RegisteredRule,
+	value: string | number,
+): string {
+	const toCheckCode = (
+		rule as { toCheckCode?: (value: string | number) => string }
+	).toCheckCode;
+	if (!toCheckCode)
+		throw new Error(`@constraint(${rule.argument}) has no check form`);
+	return toCheckCode(value);
+}
+
+/**
  * The `@constraint` argument whose rule refused with this issue, if any: the
  * one the issue is marked with (an application format's), else the one rule
  * that owns its shape.

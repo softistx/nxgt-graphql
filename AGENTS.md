@@ -496,8 +496,12 @@ packages/graphql-codegen-zod/test/
   coerces them, through lists and nested input literals.
 - **Every list takes a single value, as graphql does** (owner: uniform),
   through `inputCode`'s `list` option, which hands the list's named type: the
-  value is wrapped, then piped into the list's schema, so the client's issue
-  is the server's (path, message). An input object's or a custom scalar's
+  value is wrapped, then piped into the list's array, so the client's issue
+  is the server's (path, message). The list's size (`minItems`, `maxItems`)
+  is a `.check(z.minLength/maxLength)` on the union, never `.min/.max`
+  inside an option: zod 4.6.6 aborts an oversized array before its items,
+  and a union with every option aborted reports `invalid_union`, not
+  `too_big` (the "Newest peers" job caught it). An input object's or a custom scalar's
   first stage is `z.custom<z.input<typeof X>>`, so it is parsed once. An Int
   for an ID stays refused (owner: « on garde seulement id comme string »).
   The parity spec pins it, with a codec `DateTime` on both sides and a cycle
