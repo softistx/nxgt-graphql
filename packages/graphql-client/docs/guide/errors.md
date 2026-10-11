@@ -1,7 +1,11 @@
 # Errors
 
-Every failure of `query` and `mutate` is one of four things: an `ApiError`, an
-`ApiStatusError`, an `ApiUnavailableError`, or the signal's own reason.
+A failure of `query` and `mutate` from the API is one of three classes: an
+`ApiError`, an `ApiStatusError` or an `ApiUnavailableError`. The call can also
+reject with the signal's own reason, with a `CacheMissError` (a `cache-only`
+query the cache cannot answer), or with a `TypeError` for a mistake in the
+call itself (a wrong kind of document, `cache-only` without a cache, the rest
+in [Troubleshooting](../troubleshooting.md)).
 
 ```ts
 import {
@@ -26,6 +30,8 @@ try {
 | `ApiStatusError` | a non-2xx status with no GraphQL `errors`, or whose reply is labelled JSON but does not parse | `The API answered <status> with no GraphQL response` |
 | `ApiUnavailableError` | no GraphQL answer to read | by `reason`, below |
 | the signal's reason | the call's `signal` aborted | whatever the signal holds |
+| `CacheMissError` | a `cache-only` query whose result the cache does not hold whole | `cache-only: the cache does not hold the whole result of <operation>` |
+| `TypeError` | a mistake in the call, such as `fetchPolicy: 'cache-only'` on a client without `cache` | `fetchPolicy 'cache-only' needs a cache: pass cache: normalizedCache() to createGraphQLClient`, and the others in [Troubleshooting](../troubleshooting.md) |
 
 ## ApiError
 
@@ -117,10 +123,40 @@ class ApiUnavailableError extends Error {
 | `timeout` | `The API did not answer in time` | the `timeout` passed, before the answer or while its body was read |
 | `invalid-response` | `The API answered with neither data nor errors` | a 2xx with no `data` and no `errors`, or labelled JSON that does not parse |
 
+## CacheMissError
+
+A query with `fetchPolicy: 'cache-only'` whose result the cache does not hold
+whole: some field it selects, for these variables, was never written, or its
+entity was evicted. Nothing is sent. Without a cache at all, `cache-only`
+throws a `TypeError` instead, naming the fix.
+
+```ts
+class CacheMissError extends Error {
+  readonly operationName: string | undefined; // 'Book'
+}
+```
+
+```ts
+import { CacheMissError } from '@nxgt/graphql-client';
+
+try {
+  await client.query(BookQuery, { id: '1' }, { fetchPolicy: 'cache-only' });
+} catch (error) {
+  if (error instanceof CacheMissError) await client.query(BookQuery, { id: '1' });
+  else throw error;
+}
+```
+
+An error thrown by the cache itself after the network answered (a watch
+callback, a `keys` function) never fails the call: it goes to the cache's
+`onError` (default `console.error`), see
+[Errors in the cache](cache.md#errors-in-the-cache).
+
 ## Aborts
 
 When the call's `signal` aborts, the call rejects with the signal's reason, not
-with an `ApiUnavailableError`. A subscription's loop does the same, and its
+with an `ApiUnavailableError`. A signal already aborted wins over a cache hit
+too. A subscription's loop does the same, and its
 connection closes.
 
 ```ts

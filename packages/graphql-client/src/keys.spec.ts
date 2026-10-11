@@ -1,11 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { operationOf } from './document';
 import { callKey, dedupeKey } from './keys';
 
-const operation = {
-	query: 'query A { a }',
-	operationName: 'A',
-	kind: 'query',
-} as const;
+const operation = operationOf('query A { a }' as never);
 
 describe('keys', () => {
 	test('headers, timeout and retry tell calls apart', () => {

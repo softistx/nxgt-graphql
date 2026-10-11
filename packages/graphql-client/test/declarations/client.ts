@@ -11,14 +11,24 @@ import {
 	ApiStatusError,
 	ApiUnavailableError,
 	type BatchOptions,
+	type CacheKeys,
+	CacheMissError,
 	type CallOptions,
 	createGraphQLClient,
+	type EntityRef,
+	type FetchPolicy,
+	type FieldModifier,
+	type FragmentOptions,
+	type GraphQLCache,
 	type GraphQLClient,
 	type GraphQLClientOptions,
 	type GraphQLDocument,
 	type HttpClientBasedOptions,
 	isApiError,
+	type NormalizedCacheOptions,
+	normalizedCache,
 	type PersistedQueries,
+	type PossibleTypes,
 	type QueryOptions,
 	type QueryRetry,
 	type SubscribeOptions,
@@ -26,6 +36,7 @@ import {
 	type UnavailableReason,
 	type UrlClientOptions,
 	type VariablesArgs,
+	type VariablesThen,
 } from '@nxgt/graphql-client';
 import { createHttpClient } from '@nxgt/httpyz';
 
@@ -66,6 +77,65 @@ export const OnTick = {} as TypedDocumentNode<
 	{ tick: number },
 	Exact<{ room: string }>
 >;
+
+export const possibleTypes: PossibleTypes = { Node: ['User', 'Book'] };
+export const keys: CacheKeys = { Book: (book) => String(book['isbn']) };
+export const cacheOptions: NormalizedCacheOptions = { possibleTypes, keys };
+export const cache = normalizedCache(cacheOptions);
+export const cached = createGraphQLClient({
+	url: 'https://api.example.com/graphql',
+	cache,
+});
+export const policy: FetchPolicy = 'cache-first';
+export const fromCache = cached.query(
+	Viewer,
+	{},
+	{ fetchPolicy: 'cache-only' },
+);
+export const clientCache: GraphQLCache | undefined = cached.cache;
+export const read = cache.read(Viewer);
+export const stop = cache.watch(Rename, { name: 'a' }, (data) => data?.rename);
+export const ref: EntityRef = { __typename: 'Book', id: '1' };
+export const renamed2 = cache.modify(ref, {
+	title: ((title) => String(title)) satisfies FieldModifier,
+});
+export const BookCard = {} as TypedDocumentNode<{ title: string }, unknown>;
+export const fragmentOptions: FragmentOptions = { fragmentName: 'BookCard' };
+export const card = cache.readFragment(BookCard, ref, fragmentOptions);
+export const stopCard = cache.watchFragment(BookCard, 'Book:1', (data) =>
+	data?.title.toUpperCase(),
+);
+export const writeArgs: VariablesThen<{ name: string }, boolean> = [
+	{ name: 'a' },
+	true,
+];
+export const stopViewer = cache.watch(Viewer, (data) => data?.viewer.id);
+export function writeViewer() {
+	cache.write(Viewer, {}, { viewer: { id: 'u' } });
+	cache.write(Viewer, { viewer: { id: 'u' } });
+	// @ts-expect-error: Rename requires its variables
+	cache.write(Rename, { rename: true });
+	// @ts-expect-error: the data must have the document's shape
+	cache.write(Viewer, { viewer: { id: 1 } });
+	// @ts-expect-error: a variable the document does not declare
+	cache.write(Rename, { name: 'a', extra: 1 }, { rename: true });
+	cache.evict('User:u');
+	cache.reset();
+}
+
+// What the cache's types refuse.
+export function refusals() {
+	// @ts-expect-error: Rename requires its variables
+	cache.watch(Rename, (data) => data?.rename);
+	// @ts-expect-error: a variable the document does not declare
+	cache.watch(Rename, { name: 'a', extra: 1 }, (data) => data?.rename);
+	cache.watchFragment(
+		BookCard,
+		'Book:1',
+		// @ts-expect-error: the callback gets the fragment's data, not another shape
+		(data: { pages: number } | undefined) => data?.pages,
+	);
+}
 
 export const persisted: PersistedQueries = { mode: 'apq' };
 export const batch: BatchOptions = { max: 10 };
@@ -120,6 +190,7 @@ export async function failure() {
 			return reason;
 		}
 		if (error instanceof ApiError) return error.httpStatus;
+		if (error instanceof CacheMissError) return error.operationName;
 		throw error;
 	}
 	return undefined;

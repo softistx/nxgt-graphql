@@ -149,10 +149,58 @@ const client = createGraphQLClient({
 See [Persisted queries](docs/guide/client.md#persisted-queries) and
 [Batching](docs/guide/client.md#batching).
 
+### Normalized cache (browser)
+
+```ts
+import { createGraphQLClient, normalizedCache } from '@nxgt/graphql-client';
+
+const client = createGraphQLClient({
+  url: 'https://api.example.com/graphql',
+  // possibleTypes: graphql-codegen's fragment-matcher output, for fragments
+  // on interfaces and unions; keys: an identity other than id or _id;
+  // onError: where a watch's error goes (default console.error).
+  cache: normalizedCache({
+    possibleTypes,
+    keys: { Book: (b) => String(b.isbn) },
+    onError: (error) => logger.error(error),
+  }),
+});
+
+await client.query(BookQuery, { id: '1' });                                // network, written
+await client.query(BookQuery, { id: '1' });                                // cache, no request
+await client.query(BookQuery, { id: '1' }, { fetchPolicy: 'network-only' }); // network, written
+await client.mutate(RenameBook, { id: '1', title: 'Dune' });              // updates Book:1
+
+const stop = client.cache!.watch(BookQuery, { id: '1' }, (data) => render(data));
+const card = client.cache!.readFragment(BookCard, 'Book:1');            // one entity, by a fragment
+client.cache!.evict({ __typename: 'Book', id: '1' });
+```
+
+Off by default. Each object with a `__typename` and an `id` (or `_id`, or its
+`keys` identity) is stored once; the client adds `__typename` to the selection
+sets it sends, leaving your documents as they are. `fetchPolicy` is
+`cache-first` (default), `network-only`, `cache-only` (throws
+`CacheMissError` on a miss) or `no-cache`. `client.cache` offers `read`,
+`write`, `watch` (the hook for UI bindings, called only when the result
+changed), `readFragment` and `watchFragment` (one entity through a fragment
+document), `evict`, `modify` and `reset`. The cache holds JSON as the network
+sends it (a custom scalar stays a string; a `Date` written throws a
+`TypeError`). A watch callback or a `keys` function that throws goes to
+`onError`, never into the call, and never ends the process.
+See [Normalized cache](docs/guide/cache.md).
+
 ## Traps
 
 - **Never share a client between users on a server.** Headers carry the user's
   token; create one client per incoming request.
+- **Keep `cache` off on a server.** One client serves one request there, so a
+  cache would hold one user's data for one request and nothing more. The
+  client does not enforce it.
+- **With a cache and `persisted: { mode: 'documentId' }`, the documents must
+  carry `__typename`**: add the client preset's
+  `addTypenameSelectionDocumentTransform`, or the call throws a `TypeError`
+  before anything is sent. `apq` needs nothing.
+- **A subscription's results are not written to the cache.**
 - **`onUnauthenticated` may be async, and runs once per caller.** Keep its side
   effects idempotent; a GraphQL-level 401 on an HTTP 200 gets no refresh (see
   [Errors](docs/guide/errors.md#onunauthenticated)).

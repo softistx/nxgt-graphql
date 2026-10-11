@@ -147,3 +147,20 @@ export function isApiError(error: unknown): error is ApiError {
 			Array.isArray((error as ApiError).errors))
 	);
 }
+
+/**
+ * A `cache-only` query whose result the cache does not hold whole: some
+ * field or entity it selects was never written, or was evicted.
+ */
+export class CacheMissError extends Error {
+	override name = 'CacheMissError';
+	/** The operation's name, when it has one. */
+	readonly operationName: string | undefined;
+
+	constructor(operationName: string | undefined) {
+		super(
+			`cache-only: the cache does not hold the whole result of ${operationName ?? 'the query'}`,
+		);
+		this.operationName = operationName;
+	}
+}

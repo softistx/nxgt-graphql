@@ -17,15 +17,18 @@ class TypedDocumentString<TResult, TVariables> extends String {
 }
 
 describe('operationOf', () => {
-	test('a DocumentNode: printed text, name and kind', () => {
-		const operation = operationOf(
-			parse('mutation Rename($name: String!) { rename(name: $name) }') as never,
+	test('a DocumentNode: printed text, name, kind and the node itself', () => {
+		const node = parse(
+			'mutation Rename($name: String!) { rename(name: $name) }',
 		);
+		const operation = operationOf(node as never);
 		expect(operation).toEqual({
 			query: 'mutation Rename($name: String!) {\n  rename(name: $name)\n}',
 			operationName: 'Rename',
 			kind: 'mutation',
+			node,
 		});
+		expect(operation.node).toBe(node);
 	});
 
 	test('a TypedDocumentString is kept as written', () => {
@@ -35,6 +38,7 @@ describe('operationOf', () => {
 			query: text,
 			operationName: 'Viewer',
 			kind: 'query',
+			node: expect.any(Object),
 		});
 	});
 
@@ -44,6 +48,7 @@ describe('operationOf', () => {
 			query: text,
 			operationName: 'Tick',
 			kind: 'subscription',
+			node: expect.any(Object),
 		});
 	});
 

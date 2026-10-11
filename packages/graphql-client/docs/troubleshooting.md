@@ -17,6 +17,14 @@ One entry per error you can hit, headed by the message you will search for.
 - [`The API could not be reached`](#the-api-could-not-be-reached)
 - [`The API did not answer in time`](#the-api-did-not-answer-in-time)
 - [`The API answered with neither data nor errors`](#the-api-answered-with-neither-data-nor-errors)
+- [`cache-only: the cache does not hold the whole result of <operation>`](#cache-only-the-cache-does-not-hold-the-whole-result-of-operation)
+- [`fetchPolicy 'cache-only' needs a cache: pass cache: normalizedCache() to createGraphQLClient`](#fetchpolicy-cache-only-needs-a-cache-pass-cache-normalizedcache-to-creategraphqlclient)
+- [`With a cache, a persisted document needs __typename in every selection set: add the client preset's addTypenameSelectionDocumentTransform to its documentTransforms`](#with-a-cache-a-persisted-document-needs-__typename-in-every-selection-set-add-the-client-presets-addtypenameselectiondocumenttransform-to-its-documenttransforms)
+- [`The cache stores an operation's data: an object`](#the-cache-stores-an-operations-data-an-object)
+- [`The cache holds JSON: field <field> holds a <type>`](#the-cache-holds-json-field-field-holds-a-type)
+- [`The document has no fragment <name>`](#the-document-has-no-fragment-name)
+- [`The document holds no fragment`](#the-document-holds-no-fragment)
+- [A `cache-first` query that always goes to the network](#a-cache-first-query-that-always-goes-to-the-network)
 
 ## `query() was given a mutation`
 
@@ -263,4 +271,151 @@ page, an empty 200), or a proxy rewrote the body.
 
 ```ts
 const client = createGraphQLClient({ http, path: '/graphql' });
+```
+
+## `cache-only: the cache does not hold the whole result of <operation>`
+
+**When:** a query with `fetchPolicy: 'cache-only'` whose result the cache does
+not hold whole. A `CacheMissError`, whose `operationName` names the operation;
+nothing is sent.
+**Why:** some field the document selects, for these variables, was never
+written, or the entity holding it was evicted or reset.
+**Fix:** fall back to the network, or query with `cache-first`, which does it
+for you:
+
+```ts
+import { CacheMissError } from '@nxgt/graphql-client';
+
+try {
+  return await client.query(BookQuery, { id }, { fetchPolicy: 'cache-only' });
+} catch (error) {
+  if (!(error instanceof CacheMissError)) throw error;
+  return client.query(BookQuery, { id }, { fetchPolicy: 'network-only' });
+}
+```
+
+## `fetchPolicy 'cache-only' needs a cache: pass cache: normalizedCache() to createGraphQLClient`
+
+**When:** a query with `fetchPolicy: 'cache-only'` on a client created without
+`cache`. A `TypeError`, thrown before anything is sent.
+**Why:** without a cache there is nothing to answer from. The other policies
+are ignored without a cache: every query goes to the network.
+**Fix:**
+
+```ts
+import { createGraphQLClient, normalizedCache } from '@nxgt/graphql-client';
+
+const client = createGraphQLClient({ url, cache: normalizedCache() });
+```
+
+## `With a cache, a persisted document needs __typename in every selection set: add the client preset's addTypenameSelectionDocumentTransform to its documentTransforms`
+
+**When:** the client has both `cache` and `persisted: { mode: 'documentId' }`,
+and a query or a mutation is given a document with a selection set (other than
+the operation's own) that has no `__typename`. A `TypeError`, thrown before
+anything is sent.
+**Why:** the cache needs each object's `__typename`. In other modes the client
+adds it to the text it sends; in `documentId` mode it sends only the hash, and
+the server runs the text it holds, so the document must carry `__typename`
+already. The client preset does not add it by default.
+**Fix:** add the preset's transform, and regenerate (the hashes and
+`persisted-documents.json` change, so deploy them to the server too):
+
+```ts
+// codegen.ts
+import { addTypenameSelectionDocumentTransform } from '@graphql-codegen/client-preset';
+
+const config = {
+  generates: {
+    'src/gql/': {
+      preset: 'client',
+      presetConfig: { persistedDocuments: true },
+      documentTransforms: [addTypenameSelectionDocumentTransform],
+    },
+  },
+};
+```
+
+## `The cache stores an operation's data: an object`
+
+**When:** `cache.write(document, variables, data)` with `data` that is not an
+object (`null`, a list, a string). A `TypeError`.
+**Why:** `data` is the operation's whole result, the object `query()` returns.
+**Fix:**
+
+```ts
+cache.write(BookQuery, { id: '1' }, { book: { __typename: 'Book', id: '1', title: 'Dune' } });
+```
+
+## `The cache holds JSON: field <field> holds a <type>`
+
+**When:** `cache.write` (or `cache.modify`, through a modifier's return
+value) is given a value that is not null, a boolean, a number, a string, a
+plain object or an array: `holds a Date`, `holds a Map`, `holds undefined`,
+`holds a Book` for a class instance, `holds NaN` or `holds Infinity` for a
+number JSON cannot write, `holds a cycle` for an object that contains itself.
+A selected field given `undefined` is not an error: it is stored as `null`
+(inside a list or an object, `undefined` is refused). `<field>` is the stored field it was given
+for. A `TypeError`, and the cache is left as it was. When the client itself
+writes a result, the error goes to the cache's `onError` and the call still
+returns its data.
+**Why:** the cache holds JSON as the network sends it, and compares values as
+JSON: two `Date`s, or two `Map`s, could not be told equal or different. A
+custom scalar arrives from the network as a string, and is stored as one.
+**Fix:** write the value as the server sends it, and convert it where you show
+it:
+
+```ts
+cache.write(BookQuery, { id: '1' }, {
+  book: { __typename: 'Book', id: '1', published: date.toISOString() },
+});
+const published = new Date(cache.read(BookQuery, { id: '1' })!.book.published);
+```
+
+## `The document has no fragment <name>`
+
+**When:** with a cache, a document spreads `...<name>` but does not define that
+fragment; or `readFragment`/`watchFragment` is given a `fragmentName` the
+document does not define. A `TypeError` from the cache.
+**Why:** a document built by hand, or a fragment left out of a hand-written
+string. The client preset always includes the fragments a document spreads. A
+`fragmentName` must name one of the document's own fragments.
+**Fix:** use the preset's document, or append the fragment's definition to the
+document; check the `fragmentName`:
+
+```ts
+cache.readFragment(BookCard, 'Book:1', { fragmentName: 'BookCard' });
+```
+
+## `The document holds no fragment`
+
+**When:** `cache.readFragment` or `cache.watchFragment` is given a document
+that defines no fragment: an operation (`BookQuery`), or the client preset's
+hash-only object. A `TypeError`.
+**Why:** these read one entity through a fragment's selection set; an
+operation reads from the root instead.
+**Fix:** pass the fragment's document, or read the operation with `read`:
+
+```ts
+const BookCard = graphql(`fragment BookCard on Book { title }`);
+cache.readFragment(BookCard, 'Book:1');
+cache.read(BookQuery, { id: '1' }); // an operation
+```
+
+## A `cache-first` query that always goes to the network
+
+**When:** with a cache, the same query sends a request every time.
+**Why:** one of these makes every read a miss:
+
+- the queries that ran before used `no-cache`, which writes nothing;
+- different variables: each set of arguments is its own field;
+- a fragment on an interface or a union with no `possibleTypes`, whose fields
+  the cache cannot tell are whole;
+- an entity it refers to was evicted.
+
+**Fix:** pass `possibleTypes` from the `fragment-matcher` plugin, and check
+what the cache holds:
+
+```ts
+console.log(client.cache?.read(BookQuery, { id: '1' })); // undefined: a miss
 ```

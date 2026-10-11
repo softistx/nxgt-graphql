@@ -21,6 +21,8 @@ export interface Operation {
 	readonly kind: 'query' | 'mutation' | 'subscription';
 	/** `__meta__.hash`: on the `DocumentNode`, or on the `TypedDocumentString`. */
 	readonly hash?: string;
+	/** The parsed document: the one passed, or the text's, parsed once. */
+	readonly node: DocumentNode;
 }
 
 const operations = new WeakMap<object, Operation>();
@@ -44,6 +46,30 @@ export function operationOf(
 		operations.set(document, operation);
 	}
 	return operation;
+}
+
+export const noFragment = 'The document holds no fragment';
+
+const fragmentNodes = new Map<string, DocumentNode>();
+
+/**
+ * A fragment's document, for the cache's `readFragment` and
+ * `watchFragment`: the `DocumentNode`, or a `TypedDocumentString`'s text,
+ * parsed once. It holds no operation, so `operationOf` cannot read it.
+ */
+export function fragmentNodeOf(
+	document: GraphQLDocument<unknown, never>,
+): DocumentNode {
+	if (isDocumentNode(document)) return document;
+	if (typeof document !== 'string' && !(document instanceof String))
+		throw new TypeError(noFragment);
+	const text = String(document);
+	let node = fragmentNodes.get(text);
+	if (!node) {
+		node = parse(text, { noLocation: true });
+		fragmentNodes.set(text, node);
+	}
+	return node;
 }
 
 /** The preset's `persistedDocuments` puts `__meta__: { hash }` on each operation. */
@@ -77,6 +103,7 @@ function fromNode(document: DocumentNode): Operation {
 		query: print(document),
 		operationName: definition.name?.value,
 		kind: definition.operation as Operation['kind'],
+		node: document,
 	};
 }
 

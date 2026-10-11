@@ -1,110 +1,46 @@
 import { createHttpClient } from '@nxgt/httpyz';
 import { Batcher } from './batch';
 import { Deduplicator } from './dedupe';
-import { type GraphQLDocument, type Operation, operationOf } from './document';
 import { ApiError, ApiStatusError } from './errors';
-import { dedupeKey } from './keys';
 import type {
 	GraphQLClient,
 	GraphQLClientOptions,
-	QueryOptions,
 	Subscription,
 } from './options';
-import { checkPersistable } from './persisted';
-import { type Sending, send, type Transport } from './send';
+import { type ClientContext, operationFor, run } from './run';
+import type { Transport } from './send';
 import { EventSubscription, type OnFailure } from './subscribe';
-
-/** Any operation's document: its variables' type is contravariant. */
-type AnyDocument = GraphQLDocument<unknown, never>;
-
-/** Which call takes which kind of operation, as its refusal names it. */
-const callers = {
-	query: 'query()',
-	mutation: 'mutate()',
-	subscription: 'subscribe()',
-} as const;
 
 export function createGraphQLClient(
 	options: GraphQLClientOptions,
 ): GraphQLClient {
-	const { retry: clientRetry, dedupe = true } = options;
+	const { retry, dedupe = true, cache } = options;
 	const transport = transportOf(options);
-	const onFailure = failureHook(options);
-	const flights = new Deduplicator();
-	const batcher = options.batch
-		? new Batcher(transport, options.batch)
-		: undefined;
-
-	/** A query: shared with identical ones in flight, then batched. */
-	function sendQuery(
-		operation: Operation,
-		variables: unknown,
-		call: QueryOptions,
-	): Promise<unknown> {
-		const retry = call.retry ?? clientRetry;
-		const go = (signal: AbortSignal | undefined) => {
-			const sending: Sending = { call, retry, signal };
-			return batcher
-				? batcher.run(operation, variables, sending)
-				: send(transport, operation, variables, sending);
-		};
-		if (!dedupe) return go(call.signal);
-		return flights.run(
-			dedupeKey(operation, variables, call, retry),
-			call.signal,
-			go,
-		);
-	}
-
-	async function run(
-		document: AnyDocument,
-		expected: 'query' | 'mutation',
-		variables: unknown,
-		call: QueryOptions = {},
-	): Promise<unknown> {
-		const operation = operationFor(document, expected, transport);
-		try {
-			if (expected === 'query')
-				return await sendQuery(operation, variables, call);
-			return await send(transport, operation, variables, {
-				call,
-				retry: false,
-				signal: call.signal,
-			});
-		} catch (error) {
-			await onFailure(error);
-			throw error;
-		}
-	}
-
+	const context: ClientContext = {
+		transport,
+		retry,
+		dedupe,
+		flights: new Deduplicator(),
+		batcher: options.batch ? new Batcher(transport, options.batch) : undefined,
+		cache,
+		onFailure: failureHook(options),
+	};
 	return {
 		query: (document, ...[variables, call]) =>
-			run(document, 'query', variables, call) as Promise<never>,
+			run(context, document, 'query', variables, call) as Promise<never>,
 		mutate: (document, ...[variables, call]) =>
-			run(document, 'mutation', variables, call) as Promise<never>,
+			run(context, document, 'mutation', variables, call) as Promise<never>,
 		subscribe: (document, ...[variables, options]) =>
 			new EventSubscription(
 				transport,
-				operationFor(document, 'subscription', transport),
+				operationFor(document, 'subscription', transport, cache),
 				variables,
 				options ?? {},
-				onFailure,
+				context.onFailure,
 			) as Subscription<never>,
 		http: transport.http,
+		cache,
 	};
-}
-
-/** The document's operation, refused before anything is sent when it is not `expected`. */
-function operationFor(
-	document: AnyDocument,
-	expected: Operation['kind'],
-	transport: Transport,
-): Operation {
-	const operation = operationOf(document);
-	if (operation.kind !== expected)
-		throw new TypeError(`${callers[expected]} was given a ${operation.kind}`);
-	checkPersistable(operation, transport.persisted);
-	return operation;
 }
 
 /** What runs before a caller gets an error: the 401 hook, awaited. */
@@ -126,6 +62,7 @@ function transportOf(options: GraphQLClientOptions): Transport {
 		dedupe: _dedupe,
 		persisted: _persisted,
 		batch: _batch,
+		cache: _cache,
 		...http
 	} = options;
 	return {

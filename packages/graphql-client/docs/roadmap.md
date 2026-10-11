@@ -17,6 +17,12 @@ What `@nxgt/graphql-client` is heading for, phrased as what you get.
   yields each result over server-sent events (the GraphQL over SSE protocol's
   distinct connections mode, as graphql-yoga serves it), closed on every way
   out of the loop. No reconnection yet.
+- **A normalized cache** (this effort, not released yet). `normalizedCache({
+  possibleTypes, keys })` for the browser: entities stored once, `cache-first`
+  queries answered without a request, mutations' entities written back,
+  `fetchPolicy`, and `client.cache`'s `read`, `write`, `watch`,
+  `readFragment`, `watchFragment`, `evict`, `modify` and `reset`. Off by
+  default.
 
 ## Next
 
@@ -32,10 +38,18 @@ Candidates, not commitments.
   `ApiError`**, rather than an `ApiStatusError` holding the stream's raw text.
   APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
   `forceStatusCodeOk`, which they need today.
-- **A normalized cache.**
-- **React bindings.**
+- **React bindings.** `useQuery`, `useMutation`, `useSubscription` and
+  `useFragment` over the cache's `watch` and `watchFragment`.
+- **A subscription's results written to the cache**, as an option, so a live
+  update reaches every query showing the same entity.
 
 ## Later
 
+- **Garbage collection.** Entities no result refers to any more removed,
+  instead of staying until evicted or reset.
+- **Field policies, pagination included.** A list merged with the next page
+  instead of replaced, and a field read through a function of its own.
+- **Structural sharing.** A read that changed nothing returning the same
+  objects, so a UI binding can skip a render.
 - **Vue bindings.**
 - **Subscriptions over WebSocket.**
