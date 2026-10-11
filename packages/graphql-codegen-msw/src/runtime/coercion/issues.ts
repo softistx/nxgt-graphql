@@ -8,8 +8,9 @@ export interface PlacedIssue {
 
 /**
  * Every issue with its whole path, a union's own issue followed by each of
- * its branches' (a list that also takes a single value is a union): a
- * custom scalar's refusal may sit in either branch.
+ * its branches' (`@oneOf` and nested unions): a custom scalar's refusal may
+ * sit in either branch. A list's item issues come from the pipe after its
+ * shaping union, outside any union.
  */
 export function placed(
 	issues: readonly z.core.$ZodIssue[],

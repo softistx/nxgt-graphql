@@ -1,5 +1,7 @@
 // What the generated types say, checked by the package's typecheck.
+import type { z } from 'zod';
 import type {
+	Contact,
 	DeepQuery,
 	FriendsQuery,
 	Group,
@@ -24,6 +26,9 @@ import type {
 	Solo,
 	User,
 	UsersQueryVariables,
+	zLogQueryVariables,
+	zPrefs,
+	zSignUpInput,
 } from './generated';
 
 type Equal<A, B> =
@@ -146,5 +151,53 @@ holds<Equal<Leaf<NonNullable<DeepQuery['user']>>, { id: string }>>();
 
 // Under @include, the field may be absent; once there, its fields are.
 holds<Equal<NonNullable<FriendsQuery['maybe']>, { id: string }>>();
+
+// A list's input and output, item by item: a single value in for a list,
+// nullable items kept, nested lists and lists of input objects, enums and IDs.
+type PrefsIn = z.input<typeof zPrefs>;
+type PrefsOut = z.output<typeof zPrefs>;
+holds<Equal<PrefsIn['ids'], string | string[] | null | undefined>>();
+holds<Equal<PrefsOut['ids'], string[] | null>>();
+holds<
+	Equal<PrefsIn['roles'], Role | (Role | null | undefined)[] | null | undefined>
+>();
+holds<
+	Equal<PrefsOut['roles'], (Role | null | undefined)[] | null | undefined>
+>();
+holds<Equal<PrefsIn['dates'], string | string[] | null | undefined>>();
+holds<Equal<PrefsOut['dates'], Date[] | null | undefined>>();
+holds<
+	Equal<
+		PrefsIn['grid'],
+		| number
+		| (number | (number | null | undefined)[] | null | undefined)[]
+		| null
+		| undefined
+	>
+>();
+holds<
+	Equal<
+		PrefsOut['grid'],
+		((number | null | undefined)[] | null | undefined)[] | null | undefined
+	>
+>();
+holds<
+	Equal<
+		z.input<typeof zLogQueryVariables>['at'],
+		string | (string | null | undefined)[]
+	>
+>();
+holds<
+	Equal<z.output<typeof zLogQueryVariables>['at'], (Date | null | undefined)[]>
+>();
+holds<
+	Equal<
+		z.input<typeof zSignUpInput>['contacts'],
+		Contact | Contact[] | null | undefined
+	>
+>();
+holds<
+	Equal<z.output<typeof zSignUpInput>['contacts'], Contact[] | null | undefined>
+>();
 
 export { found, group, none, returned, sent };

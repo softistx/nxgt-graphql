@@ -29,6 +29,7 @@ input Prefs {
 	owner: ID = 7
 	ids: [ID!] = 1
 	dates: [DateTime!]
+	roles: [Role]
 }
 
 input SignUpInput {
