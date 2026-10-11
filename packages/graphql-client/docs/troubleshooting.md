@@ -25,6 +25,9 @@ One entry per error you can hit, headed by the message you will search for.
 - [`The document has no fragment <name>`](#the-document-has-no-fragment-name)
 - [`The document holds no fragment`](#the-document-holds-no-fragment)
 - [A `cache-first` query that always goes to the network](#a-cache-first-query-that-always-goes-to-the-network)
+- [`No GraphQL client: render this component inside <GraphQLProvider client={client}>`](#no-graphql-client-render-this-component-inside-graphqlprovider-clientclient)
+- [`useFragment() reads the cache: pass cache: normalizedCache() to createGraphQLClient`](#usefragment-reads-the-cache-pass-cache-normalizedcache-to-creategraphqlclient)
+- [A `useQuery` that sends its query again on every render](#a-usequery-that-sends-its-query-again-on-every-render)
 
 ## `query() was given a mutation`
 
@@ -418,4 +421,58 @@ what the cache holds:
 
 ```ts
 console.log(client.cache?.read(BookQuery, { id: '1' })); // undefined: a miss
+```
+
+## `No GraphQL client: render this component inside <GraphQLProvider client={client}>`
+
+**When:** a component calls `useClient`, `useQuery`, `useMutation`,
+`useSubscription` or `useFragment` (from `@nxgt/graphql-client/react`) with no
+`GraphQLProvider` above it. An `Error` thrown during the render.
+**Why:** the hooks take their client from the nearest provider; there is no
+default client. A test rendering a component alone, or a portal or a second
+React root outside the provider, hits it too.
+**Fix:** wrap the tree, or the component under test, in a provider:
+
+```tsx
+<GraphQLProvider client={client}>
+  <App />
+</GraphQLProvider>
+
+// a test
+renderHook(() => useQuery(BookQuery, { id: '1' }), {
+  wrapper: ({ children }) => <GraphQLProvider client={client}>{children}</GraphQLProvider>,
+});
+```
+
+## `useFragment() reads the cache: pass cache: normalizedCache() to createGraphQLClient`
+
+**When:** `useFragment` runs under a provider whose client was created
+without `cache`. An `Error` thrown during the render.
+**Why:** `useFragment` reads an entity from the normalized cache and never
+sends a request; without a cache there is nothing to read.
+**Fix:** give the client a cache, or read the fields from the query's data:
+
+```ts
+const client = createGraphQLClient({ url: '/graphql', cache: normalizedCache() });
+```
+
+## A `useQuery` that sends its query again on every render
+
+**When:** a component using `useQuery` sends a request at each render, or
+renders without end.
+**Why:** something the hook compares changed at each render. The variables
+and `headers` are compared by value, so a new object literal is not the cause;
+a new **document** is: a document built inside the component
+(`parse(...)`, `graphql(...)` called in the render) is a new object each time.
+A value that changes in the variables (`new Date().toISOString()`, a random
+id) does it too.
+**Fix:** declare documents at module level, as the client preset's
+`graphql()` calls are, and keep changing values out of the variables:
+
+```tsx
+const BookQuery = graphql(`query Book($id: ID!) { book(id: $id) { id title } }`);
+
+function Book({ id }: { id: string }) {
+  const { data } = useQuery(BookQuery, { id }); // one request per id
+}
 ```

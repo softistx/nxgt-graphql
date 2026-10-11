@@ -24,6 +24,21 @@ Peers, both **required**:
 `@nxgt/httpyz` is a dependency; you import its types from it only when you
 pass your own client.
 
+For the React hooks (`@nxgt/graphql-client/react`), two **optional** peers:
+
+```sh
+bun add react
+bun add -d @types/react
+```
+
+| Optional peer | Range | Needed for |
+| --- | --- | --- |
+| `react` | `^19.0.0` | `@nxgt/graphql-client/react` |
+| `@types/react` | `^19.0.0` | its types |
+
+The root entry never imports `react`: a server or a script that uses the
+client alone installs neither.
+
 ## Setup
 
 The client takes the documents the client preset writes. Either mode works:
@@ -45,7 +60,10 @@ const config = {
 
 ## Subpaths
 
-Only `.` is exported.
+| Subpath | What it holds |
+| --- | --- |
+| `@nxgt/graphql-client` | the client, its errors and the normalized cache |
+| `@nxgt/graphql-client/react` | `GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment` (React 19) |
 
 ## Usage
 
@@ -189,6 +207,41 @@ sends it (a custom scalar stays a string; a `Date` written throws a
 `onError`, never into the call, and never ends the process.
 See [Normalized cache](docs/guide/cache.md).
 
+### React
+
+```ts
+import { createGraphQLClient, normalizedCache } from '@nxgt/graphql-client';
+import {
+  GraphQLProvider,
+  useFragment,
+  useMutation,
+  useQuery,
+  useSubscription,
+} from '@nxgt/graphql-client/react';
+
+const client = createGraphQLClient({ url: '/graphql', cache: normalizedCache() });
+// <GraphQLProvider client={client}><App /></GraphQLProvider>
+
+function Book({ id }: { id: string }) {
+  const { data, error, loading, refetch } = useQuery(BookQuery, { id });
+  const [rename, { loading: saving }] = useMutation(RenameBook);
+  const { data: live } = useSubscription(OnBookChanged, { id });
+  const card = useFragment(BookCard, { __typename: 'Book', id });
+  if (loading) return <Spinner />;
+  if (error) return <Failure error={error} retry={refetch} />;
+  return <Title book={data!.book} onRename={(title) => rename({ id, title })} />;
+}
+```
+
+Every hook sends from an effect, never during a render, so a server render
+sends nothing. `useQuery` compares its variables by value (a new object
+literal each render sends nothing again), aborts its request on unmount and
+when the variables change (an abort is never an `error`), and, with a cache,
+renders again when another write changes its result. `refetch()` asks the
+network and returns the data. `mutate` returns the call's promise and records
+its state. `useSubscription` closes the connection on unmount. `useFragment`
+reads one entity from the cache, kept current. See [React](docs/guide/react.md).
+
 ## Traps
 
 - **Never share a client between users on a server.** Headers carry the user's
@@ -223,6 +276,13 @@ See [Normalized cache](docs/guide/cache.md).
   document without its hash throws a `TypeError` before anything is sent.
 - **Identical in-flight queries share one request.** Pass `dedupe: false` to
   turn it off.
+- **Every React hook needs a `GraphQLProvider` above it**, and `useFragment`
+  a client with a cache: each throws otherwise, naming the fix.
+- **No Suspense yet**: `useQuery` returns `loading`, it does not suspend.
+- **The client preset's fragment masking may write its own `useFragment`**
+  (its unmask function, in `gql/fragment-masking.ts`). Ours reads the cache by
+  an entity reference; import one of them under another name, or rename the
+  preset's with `fragmentMasking: { unmaskFunctionName }`.
 
 ## Documentation
 

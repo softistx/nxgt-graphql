@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys, onError })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `readFragment`, `watchFragment`, `evict`, `modify`, `reset`). A mutation is never retried. React 19 bindings on the `./react` subpath (`GraphQLProvider`, `useClient`, `useQuery`, `useMutation`, `useSubscription`, `useFragment`). Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript`, optional `react` and `@types/react` (`^19.0.0`) |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -608,7 +608,35 @@ packages/graphql-client/src/
                         queued until the current one is over
     values.ts           Reference, StoreObject, isPlainObject (prototype Object.prototype or
                         null), assertJson, equal, deepMerge
+  react/                the `./react` subpath (entry point `react/index.ts`, in `nxgt.entrypoints`)
+    index.ts            its barrel
+    context.ts          GraphQLProvider, useClient (throws `noProvider` outside one)
+    stable.ts           useStable (a value kept while its key is the same), variablesKey, headersKey
+    watched.ts          useWatched: a cache read and its watch through useSyncExternalStore,
+                        the snapshot the object the watch last delivered
+    query-run.ts        startQuery (the effect: run, then abort in the cleanup), refetchQuery,
+                        stateFor: plain functions over one QueryRequest
+    use-query.ts        useQuery: the QueryRequest memoized by value, the cache read, the state
+    use-mutation.ts     useMutation: the last call recorded, nothing after unmount or reset
+    use-subscription.ts useSubscription: one connection per effect, closed in its cleanup
+    use-fragment.ts     useFragment: readFragment and watchFragment through useWatched
+packages/graphql-client/test/
+  declarations/         client.ts and react.ts: the consumer fixtures verify:artifacts emits
+  dom.ts                happy-dom for the React specs only: registered while one runs, the
+                        runtime's fetch, Request, AbortSignal, streams and timers kept
+  react.ts              the React specs' fetch doubles (a held answer, an event stream) and wrapper
 ```
+
+- **A React spec imports `../../test/dom` first, as a side-effect import**
+  (Biome does not move those), then calls `useDom(cleanup)` with
+  `@testing-library/react/pure`'s `cleanup`. react-dom reads `window` as it
+  loads, and `useDom` unregisters happy-dom after the file, so every other
+  spec keeps the bare runtime. Nothing goes in `bunfig.toml`: it is
+  nxgt-data's byte copy, and a preload would give every spec a DOM.
+- **`react-dom` and `@types/react-dom` are devDependencies by range
+  (`^19.0.0`)**, not pinned as `react` is: the lockfile holds 19.0.0, and
+  the "Newest peers" job, which raises `react` to its newest, resolves
+  `react-dom` to the same version (react-dom refuses another `react`).
 
 ### Invariants
 
@@ -720,6 +748,26 @@ packages/graphql-client/src/
 - **`graphql` is a peer used at runtime** (`parse`, `print`, `Kind`, `visit`,
   `valueFromASTUntyped`), not only for types. The cache takes no schema and no
   other dependency.
+- **The root entry never imports `react`.** Only `src/react/` does, and
+  nothing outside it imports from it: `react/boundary.spec.ts` walks the
+  root's import graph and fails on `react`, `react-dom` or a module of
+  `src/react/`. `react` and `@types/react` are optional peers; the second is
+  declared so `verify:artifacts`' types check finds it (react ships no
+  types).
+- **A hook never sends during a render.** `useQuery` and `useSubscription`
+  start in `useEffect`, so a server render sends nothing; the cache is read
+  during a render through `useSyncExternalStore` (its server snapshot too),
+  which sends nothing. `server-render.spec.ts` renders with `renderToString`
+  and counts zero requests.
+- **A hook aborts what it started.** Each effect's cleanup aborts its
+  `AbortController` (a query, its refetches) or closes its subscription: an
+  unmount, new variables, and StrictMode's second effect leave no request
+  behind; the specs assert on the signal `fetch` received. An abort is never
+  recorded as `error`, and nothing is recorded after a cleanup.
+- **Variables and headers are compared by value** (`stableJson`, the
+  cache's own field-key JSON, and the headers' entries): a new object
+  literal each render sends nothing again. A document is compared by
+  identity, as the client preset's module constants allow.
 - **Source imports carry no extension.**
 - **Temporary, until nxgt-http wraps body reads**: `response.ts` checks for the
   `DOMException` named `TimeoutError`, which is what a deadline firing while the
