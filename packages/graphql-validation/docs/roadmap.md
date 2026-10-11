@@ -4,18 +4,31 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Now
 
-- **Your own formats** (in progress, not released yet). Name a Zod string schema in
-  `@constraint(format: "...")`: `withValidation(schema, { formats })`, one
-  record your module exports, checked at startup, its refusals named
-  `format`. `@nxgt/graphql-codegen-zod` 0.3 reads the same record, so the
-  client refuses what the server refuses, with the same messages.
+- **Answering invalid input as one error** (in progress, not released yet).
+  `invalidInputError(issues, { translate })` builds one 400 error whose
+  `extensions.fields` lists every field at fault with your own codes,
+  translated; `fieldsError` does the same for a refusal such as a 409
+  conflict; `inputPath` turns a GraphQL path into `person.firstName`.
 
 ## Next
 
 - **Schemas that read the context**, `(args, context) => schema`, for checks
   that need the request (uniqueness in a database, permissions).
 
+## Later
+
+- **Emit the invalid-input shape directly.** An option for `withValidation`
+  and `validated` to raise the `invalidInputError` shape in place of
+  `BAD_USER_INPUT`, so an API using it needs no mapping of its own.
+
 ## Shipped
+
+- **Your own formats** — 0.3.0. Name a Zod string schema in
+  `@constraint(format: "...")`: `withValidation(schema, { formats })`, one
+  record your module exports, checked at startup, its refusals named
+  `format`. `@nxgt/graphql-codegen-zod` 0.3 reads the same record, so the
+  client refuses what the server refuses, with the same messages. From
+  0.3.1 they run through Zod's public API only.
 
 - **Declarations resolve under `nodenext`** — 0.2.1. `moduleResolution`
   `nodenext` and `node16` find every export, as `bundler` does.

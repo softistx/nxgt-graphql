@@ -5,6 +5,10 @@ import {
 	badUserInput,
 	constraintTypeDefs,
 	type FormatSchemas,
+	fieldsError,
+	inputPath,
+	invalidInputError,
+	type Translate,
 	validated,
 	withValidation,
 } from '@nxgt/graphql-validation';
@@ -60,6 +64,28 @@ export const withBuiltInName = () =>
 	});
 
 export const refused = badUserInput('Query.a', new z.ZodError([]));
+
+// An API that answers invalid input as one 400 error with a list of fields.
+const translate: Translate = (code) => code;
+export const invalid = invalidInputError(
+	[
+		{
+			path: inputPath(['input', 'name']),
+			code: 'too-short',
+			params: { min: 2 },
+		},
+	],
+	{ translate, path: ['signUp'] },
+);
+export const conflict = fieldsError(
+	'conflict',
+	[{ path: 'email', code: 'taken' }],
+	{
+		status: 409,
+		params: { name: 'Ada' },
+	},
+);
+export const translated = { translate };
 
 // The ./codegen subpath, as a code generator holds its results.
 const codegenSchema = buildSchema(
