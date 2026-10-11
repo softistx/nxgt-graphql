@@ -49,7 +49,11 @@ export class FormatSources {
 			const loaded = (await load('formatSchemas', record, outputFile))[
 				'formatSchemas'
 			];
-			if (typeof loaded !== 'object' || loaded === null) {
+			if (
+				typeof loaded !== 'object' ||
+				loaded === null ||
+				Array.isArray(loaded)
+			) {
 				throw new Error(
 					`@nxgt/graphql-codegen-zod: ${record} exports no formatSchemas record.`,
 				);

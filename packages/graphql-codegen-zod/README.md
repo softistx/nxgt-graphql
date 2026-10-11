@@ -121,7 +121,8 @@ import { formatSchemas } from "../formats";
 handle: formatSchemas.slug.max(40),
 ```
 
-The module must be one graphql-codegen can import: JavaScript, or
+Keep `satisfies`, not a `Record<string, …>` annotation: the generated file
+reads `formatSchemas.slug`. The module must be one graphql-codegen can import: JavaScript, or
 TypeScript when codegen runs under Bun or tsx. One it cannot load fails
 generation. See [Your own formats](docs/guide/output.md#your-own-formats).
 

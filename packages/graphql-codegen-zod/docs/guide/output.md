@@ -541,6 +541,10 @@ email: z.email(),
   after it are chained on your schema, as `withValidation` applies them: the
   client refuses what the server refuses, with your messages. A key that is
   not an identifier is read with brackets (`formatSchemas["country-code"]`).
+- **Export the record as an object literal** (`satisfies FormatSchemas`,
+  as above), never annotated `Record<string, …>`: the generated file reads
+  `formatSchemas.slug`, which `noUncheckedIndexedAccess` types
+  `… | undefined` on a `Record`, and the file then fails to typecheck.
 - **The built-in formats stay inline** (`z.email()`), whatever the record
   holds; a record cannot replace them.
 - **Loaded, never trusted.** The plugin imports each module at generation and
