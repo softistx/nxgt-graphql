@@ -41,6 +41,10 @@ input SignUpInput {
 	birth: DateTime
 	prefs: Prefs = { tags: "x", grid: 1 }
 	contacts: [Contact!] @constraint(maxItems: 2)
+	"The application's own formats: from the formatSchemas record, then zodFormats."
+	handle: String = "new-user" @constraint(format: "slug", maxLength: 12)
+	country: String @constraint(format: "country-code")
+	skus: [String!] @constraint(format: "sku", maxItems: 2)
 }
 
 input Contact @oneOf {
@@ -118,6 +122,7 @@ type Query {
 type Mutation {
 	signUp(input: SignUpInput!): User
 	rate(score: Float! @constraint(multipleOf: 0.5), ids: [ID!]! @constraint(minItems: 1, minLength: 3)): Boolean
+	order(sku: String! @constraint(format: "sku")): Boolean
 }
 `;
 
@@ -134,6 +139,7 @@ export const documents = [
 				users(filter: { and: [{ name: $name }] }, first: $first) { id }
 			}
 			mutation Rate($score: Float!, $id: ID!) { rate(score: $score, ids: [$id]) }
+			mutation Order($sku: String!) { order(sku: $sku) }
 			query Reach($c: Contact!) { reach(contact: $c) }
 			query ReachEmail($e: String!) { reach(contact: { email: $e }) }
 			query Groups($where: Group) { groups(where: $where) }

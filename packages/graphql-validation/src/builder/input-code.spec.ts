@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { constraintTypeDefs } from '../constraint-directive';
 import { type FormatSchemas, registryOf } from '../formats/registry';
 import { constraintsOn } from './constraints';
-import { inputCode } from './input-code';
+import { type InputCodeOptions, inputCode } from './input-code';
 import { InputSchemas } from './input-schema';
 
 const schema = buildSchema(`${constraintTypeDefs}
@@ -199,7 +199,11 @@ describe('inputCode, its formats parameter', () => {
 	).getFields();
 	const directive = new InputSchemas(withOwn, registryOf({ siret: z.string() }))
 		.directive;
-	const codeWith = (name: 'siret' | 'email', formats?: FormatSchemas) => {
+	const codeWith = (
+		name: 'siret' | 'email',
+		formats?: FormatSchemas,
+		options: InputCodeOptions = {},
+	) => {
 		const input = company[name] as GraphQLInputField;
 		return () =>
 			inputCode(
@@ -207,7 +211,7 @@ describe('inputCode, its formats parameter', () => {
 				constraintsOn(directive, input.astNode),
 				`Company.${name}`,
 				named,
-				{},
+				options,
 				formats,
 			);
 	};
@@ -218,8 +222,44 @@ describe('inputCode, its formats parameter', () => {
 			'Unknown @constraint format "siret". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid.',
 		);
 		expect(codeWith('siret', formatSchemas)).toThrow(
-			`@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write.`,
+			`@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.`,
 		);
+	});
+
+	test('writes an application format through its format option, the rules after it chained', () => {
+		const asked: string[] = [];
+		const format = (name: string) => {
+			asked.push(name);
+			return `formatSchemas[${JSON.stringify(name)}]`;
+		};
+		const code = codeWith('siret', formatSchemas, { format })();
+		expect(code).toBe('formatSchemas["siret"].max(14).nullish()');
+		expect(asked).toEqual(['siret']);
+		// Never asked for a built-in one.
+		expect(codeWith('email', formatSchemas, { format })()).toBe(
+			'z.email().nullish()',
+		);
+		expect(asked).toEqual(['siret']);
+	});
+
+	test('writes what the runtime checks with the application format', () => {
+		const code = codeWith('siret', formatSchemas, {
+			format: (name) => `formatSchemas[${JSON.stringify(name)}]`,
+		})();
+		const generated = new Function('z', 'formatSchemas', `return ${code};`)(
+			z,
+			formatSchemas,
+		) as z.ZodType;
+		const runtime = new InputSchemas(withOwn, registryOf(formatSchemas)).of(
+			company['siret'] as GraphQLInputField,
+			'Company.siret',
+		);
+		for (const value of ['73282932000074', '7328', '7328293200007a', null]) {
+			expect([value, generated.safeParse(value).success]).toEqual([
+				value,
+				runtime.safeParse(value).success,
+			]);
+		}
 	});
 
 	test('still writes the built-in formats', () => {

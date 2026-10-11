@@ -1,12 +1,13 @@
 # Troubleshooting
 
 One entry per error you can hit, headed by the message you will search for.
-Configuration, Scalars, Operations and The schema happen while
+Configuration, Scalars, Formats, Operations and The schema happen while
 `graphql-codegen` runs; The generated file is what `tsc` and the generated
 schemas report.
 
 - [Configuration](#configuration)
 - [Scalars](#scalars)
+- [Formats](#formats)
 - [Operations](#operations)
 - [The generated file](#the-generated-file)
 - [The schema](#the-schema)
@@ -85,6 +86,101 @@ export const scalarSchemas = {
 	DateTime: z.iso.datetime({ offset: true }),
 };
 ```
+
+## Formats
+
+Your own `@constraint(format: "...")` values, from `formatSchemas` and
+`zodFormats`. The plugin loads them at generation, so each module must be one
+graphql-codegen can import.
+
+### `@nxgt/graphql-codegen-zod: cannot load ./formats (formatSchemas): …`
+
+The full message goes on: `<the loader's own error>. The plugin checks your
+formats as withValidation does, so it must import them: point formatSchemas at
+a module graphql-codegen can load: a path relative to the generated file or a
+package, in JavaScript, or in TypeScript when codegen runs under Bun or tsx.`
+With `zodFormats`, the option reads `zodFormats.slug`.
+
+**When:** running codegen with `formatSchemas` or `zodFormats` set, when the
+module cannot be imported: the path is wrong, it is TypeScript and codegen
+runs under a Node that does not load it, or the module itself throws.
+**Why:** the plugin checks your formats, and every default value against
+them, as `withValidation` does at startup, so it needs the real schemas.
+Unlike a `scalarSchemas` record, a module it cannot load is never trusted:
+a default that breaks its format would reach the generated file unseen.
+**Fix:** a relative path is relative to the **generated file**, not to
+`codegen.ts`. Then make the module loadable: run codegen under Bun or tsx
+(`bunx --bun graphql-codegen` runs it under Bun), or point
+the option at a compiled `.js` file or a package.
+
+```ts
+// generating src/generated/zod.ts from src/formats.ts
+config: { formatSchemas: '../formats' }
+```
+
+### `@nxgt/graphql-codegen-zod: ./formats exports no formatSchemas record.`
+
+**When:** running codegen with `formatSchemas` set. The module path in the
+message is the one you configured.
+**Why:** the module loaded, but exports no `formatSchemas` object.
+**Fix:** export the record under that name, or name one format at a time
+with `zodFormats`.
+
+```ts
+// formats.ts
+import { z } from 'zod';
+
+export const formatSchemas = {
+	slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug'),
+};
+```
+
+### `@nxgt/graphql-codegen-zod: zodFormats.slug is "slugSchema"; write it '<module>#<export>', e.g. './slug#slugSchema'.`
+
+**When:** running codegen with a `zodFormats` entry that is not
+`module#export`.
+**Why:** the entry needs a module and an export name on either side of the
+last `#`; the one in the message has none, or an empty side.
+**Fix:**
+
+```ts
+config: { zodFormats: { slug: './slug#slugSchema' } }
+```
+
+### `@nxgt/graphql-codegen-zod: ./slug exports no slugSchema (zodFormats.slug).`
+
+**When:** running codegen with a `zodFormats` entry whose module loaded but
+has no export of that name.
+**Why:** the name after `#` must be one the module exports, spelled the same.
+**Fix:** export the schema under that name, or correct the entry.
+
+```ts
+// slug.ts
+export const slugSchema = z.string().regex(/^[a-z0-9-]+$/, 'Invalid slug');
+```
+
+### `Unknown @constraint format "slug". Known formats: byte, date, date-time, email, ipv4, ipv6, uri, uuid.`
+
+**When:** running codegen on a schema whose `@constraint(format: "slug")`
+names a format of your own, with neither `formatSchemas` nor `zodFormats`
+mapping it. The list ends with the formats the plugin did load.
+**Why:** this is `withValidation`'s own message: the plugin knows the
+built-in formats and those you map, nothing else.
+**Fix:** point `formatSchemas` at the record the server hands
+`withValidation`, or map that one format.
+
+```ts
+config: { formatSchemas: '../formats' }
+// or
+config: { zodFormats: { slug: '../slug#slugSchema' } }
+```
+
+The plugin also refuses, with `withValidation`'s messages, a format whose name
+is a built-in one (`The format "email" is built in: give yours another
+name.`), a schema that is not a Zod string schema, and a default value its
+format refuses (`The default value of Query.a(s:) breaks its @constraint`);
+each is in
+[`@nxgt/graphql-validation`'s troubleshooting](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-validation/docs/troubleshooting.md).
 
 ## Operations
 

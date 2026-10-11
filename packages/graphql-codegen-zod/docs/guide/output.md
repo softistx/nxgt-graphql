@@ -483,6 +483,89 @@ later.
 - A rule on a custom scalar (`@constraint` on a `DateTime` field) is refused,
   as `withValidation` refuses it; check the value in the scalar's own schema.
 
+## Your own formats
+
+`@nxgt/graphql-validation` 0.3 takes formats of your own:
+`withValidation(schema, { formats })`, a record of Zod string schemas that
+`@constraint(format: "...")` may name beside the built-in ones. The plugin
+reads the same record, mapped in one of two ways:
+
+| Option | Type | Effect |
+| --- | --- | --- |
+| `formatSchemas` | `string` | a module exporting a `formatSchemas` record keyed by format name, the one the server hands `withValidation` |
+| `zodFormats` | `Record<string, string>` | `'<module>#<export>'` for one format; wins over the record |
+
+```ts
+// src/formats.ts, shared by the server and codegen
+import type { FormatSchemas } from '@nxgt/graphql-validation';
+import { z } from 'zod';
+
+export const formatSchemas = {
+	slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug'),
+	'country-code': z.string().length(2).refine(
+		(value) => value === value.toUpperCase(),
+		'Invalid country code: write it uppercase',
+	),
+} satisfies FormatSchemas;
+```
+
+```ts
+// codegen.ts
+config: {
+	formatSchemas: '../formats', // relative to the generated file
+	zodFormats: { sku: '../sku#skuSchema' },
+}
+```
+
+```graphql
+input SignUpInput {
+	handle: String! @constraint(format: "slug", maxLength: 40)
+	country: String @constraint(format: "country-code")
+	skus: [String!] @constraint(format: "sku", maxItems: 2)
+	email: String! @constraint(format: "email")
+}
+```
+
+```ts
+// what the generated file imports and writes
+import { formatSchemas } from "../formats";
+import { skuSchema } from "../sku";
+
+handle: formatSchemas.slug.max(40),
+country: formatSchemas["country-code"].nullish(),
+skus: z.union([z.array(skuSchema).max(2), /* a single value, wrapped */]).nullish(),
+email: z.email(),
+```
+
+- **Your schema, then the other rules.** `format` comes first and the rules
+  after it are chained on your schema, as `withValidation` applies them: the
+  client refuses what the server refuses, with your messages. A key that is
+  not an identifier is read with brackets (`formatSchemas["country-code"]`).
+- **Export the record as an object literal** (`satisfies FormatSchemas`,
+  as above), never annotated `Record<string, …>`: the generated file reads
+  `formatSchemas.slug`, which `noUncheckedIndexedAccess` types
+  `… | undefined` on a `Record`, and the file then fails to typecheck.
+- **The built-in formats stay inline** (`z.email()`), whatever the record
+  holds; a record cannot replace them.
+- **Loaded, never trusted.** The plugin imports each module at generation and
+  checks the record as `withValidation` does: names, no built-in name, a Zod
+  string schema each, and every default value against its format. A module it
+  cannot load fails generation; unlike a `scalarSchemas` record, it is never
+  taken on trust, since a default could then break its format unseen. Run
+  codegen under Bun or tsx to load a TypeScript module, or point the option at
+  JavaScript.
+- **One record for both sides.** Hand the server the very record codegen
+  reads, `zodFormats` entries included
+  (`withValidation(schema, { formats: { ...formatSchemas, sku: skuSchema } })`),
+  or the client and the server check different things.
+- **The client's issue has no `constraint`.** The server's carries
+  `constraint: "format"` for every issue your schema raises; the generated
+  schema is plain Zod, its issues the ones your schema raises, as for a
+  built-in format.
+- A format that neither option maps fails generation with `withValidation`'s
+  own message, `Unknown @constraint format "slug". Known formats: …`. See
+  [Troubleshooting](../troubleshooting.md#formats).
+
 ## Output types
 
 Every object type gets a schema and a type, typed `z.output`: what a

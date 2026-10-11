@@ -16,6 +16,18 @@ export interface CodegenZodConfig {
 	 * `scalarSchemas`: `{ Money: './money#moneySchema' }`.
 	 */
 	readonly zodScalars?: Readonly<Record<string, string>>;
+	/**
+	 * A module exporting `formatSchemas`, the record of the application's own
+	 * formats that `withValidation(schema, { formats })` takes: a path
+	 * relative to the generated file, or a package. Loaded at generation, so
+	 * graphql-codegen must be able to import it.
+	 */
+	readonly formatSchemas?: string;
+	/**
+	 * One format's schema, `'<module>#<export>'`, winning over
+	 * `formatSchemas`: `{ slug: './slug#slugSchema' }`.
+	 */
+	readonly zodFormats?: Readonly<Record<string, string>>;
 	/** Before each schema's name: `zSignUpInput`. Default `'z'`. */
 	readonly schemaPrefix?: string;
 	/**
