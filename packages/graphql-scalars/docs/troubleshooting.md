@@ -42,7 +42,7 @@ bun add @nxgt/graphql-scalars@latest
 them, or keys a map by schema.
 **Why:** the schemas are `@nxgt/zod`'s, so the two are the same instance only
 when the tree holds one copy of `@nxgt/zod`. A range elsewhere that does not
-overlap (`@nxgt/zod@0.2` beside this package's `^0.1.2`) installs a second
+overlap (`@nxgt/zod@0.2` beside this package's `^0.1.3`) installs a second
 copy; the rules are the same, the objects are not.
 **Fix:** find the copies, then align the ranges so they dedupe.
 
