@@ -53,6 +53,24 @@ describe('a format with an async check, from another zod copy', () => {
 		);
 	});
 
+	test('raises the same issues as the package zod for a synchronous check too', () => {
+		const code = (zod: typeof z) =>
+			new FormatRegistry({
+				code: zod
+					.string()
+					.min(3)
+					.regex(/^[a-z]+$/),
+			})
+				.named('code')
+				.toZod();
+		for (const value of ['abc', 'A1']) {
+			const theirs = code(other).safeParse(value);
+			const ours = code(z).safeParse(value);
+			expect(theirs.success).toBe(ours.success);
+			expect(theirs.error?.issues).toEqual(ours.error?.issues);
+		}
+	});
+
 	test('passes a request its check accepts, refuses one it refuses', async () => {
 		const schema = buildSchema(`${constraintTypeDefs}
 			type Query { a(s: String @constraint(format: "free")): String }`);
