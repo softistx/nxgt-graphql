@@ -99,8 +99,12 @@ export function marked(
 					`The format "${name}" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().`,
 				);
 			}
-			const replayed = replay.safeParse(ctx.value);
-			stored = [];
+			let replayed: z.ZodSafeParseResult<unknown>;
+			try {
+				replayed = replay.safeParse(ctx.value);
+			} finally {
+				stored = [];
+			}
 			if (replayed.success) return;
 			for (const issue of replayed.error.issues) {
 				const own = paramsOf(issue)?.[RULE_PARAM] === 'format';
