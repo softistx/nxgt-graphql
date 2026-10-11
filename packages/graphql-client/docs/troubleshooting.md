@@ -45,8 +45,9 @@ await client.query(UserQuery, { id: '42' }); // the operation, not UserFragment
 ## `The API answered <status> with no GraphQL response`
 
 **When:** the API answers a non-2xx status whose body has no GraphQL `errors`
-(a 401, 403, 404, or a gateway's 503). An `ApiStatusError`, with `status` and
-`body`.
+(a 401, 403, 404, or a gateway's 503), or whose reply is labelled JSON but does
+not parse (a gateway's HTML page, a cut body). An `ApiStatusError`, with
+`status` and `body` (undefined when the body did not parse).
 **Why:** a proxy, a gateway or an auth layer answered before GraphQL ran.
 **Fix:** read `error.status` and `error.body`; for a 401, set
 `onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)).
@@ -69,7 +70,7 @@ const client = createGraphQLClient({ url, retry: 2 });
 
 ## `The API did not answer in time`
 
-**When:** the `timeout` passed before an answer. An `ApiUnavailableError`,
+**When:** the `timeout` passed before an answer, or while the body was read. An `ApiUnavailableError`,
 `reason: 'timeout'`.
 **Why:** the API is slow, or the timeout is shorter than the operation needs.
 **Fix:**
@@ -80,7 +81,8 @@ await client.query(SlowReport, undefined, { timeout: 30_000 });
 
 ## `The API answered with neither data nor errors`
 
-**When:** a 2xx response whose body holds no `data` and no `errors`. An
+**When:** a 2xx response whose body holds no `data` and no `errors`, or is
+labelled JSON but does not parse. An
 `ApiUnavailableError`, `reason: 'invalid-response'`.
 **Why:** the `url` points at something that is not a GraphQL endpoint (an HTML
 page, an empty 200), or a proxy rewrote the body.

@@ -1,150 +1,48 @@
-import {
-	type AnyReply,
-	createHttpClient,
-	type HttpClient,
-	type HttpClientOptions,
-	NetworkError,
-	type RetryOptions,
-	TimeoutError,
-} from '@nxgt/httpyz';
-import { Deduplicator } from './dedupe.js';
-import {
-	type GraphQLDocument,
-	type Operation,
-	operationOf,
-} from './document.js';
-import {
-	ApiError,
-	type ApiErrorEntry,
-	ApiStatusError,
-	ApiUnavailableError,
-} from './errors.js';
-
-/** A query's retries: always over POST, which is how GraphQL is sent. */
-export type QueryRetry = number | Omit<RetryOptions, 'methods'> | false;
-
-interface CommonOptions {
-	/**
-	 * Runs when the API answers 401 (the HTTP status, or a GraphQL error's
-	 * `extensions.http.status`) and the transport's `auth.refresh` did not
-	 * save the call. What it throws, such as a redirect, is what the caller
-	 * gets; when it returns, the caller gets the `ApiError` or
-	 * `ApiStatusError`.
-	 */
-	onUnauthenticated?: (error: ApiError | ApiStatusError) => void;
-	/** Retries of a query. A mutation is never sent twice. Default: none. */
-	retry?: QueryRetry;
-	/** Identical queries in flight share one request. Default: `true`. */
-	dedupe?: boolean;
-}
-
-/** A client of its own: the endpoint's URL, and `@nxgt/httpyz`'s options. */
-export interface UrlClientOptions
-	extends CommonOptions,
-		Omit<HttpClientOptions, 'baseUrl' | 'retry'> {
-	/** The GraphQL endpoint: `https://api.example.com/graphql`. */
-	url: string | URL;
-	http?: never;
-	path?: never;
-}
-
-/** Over an `@nxgt/httpyz` client the application already has. */
-export interface HttpClientBasedOptions extends CommonOptions {
-	http: HttpClient;
-	/** The endpoint's path under the client's `baseUrl`. Default: `/graphql`. */
-	path?: string;
-	url?: never;
-}
-
-export type GraphQLClientOptions = UrlClientOptions | HttpClientBasedOptions;
-
-/** What a call may add. */
-export interface CallOptions {
-	/** Aborts the call: it rejects with the signal's reason. */
-	signal?: AbortSignal;
-	/** Over the client's headers, for this call. */
-	headers?: HeadersInit;
-	/** This call's timeout in milliseconds, instead of the client's. */
-	timeout?: number;
-}
-
-export interface QueryOptions extends CallOptions {
-	/** This query's retries, instead of the client's. */
-	retry?: QueryRetry;
-}
-
-/** The variables, optional when the operation requires none. */
-export type VariablesArgs<TVariables, TOptions> =
-	Record<string, never> extends TVariables
-		? [variables?: TVariables, options?: TOptions]
-		: [variables: TVariables, options?: TOptions];
-
-export interface GraphQLClient {
-	/** Runs a query and returns its `data`; any GraphQL error throws. */
-	query<TResult, TVariables>(
-		document: GraphQLDocument<TResult, TVariables>,
-		...args: VariablesArgs<TVariables, QueryOptions>
-	): Promise<TResult>;
-	/** Runs a mutation and returns its `data`; any GraphQL error throws. It is never retried. */
-	mutate<TResult, TVariables>(
-		document: GraphQLDocument<TResult, TVariables>,
-		...args: VariablesArgs<TVariables, CallOptions>
-	): Promise<TResult>;
-	/** The transport, for what is not GraphQL. */
-	readonly http: HttpClient;
-}
+import { createHttpClient } from '@nxgt/httpyz';
+import { Deduplicator } from './dedupe';
+import { type GraphQLDocument, type Operation, operationOf } from './document';
+import { ApiError, ApiStatusError } from './errors';
+import type {
+	GraphQLClient,
+	GraphQLClientOptions,
+	QueryOptions,
+	QueryRetry,
+} from './options';
+import { send, type Transport } from './send';
 
 /** Any operation's document: its variables' type is contravariant. */
 type AnyDocument = GraphQLDocument<unknown, never>;
-
-const accept = 'application/graphql-response+json, application/json';
 
 export function createGraphQLClient(
 	options: GraphQLClientOptions,
 ): GraphQLClient {
 	const { onUnauthenticated, retry: clientRetry, dedupe = true } = options;
-	const { http, path } = transportOf(options);
+	const transport = transportOf(options);
 	const flights = new Deduplicator();
 
-	async function send(
+	function sendQuery(
 		operation: Operation,
 		variables: unknown,
 		call: QueryOptions,
-		retry: QueryRetry | undefined,
-		signal: AbortSignal | undefined,
 	): Promise<unknown> {
-		const headers = new Headers(call.headers);
-		if (!headers.has('accept')) headers.set('accept', accept);
-		let reply: AnyReply;
-		try {
-			reply = await http.post(path, {
-				json: {
-					query: operation.query,
-					variables: variables ?? {},
-					operationName: operation.operationName,
-				},
-				headers,
-				...(signal && { signal }),
-				...(call.timeout !== undefined && { timeout: call.timeout }),
-				...(retry !== undefined && { retry: retrySettings(retry) }),
-				...(operation.operationName !== undefined && {
-					operationId: operation.operationName,
-				}),
+		const retry = call.retry ?? clientRetry;
+		if (!dedupe)
+			return send(transport, operation, variables, {
+				call,
+				retry,
+				signal: call.signal,
 			});
-		} catch (error) {
-			if (signal?.aborted) throw signal.reason;
-			if (error instanceof TimeoutError)
-				throw new ApiUnavailableError('timeout', { cause: error });
-			if (error instanceof NetworkError)
-				throw new ApiUnavailableError('unreachable', { cause: error });
-			throw error;
-		}
-		return dataOf(reply);
+		return flights.run(
+			dedupeKey(operation, variables, call, retry),
+			call.signal,
+			(signal) =>
+				send(transport, operation, variables, { call, retry, signal }),
+		);
 	}
 
 	async function run(
 		document: AnyDocument,
-		expected: Operation['kind'],
+		expected: 'query' | 'mutation',
 		variables: unknown,
 		call: QueryOptions = {},
 	): Promise<unknown> {
@@ -155,29 +53,16 @@ export function createGraphQLClient(
 			);
 		}
 		try {
-			if (expected === 'mutation')
-				return await send(operation, variables, call, false, call.signal);
-			const retry = call.retry ?? clientRetry;
-			if (!dedupe)
-				return await send(operation, variables, call, retry, call.signal);
-			const key = JSON.stringify([
-				operation.query,
-				variables ?? {},
-				[...new Headers(call.headers)],
-				call.timeout,
-				retry,
-			]);
-			return await flights.run(key, call.signal, (signal) =>
-				send(operation, variables, call, retry, signal),
-			);
+			if (expected === 'query')
+				return await sendQuery(operation, variables, call);
+			return await send(transport, operation, variables, {
+				call,
+				retry: false,
+				signal: call.signal,
+			});
 		} catch (error) {
-			if (
-				onUnauthenticated &&
-				(error instanceof ApiError || error instanceof ApiStatusError) &&
-				error.status === 401
-			) {
-				onUnauthenticated(error);
-			}
+			if (onUnauthenticated && isUnauthenticated(error))
+				await onUnauthenticated(error);
 			throw error;
 		}
 	}
@@ -187,14 +72,11 @@ export function createGraphQLClient(
 			run(document, 'query', variables, call) as Promise<never>,
 		mutate: (document, ...[variables, call]) =>
 			run(document, 'mutation', variables, call) as Promise<never>,
-		http,
+		http: transport.http,
 	};
 }
 
-function transportOf(options: GraphQLClientOptions): {
-	http: HttpClient;
-	path: string;
-} {
+function transportOf(options: GraphQLClientOptions): Transport {
 	if (options.http)
 		return { http: options.http, path: options.path ?? '/graphql' };
 	const {
@@ -202,36 +84,30 @@ function transportOf(options: GraphQLClientOptions): {
 		onUnauthenticated: _hook,
 		retry: _retry,
 		dedupe: _dedupe,
-		...transport
+		...http
 	} = options;
-	return { http: createHttpClient({ ...transport, baseUrl: url }), path: '' };
+	return { http: createHttpClient({ ...http, baseUrl: url }), path: '' };
 }
 
-/** httpyz retries no POST by default: a query's retries name it. */
-function retrySettings(retry: QueryRetry): RetryOptions | false {
-	if (retry === false) return false;
-	if (typeof retry === 'number') return { attempts: retry, methods: ['post'] };
-	return { ...retry, methods: ['post'] };
+/** Queries alike in all a request carries share one flight. */
+function dedupeKey(
+	operation: Operation,
+	variables: unknown,
+	call: QueryOptions,
+	retry: QueryRetry | undefined,
+): string {
+	return JSON.stringify([
+		operation.query,
+		variables ?? {},
+		[...new Headers(call.headers)],
+		call.timeout,
+		retry,
+	]);
 }
 
-/** A response's `data`, or the error it stands for. */
-function dataOf(reply: AnyReply): unknown {
-	const body = isRecord(reply.data) ? reply.data : undefined;
-	const errors = body?.['errors'];
-	if (Array.isArray(errors) && errors.length > 0) {
-		throw new ApiError(
-			errors as ApiErrorEntry[],
-			body?.['data'] ?? undefined,
-			reply.status,
-		);
-	}
-	if (reply.status < 200 || reply.status >= 300)
-		throw new ApiStatusError(reply.status, reply.data);
-	const data = body?.['data'];
-	if (data == null) throw new ApiUnavailableError('invalid-response');
-	return data;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
+function isUnauthenticated(error: unknown): error is ApiError | ApiStatusError {
+	return (
+		(error instanceof ApiError || error instanceof ApiStatusError) &&
+		error.status === 401
+	);
 }

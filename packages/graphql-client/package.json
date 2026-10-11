@@ -1,7 +1,7 @@
 {
 	"name": "@nxgt/graphql-client",
 	"version": "0.0.0",
-	"description": "A typed GraphQL client for the client preset's TypedDocumentNode, built on @nxgt/httpyz",
+	"description": "A typed GraphQL client for the client preset's TypedDocumentNode or TypedDocumentString, built on @nxgt/httpyz",
 	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.js",

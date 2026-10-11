@@ -76,7 +76,7 @@ requires none. See [Client](docs/guide/client.md).
 ### Handle the errors
 
 ```ts
-import { ApiError, ApiUnavailableError, isApiError } from '@nxgt/graphql-client';
+import { ApiUnavailableError, isApiError } from '@nxgt/graphql-client';
 
 try {
   await client.query(UserQuery, { id: '42' });
@@ -93,6 +93,9 @@ See [Errors](docs/guide/errors.md).
 
 - **Never share a client between users on a server.** Headers carry the user's
   token; create one client per incoming request.
+- **`onUnauthenticated` may be async, and runs once per caller.** Keep its side
+  effects idempotent; a GraphQL-level 401 on an HTTP 200 gets no refresh (see
+  [Errors](docs/guide/errors.md#onunauthenticated)).
 - **A mutation is never retried**, and `query()` refuses a mutation document
   (and `mutate()` a query) with a `TypeError`.
 - **Identical in-flight queries share one request.** Pass `dedupe: false` to

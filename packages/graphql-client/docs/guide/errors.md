@@ -23,7 +23,7 @@ try {
 | Class | When | Message |
 | --- | --- | --- |
 | `ApiError` | the response carries `errors` | the first error's message |
-| `ApiStatusError` | a non-2xx status with no GraphQL `errors` | `The API answered <status> with no GraphQL response` |
+| `ApiStatusError` | a non-2xx status with no GraphQL `errors`, or whose reply is labelled JSON but does not parse | `The API answered <status> with no GraphQL response` |
 | `ApiUnavailableError` | no GraphQL answer to read | by `reason`, below |
 | the signal's reason | the call's `signal` aborted | whatever the signal holds |
 
@@ -82,7 +82,8 @@ fails. Prefer it to `instanceof ApiError`.
 ## ApiStatusError
 
 A status that is not a success, with no GraphQL body: a 401, 403, 404, a
-gateway's 503.
+gateway's 503. A reply labelled JSON that does not parse (a gateway's HTML page
+under a JSON header, a cut body) is the same error with `body` undefined.
 
 ```ts
 class ApiStatusError extends Error {
@@ -98,15 +99,15 @@ type UnavailableReason = 'unreachable' | 'timeout' | 'invalid-response';
 
 class ApiUnavailableError extends Error {
   readonly reason: UnavailableReason;
-  // cause: the transport's error, for unreachable and timeout
+  // cause: the transport's error, for unreachable, timeout, and an unparsable 2xx
 }
 ```
 
 | `reason` | Message | When |
 | --- | --- | --- |
 | `unreachable` | `The API could not be reached` | the network failed |
-| `timeout` | `The API did not answer in time` | the `timeout` passed |
-| `invalid-response` | `The API answered with neither data nor errors` | a success with no `data` and no `errors` |
+| `timeout` | `The API did not answer in time` | the `timeout` passed, before the answer or while its body was read |
+| `invalid-response` | `The API answered with neither data nor errors` | a 2xx with no `data` and no `errors`, or labelled JSON that does not parse |
 
 ## Aborts
 
@@ -123,10 +124,19 @@ await pending.catch((error) => console.log(error.message)); // navigated away
 ## onUnauthenticated
 
 Runs when the API answers 401, as the HTTP status or as a GraphQL error's
-`extensions.http.status`, and `@nxgt/httpyz`'s `auth.refresh` did not save the
-call (a refresh that works never reaches it). What it throws is what the caller
-gets; when it returns, the caller gets the `ApiError` or `ApiStatusError`.
-Without it, the error surfaces unchanged.
+`extensions.http.status`. What it throws is what the caller gets; when it
+returns, the caller gets the `ApiError` or `ApiStatusError`. Without it, the
+error surfaces unchanged. It may be async: the call waits for it.
+
+- **HTTP 401**: it runs after `@nxgt/httpyz`'s `auth.refresh` did not save the
+  call (a refresh that works never reaches it).
+- **A GraphQL error with `extensions.http.status` 401 on an HTTP 200**: it runs
+  directly. `auth.refresh` only replays on an HTTP 401, so no refresh is tried.
+  Have the server answer HTTP 401 for it, or refresh inside the hook so the
+  next call carries a fresh token.
+- **Once per caller.** Deduplicated callers share one request but each runs the
+  hook, so a hook that throws a redirect reaches every caller. Keep its side
+  effects idempotent.
 
 ```ts
 import { createGraphQLClient } from '@nxgt/graphql-client';
@@ -136,12 +146,13 @@ class SignedOut extends Error {}
 const client = createGraphQLClient({
   url: 'https://api.example.com/graphql',
   auth: { token: () => session.token, refresh: () => session.renew() },
-  onUnauthenticated: () => {
+  onUnauthenticated: async () => {
+    await session.forget(); // idempotent: every deduplicated caller runs it
     throw new SignedOut('Sign in again');
   },
 });
 
-declare const session: { token: string; renew(): Promise<void> };
+declare const session: { token: string; renew(): Promise<void>; forget(): Promise<void> };
 ```
 
 ## Mapping errors to an HTTP response

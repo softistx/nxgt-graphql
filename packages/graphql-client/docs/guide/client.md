@@ -61,13 +61,13 @@ declare function fetchNewToken(): Promise<string>;
 | `url` | `string \| URL` | required | the GraphQL endpoint, sent as the base URL |
 | `fetch` | `(request: Request) => Response \| Promise<Response>` | `globalThis.fetch` | sends each request; takes a `Request`, so a Hono `app.fetch` fits and is the mock hook in tests |
 | `headers` | `HeadersInit \| () => HeadersInit \| Promise<HeadersInit>` | none | sent with every request |
-| `timeout` | `number` | none | milliseconds before the call fails (`ApiUnavailableError`, reason `timeout`) |
+| `timeout` | `number` | none | milliseconds before the call fails (`ApiUnavailableError`, reason `timeout`), reading the body included |
 | `auth` | `{ token, refresh?, scheme? }` | none | a bearer token on every request, refreshed once on a 401 |
 | `init` | fetch options | none | `credentials`, `mode`, `cache`… |
 | `use` | httpyz middleware | none | around every request |
 | `retry` | `number \| Omit<RetryOptions, 'methods'> \| false` | none | retries of a query |
 | `dedupe` | `boolean` | `true` | identical in-flight queries share one request |
-| `onUnauthenticated` | `(error) => void` | none | see [Errors](errors.md#onunauthenticated) |
+| `onUnauthenticated` | `(error) => void \| Promise<void>` | none | see [Errors](errors.md#onunauthenticated) |
 
 Mocking in a test:
 
@@ -106,18 +106,21 @@ import type { GraphQLClient, GraphQLClientOptions } from '@nxgt/graphql-client';
 interface GraphQLClient {
   query<TResult, TVariables>(
     document: GraphQLDocument<TResult, TVariables>,
-    ...args: VariablesArgs<TVariables, QueryOptions>
+    // NoInfer: the document alone sets the variables' type
+    ...args: VariablesArgs<NoInfer<TVariables>, QueryOptions>
   ): Promise<TResult>;
   mutate<TResult, TVariables>(
     document: GraphQLDocument<TResult, TVariables>,
-    ...args: VariablesArgs<TVariables, CallOptions>
+    ...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
   ): Promise<TResult>;
   readonly http: HttpClient;
 }
 ```
 
 Both return the response's `data`; any GraphQL error throws. Variables are
-required when the operation has a required one, optional otherwise.
+required when the operation has a required one, optional otherwise. The
+document alone sets their type, so a key the operation does not declare is a
+type error.
 
 ```ts
 const { user } = await client.query(UserQuery, { id: '42' }); // variables required

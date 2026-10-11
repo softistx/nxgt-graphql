@@ -1,15 +1,5 @@
-export {
-	type CallOptions,
-	createGraphQLClient,
-	type GraphQLClient,
-	type GraphQLClientOptions,
-	type HttpClientBasedOptions,
-	type QueryOptions,
-	type QueryRetry,
-	type UrlClientOptions,
-	type VariablesArgs,
-} from './client.js';
-export type { GraphQLDocument } from './document.js';
+export { createGraphQLClient } from './client';
+export type { GraphQLDocument } from './document';
 export {
 	ApiError,
 	type ApiErrorEntry,
@@ -20,4 +10,14 @@ export {
 	ApiUnavailableError,
 	isApiError,
 	type UnavailableReason,
-} from './errors.js';
+} from './errors';
+export type {
+	CallOptions,
+	GraphQLClient,
+	GraphQLClientOptions,
+	HttpClientBasedOptions,
+	QueryOptions,
+	QueryRetry,
+	UrlClientOptions,
+	VariablesArgs,
+} from './options';

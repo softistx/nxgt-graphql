@@ -2,18 +2,21 @@ import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { createHttpClient } from '@nxgt/httpyz';
 import { parse } from 'graphql';
-import { createGraphQLClient } from './client.js';
+import { createGraphQLClient } from './client';
 import {
 	ApiError,
 	ApiStatusError,
 	ApiUnavailableError,
 	isApiError,
-} from './errors.js';
+} from './errors';
 
 type Viewer = { viewer: { id: string } };
 const ViewerQuery = parse(
 	'query Viewer { viewer { id } }',
 ) as TypedDocumentNode<Viewer, Record<string, never>>;
+const TickSubscription = parse(
+	'subscription Tick { tick }',
+) as TypedDocumentNode<{ tick: number }, Record<string, never>>;
 const RenameMutation = parse(
 	'mutation Rename($name: String!) { rename(name: $name) }',
 ) as TypedDocumentNode<{ rename: boolean }, { name: string }>;
@@ -515,7 +518,212 @@ describe('dedupe', () => {
 	});
 });
 
+describe('subscriptions and per-call options', () => {
+	test('query() refuses a subscription', async () => {
+		const client = createGraphQLClient({ url, fetch: () => json({}) });
+		await expect(client.query(TickSubscription as never)).rejects.toThrow(
+			new TypeError('query() was given a subscription'),
+		);
+	});
+
+	const flaky = () => {
+		let calls = 0;
+		const fetch = () =>
+			++calls === 1
+				? new Response(null, { status: 503 })
+				: json({ data: { viewer: { id: 'u1' } } });
+		return { fetch, calls: () => calls };
+	};
+
+	test('a per-call retry overrides the client without one', async () => {
+		const api = flaky();
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		expect(
+			await client.query(
+				ViewerQuery,
+				{},
+				{ retry: { attempts: 1, delay: () => 0 } },
+			),
+		).toEqual({ viewer: { id: 'u1' } });
+		expect(api.calls()).toBe(2);
+	});
+
+	test('retry: false on a call turns the client retries off', async () => {
+		const api = flaky();
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			retry: { attempts: 1, delay: () => 0 },
+		});
+		await expect(
+			client.query(ViewerQuery, {}, { retry: false }),
+		).rejects.toBeInstanceOf(ApiStatusError);
+		expect(api.calls()).toBe(1);
+	});
+
+	test('a per-call timeout throws ApiUnavailableError("timeout")', async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: (request) =>
+				new Promise<Response>((_, reject) =>
+					request.signal.addEventListener('abort', () =>
+						reject(request.signal.reason),
+					),
+				),
+		});
+		const error = await client
+			.query(ViewerQuery, {}, { timeout: 10 })
+			.catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ApiUnavailableError);
+		expect((error as ApiUnavailableError).reason).toBe('timeout');
+	});
+});
+
+describe('transport failures', () => {
+	test('a timeout firing while the body is read is a timeout', async () => {
+		const client = createGraphQLClient({
+			url,
+			timeout: 20,
+			// As fetch does, the body errors with the signal's reason on abort.
+			fetch: (request) =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.enqueue(new TextEncoder().encode('{"data":'));
+							request.signal.addEventListener('abort', () =>
+								controller.error(request.signal.reason),
+							);
+						},
+					}),
+					{ headers: { 'content-type': 'application/json' } },
+				),
+		});
+		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ApiUnavailableError);
+		expect((error as ApiUnavailableError).reason).toBe('timeout');
+	});
+
+	test('a 502 labelled JSON holding HTML is an ApiStatusError', async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: () =>
+				new Response('<html>', {
+					status: 502,
+					headers: { 'content-type': 'application/json' },
+				}),
+		});
+		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(502);
+	});
+
+	test('a 200 labelled JSON with a cut body is an invalid response', async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: () =>
+				new Response('{"data":', {
+					headers: { 'content-type': 'application/json' },
+				}),
+		});
+		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ApiUnavailableError);
+		expect((error as ApiUnavailableError).reason).toBe('invalid-response');
+	});
+});
+
+describe('onUnauthenticated, more', () => {
+	const unauthorized = () => new Response(null, { status: 401 });
+
+	test('an async hook that throws: the caller gets that value, nothing is left unhandled', async () => {
+		const fired: unknown[] = [];
+		const onUnhandled = (reason: unknown) => fired.push(reason);
+		process.on('unhandledRejection', onUnhandled);
+		try {
+			const thrown = new Error('redirect');
+			const client = createGraphQLClient({
+				url,
+				fetch: unauthorized,
+				onUnauthenticated: async () => {
+					await Bun.sleep(1);
+					throw thrown;
+				},
+			});
+			expect(await client.query(ViewerQuery).catch((e: unknown) => e)).toBe(
+				thrown,
+			);
+			await Bun.sleep(10);
+			expect(fired).toEqual([]);
+		} finally {
+			process.off('unhandledRejection', onUnhandled);
+		}
+	});
+
+	test('the hook runs on mutate', async () => {
+		let seen: unknown;
+		const client = createGraphQLClient({
+			url,
+			fetch: unauthorized,
+			onUnauthenticated: (error) => {
+				seen = error;
+			},
+		});
+		const error = await client
+			.mutate(RenameMutation, { name: 'a' })
+			.catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect(seen).toBe(error);
+	});
+
+	test.each([403, 500])('the hook does not run for a %d', async (status) => {
+		let hooked = false;
+		const client = createGraphQLClient({
+			url,
+			fetch: () => new Response(null, { status }),
+			onUnauthenticated: () => {
+				hooked = true;
+			},
+		});
+		const error = await client.query(ViewerQuery).catch((e: unknown) => e);
+		expect((error as ApiStatusError).status).toBe(status);
+		expect(hooked).toBe(false);
+	});
+
+	test('three deduplicated callers on a 401 each run the hook (once per caller)', async () => {
+		let hooks = 0;
+		let calls = 0;
+		const client = createGraphQLClient({
+			url,
+			fetch: async () => {
+				calls++;
+				await Bun.sleep(5);
+				return unauthorized();
+			},
+			onUnauthenticated: () => {
+				hooks++;
+			},
+		});
+		await Promise.all(
+			[1, 2, 3].map(() => client.query(ViewerQuery).catch(() => undefined)),
+		);
+		expect(calls).toBe(1);
+		expect(hooks).toBe(3);
+	});
+});
+
 describe('types', () => {
+	/** As the client preset's generated `Exact`. */
+	type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+	type Doc<TVariables> = TypedDocumentNode<{ ok: boolean }, TVariables>;
+	const NoVariables = parse('query A { ok }') as Doc<
+		Exact<{ [key: string]: never }>
+	>;
+	const Optional = parse('query B($n: Int) { ok }') as Doc<
+		Exact<{ n?: number | null }>
+	>;
+	const Required = parse('query C($id: ID!) { ok }') as Doc<
+		Exact<{ id: string }>
+	>;
+
 	test('variables are required when the operation requires some, and the result is typed', async () => {
 		const client = createGraphQLClient({
 			url,
@@ -529,5 +737,22 @@ describe('types', () => {
 			name: 'a',
 		});
 		expect(result.rename).toBe(true);
+	});
+
+	test('extra and misspelled keys are refused; none-required variables may be omitted', async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: () => json({ data: { ok: true } }),
+		});
+		const ignore = () => undefined;
+		// @ts-expect-error: `extra` is not a variable of an operation requiring `id`
+		await client.query(Required, { id: 'a', extra: 1 }).catch(ignore);
+		// @ts-expect-error: `x` is not a key of Exact<{ [key: string]: never }>
+		await client.query(NoVariables, { x: 1 }).catch(ignore);
+		// @ts-expect-error: `m` is a misspelling of `n`
+		await client.query(Optional, { m: 1 }).catch(ignore);
+		expect(await client.query(NoVariables)).toEqual({ ok: true });
+		expect(await client.query(Optional)).toEqual({ ok: true });
+		expect(await client.query(Optional, { n: 1 })).toEqual({ ok: true });
 	});
 });

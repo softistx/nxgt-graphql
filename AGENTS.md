@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an `onUnauthenticated` hook run after httpyz's refresh, identical queries in flight shared. A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared. A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -111,7 +111,8 @@ exactly as a devDependency at the oldest end of its range
 (`graphql` `16.11.0`, `zod` `4.6.5`). `zod`'s range, `>=4.6.5 <5`, is
 nxgt-data's (`@nxgt/mongo`, `@nxgt/redis`): one range is one zod in an
 application's tree. Siblings, when there are some, depend on each other by
-`workspace:^`.
+`workspace:^`. `@nxgt/graphql-client` sits on `@nxgt/httpyz` and depends on no
+sibling package.
 
 ## Invariants
 
@@ -541,6 +542,44 @@ packages/graphql-codegen-zod/test/
   fragment suffix)`, the suffix following
   `omitOperationSuffix`/`dedupeOperationSuffix`. Read that code before changing
   a name.
+
+## @nxgt/graphql-client
+
+A typed GraphQL client over `@nxgt/httpyz`: the documents' types set the
+variables and the data, and every failure is a typed error.
+
+### Layout
+
+```
+packages/graphql-client/src/
+  index.ts       the public barrel
+  client.ts      createGraphQLClient: query and mutate, the hook, the transport choice
+  options.ts     the option and client types (url or http shape, QueryRetry, NoInfer variables)
+  send.ts        one POST: headers, signal, timeout, retry settings; the transport's errors mapped
+  response.ts    dataOf (errors, status, data) and transportError (timeout, network, unparsable body)
+  dedupe.ts      the Deduplicator: identical queries in flight share one request
+  document.ts    operationOf: a TypedDocumentNode or TypedDocumentString read once, cached
+  errors.ts      ApiError, ApiStatusError, ApiUnavailableError, isApiError
+```
+
+### Invariants
+
+- **A mutation is never retried or deduplicated.**
+- **`onUnauthenticated` runs after httpyz's `auth.refresh` for an HTTP 401,
+  and directly for a GraphQL error carrying `extensions.http.status` 401 on any
+  HTTP status** (httpyz replays only on an HTTP 401). It runs once per caller,
+  deduplicated callers included, and is awaited; what it throws is what the
+  caller gets.
+- **Errors surface, never swallowed**: without a hook, the error reaches the
+  caller unchanged. A reply labelled JSON that does not parse is an
+  `ApiStatusError` on a non-2xx and an `ApiUnavailableError('invalid-response')`
+  on a 2xx.
+- **`graphql` is a peer used at runtime** (`parse`, `print`, `Kind`), not only
+  for types.
+- **Source imports carry no extension.**
+- **Temporary, until nxgt-http wraps body reads**: `response.ts` checks for the
+  `DOMException` named `TimeoutError`, which is what a deadline firing while the
+  body is read rejects with, and maps it to `ApiUnavailableError('timeout')`.
 
 ## The green bar
 
