@@ -2,7 +2,9 @@
 
 The error an invalid input becomes, how a client reads it, and `validated` for
 rules a `@constraint` cannot say. For declaring constraints, see
-[Constraints](constraints.md).
+[Constraints](constraints.md). For an API that answers invalid input as one
+400 error with a list of fields, see
+[Answering invalid input as one error](invalid-input.md).
 
 ## The error
 
