@@ -188,5 +188,8 @@ describe("plugin, the application's formats", () => {
 				zodFormats: { scalars: './scalars#scalarSchemas' },
 			}),
 		).rejects.toThrow('The format "scalars" is not a Zod string schema');
+		await expect(
+			generate('a: Int', { zodFormats: { sku: './sku#trimmedSkuSchema' } }),
+		).rejects.toThrow('The format "sku" rewrites the value');
 	});
 });

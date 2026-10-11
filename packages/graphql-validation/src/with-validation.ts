@@ -92,8 +92,9 @@ function wrap(
  * is checked; a code-first schema with no SDL has no `@constraint` to read.
  *
  * `options.formats` adds the application's own formats; wrapping a schema
- * again with other formats throws, since its fields are already checked
- * against the first ones.
+ * again throws unless the record has the same names, each the very same
+ * schema (no formats after some, or some after none, throws too), since its
+ * fields are already checked against the first ones.
  */
 export function withValidation<
 	S extends GraphQLSchema,

@@ -4,6 +4,7 @@
 import {
 	badUserInput,
 	constraintTypeDefs,
+	type FormatSchemas,
 	validated,
 	withValidation,
 } from '@nxgt/graphql-validation';
@@ -41,6 +42,22 @@ export const withFormats = withValidation(
 	),
 	{ formats: formatSchemas },
 );
+
+// A record typed wider than its literal may hold no built-in name: it passes.
+const widened: FormatSchemas = formatSchemas;
+const loose: Record<string, z.ZodString> = { siret: z.string() };
+export const withWidened = withValidation(withFormats, { formats: widened });
+export const withLoose = withValidation(
+	buildSchema(`${constraintTypeDefs}\ntype Query { a: Int }`),
+	{ formats: loose },
+);
+
+// A literal record naming a built-in format is a type error.
+export const withBuiltInName = () =>
+	withValidation(buildSchema(`${constraintTypeDefs}\ntype Query { a: Int }`), {
+		// @ts-expect-error -- "email" is a built-in format
+		formats: { email: z.email() },
+	});
 
 export const refused = badUserInput('Query.a', new z.ZodError([]));
 

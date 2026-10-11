@@ -326,13 +326,17 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   built-in format (typed `never` by `OwnFormats`, refused at startup too); each
   value's definition is `type: 'string'` (`z.string()` or a string format,
   never a pipe, so no transform or codec), read from `_zod.def` so another zod
-  copy passes. An unknown format lists the application's after the built-in
-  ones. Its entry has no `toCode`: the generator writes it, through
+  copy passes, and none of its checks is `check: 'overwrite'` (`.trim()`,
+  `.toLowerCase()`, `.toUpperCase()`, `.normalize()`, `.overwrite()` keep
+  `type: 'string'` but rewrite the value, which a client chaining rules on the
+  schema would check in place of what was sent). An unknown format lists the
+  application's after the built-in ones. Its entry has no `toCode`: the generator writes it, through
   `InputCodeOptions.format(name)` (threaded to the rule as
   `RuleContext.formatCode`), the other rules chained on that source; without
-  the option `inputCode` throws. Wrapping a schema again with other formats throws
-  (the record is kept on the schema under a `Symbol.for` key); with the same
-  names and the very same schemas it is the usual no-op.
+  the option `inputCode` throws. Wrapping a schema again with other formats, or
+  none after some, throws (the record is kept on the schema under a
+  `Symbol.for` key); with the same names and the very same schemas it is the
+  usual no-op.
 - **An application format's issue is `format`'s, whatever its code.** Its
   schema runs inside a `z.string().superRefine` (`formats/registry.ts`,
   `marked`) that re-raises each issue unchanged but for
@@ -379,7 +383,7 @@ packages/graphql-codegen-zod/src/
   plugin.spec.ts           the guards below
 packages/graphql-codegen-zod/test/
   fixture.ts               the SDL and operations the specs generate from
-  formats.ts, sku.ts       the application's formats: a formatSchemas record (one hyphenated key) and one zodFormats export
+  formats.ts, sku.ts       the application's formats: a formatSchemas record (one hyphenated key) and one zodFormats export (plus a rewriting one generation refuses)
   generated.ts             generated, typechecked: `bun run generated:write`
   real-scalars.ts          every @nxgt/graphql-scalars scalar, alone and in a list
   generated-scalars.ts     generated against the real scalarSchemas record, typechecked

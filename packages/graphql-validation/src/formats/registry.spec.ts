@@ -61,6 +61,28 @@ describe('FormatRegistry', () => {
 		);
 	});
 
+	test.each([
+		['.trim()', z.string().trim()],
+		['.toLowerCase()', z.string().toLowerCase()],
+		['.toUpperCase()', z.string().toUpperCase()],
+		['.normalize()', z.string().normalize()],
+		['.overwrite()', z.string().overwrite((value) => value)],
+		[
+			'a narrowed .trim()',
+			z
+				.string()
+				.regex(/^[a-z]+$/)
+				.trim()
+				.max(40),
+		],
+		['a string format with .toLowerCase()', z.email().toLowerCase()],
+		['.check(z.trim())', z.string().check(z.trim())],
+	])('refuses a format that rewrites the value: %s', (_, schema) => {
+		expect(() => new FormatRegistry({ slug: schema })).toThrow(
+			'The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.',
+		);
+	});
+
 	test('names every known format, the application ones too, for an unknown one', () => {
 		const registry = new FormatRegistry({
 			siret: z.string(),

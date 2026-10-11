@@ -260,6 +260,18 @@ What a format of your own is:
   a codec or `.optional()`: the resolver receives what the client sent, and a
   null or absent value is the field's type's business (`String` or `String!`),
   not the format's. A non-string schema is a type error, and refused at startup.
+- **It never rewrites the value.** `.trim()`, `.toLowerCase()`,
+  `.toUpperCase()`, `.normalize()` and `.overwrite()` keep a string schema but
+  change the value it passes on, and are refused at startup: the server checks
+  the value as sent, while a client chaining `maxLength` on your schema would
+  check the rewritten one, so the two would disagree on `" AB "`. Refuse what
+  is not canonical instead:
+
+  ```ts
+  // not z.string().trim().toLowerCase()
+  const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug: lowercase words joined by hyphens');
+  ```
+
 - **Narrowed like a built-in one.** `format` comes first and the other rules
   narrow it: `@constraint(format: "work-email", maxLength: 64)` is your schema,
   then at most 64 characters.
@@ -280,9 +292,12 @@ What a format of your own is:
   `.refine(async …)` works in a request; a default value is checked at startup
   synchronously, so a field whose format is async cannot have a default.
 
-Call `withValidation` once, with every format: wrapping the same schema again
-with other formats throws, since its fields are already checked against the
-first ones. Without `formats`, nothing changes.
+Call `withValidation` once, with every format. A second call on the same
+schema wraps nothing when its record has the same names, each the very same
+schema object (the same record, or a copy of it); otherwise it throws — other
+names, another schema object for a name (even an identical one), or no
+`formats` after a call with some, or the reverse — since the fields are already
+checked against the first formats. Without `formats`, nothing changes.
 
 [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod)
 0.3 reads the same record (`config: { formatSchemas: './formats' }`): the
