@@ -197,14 +197,17 @@ does the same for a refusal of your own (a 409 conflict) that names the
 fields at fault. Neither changes what `withValidation` raises.
 
 ```ts
-import { inputPath, invalidInputError } from '@nxgt/graphql-validation';
+import { inputPath, invalidInputError, type Translate } from '@nxgt/graphql-validation';
+
+// Your catalogue: code and params in, the message in the request's language out.
+const t: Translate = (code, params) => i18n.t(code, params);
 
 throw invalidInputError(
   [
     { path: inputPath(['input', 'person', 'firstName']), code: 'validation.errors.too-short', params: { min: 2 } },
     { path: 'person.lastName', code: 'validation.errors.required' },
   ],
-  { translate: t, originalError: zodError },
+  { translate: t },
 );
 // extensions: { code: 'validation.errors.invalid-input', http: { status: 400 },
 //   fields: [{ path: 'person.firstName', code: 'validation.errors.too-short',

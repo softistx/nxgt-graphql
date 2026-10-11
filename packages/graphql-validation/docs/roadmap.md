@@ -29,7 +29,6 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
   `format`. `@nxgt/graphql-codegen-zod` 0.3 reads the same record, so the
   client refuses what the server refuses, with the same messages. From
   0.3.1 they run through Zod's public API only.
-
 - **Declarations resolve under `nodenext`** — 0.2.1. `moduleResolution`
   `nodenext` and `node16` find every export, as `bundler` does.
 - **A Zod codegen plugin** — 0.2.0. [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod)
