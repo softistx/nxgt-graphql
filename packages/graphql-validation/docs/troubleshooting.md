@@ -124,15 +124,17 @@ resolver:
 const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not .transform(Number)
 ```
 
-### `The format "code" cannot be run: its definition reads type: 'string' but it has no _zod.run, so it was not built by zod 4. Pass the schema z.string() or a string format returns, not an object shaped like one.`
+### `The format "code" cannot be run: its definition reads type: 'string' but it has no safeParseAsync, check, refine or catch, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`
 
 **When:** calling `withValidation` (or generating with
 `@nxgt/graphql-codegen-zod`) with `formats` whose value has a string
-schema's definition (`_zod.def.type` is `'string'`) but no `_zod.run`: an
-object built by hand or a test double shaped like a schema. A record typed
-loosely (`as never`, `any`) gets past the compiler; this check does not.
-**Why:** every request runs the format through its `_zod.run`; without it,
-each request would fail with `schema._zod.run is not a function`, a message
+schema's definition (`_zod.def.type` is `'string'`) but not the methods of
+Zod's classic API: an object built by hand, a test double shaped like a
+schema, or a `zod/mini` schema. A record typed loosely (`as never`, `any`)
+gets past the compiler; this check does not.
+**Why:** every request runs the format through `safeParseAsync`, and reads
+its abort and its result through `check`, `refine` and `catch`; without them,
+each request would fail with `schema.safeParseAsync is not a function`, a message
 that reaches the client. Startup refuses it instead.
 **Fix:** pass the schema zod built, not an object shaped like one:
 
@@ -334,12 +336,16 @@ type Query { a(name: String = "xy" @constraint(minLength: 2)): Int }
 
 **When:** calling `withValidation` (or `checkConstraints`), on an argument or
 input field with a default value whose format is one of yours with an async
-check (`.refine(async …)`), from this package's zod or another copy.
+check (`.refine(async …)`, an async `.superRefine()`, any check returning a
+promise), from this package's zod or another copy, or whose check throws on
+the default value: its error ends a run startup cannot wait for, so it reads
+as async too.
 **Why:** a default value is checked at startup, synchronously; Zod refuses
 to run an async check there. In a request, the arguments are parsed
 asynchronously and the check works.
 **Fix:** drop the default, or keep the async check out of the format and run
-it with [`validated`](guide/errors.md#validated).
+it with [`validated`](guide/errors.md#validated); a check that throws is a
+bug to fix in the format.
 
 ### `@constraint on @cached(ttl:) checks nothing: a directive's argument reaches no resolver. Remove it.`
 

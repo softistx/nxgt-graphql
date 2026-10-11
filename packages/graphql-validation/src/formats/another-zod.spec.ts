@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { buildSchema, type GraphQLObjectType, graphql } from 'graphql';
 import { z } from 'zod';
+import { publicOnly } from '../../test/public-only';
 import { constraintTypeDefs } from '../constraint-directive';
 import { withValidation } from '../with-validation';
 import { FormatRegistry } from './registry';
@@ -95,5 +96,23 @@ describe('a format with an async check, from another zod copy', () => {
 		expect(refused.errors?.[0]?.extensions['issues']).toEqual([
 			{ path: ['s'], code: 'custom', constraint: 'format', message: 'taken' },
 		]);
+	});
+
+	test('accepts and refuses alike when its internals changed, its public API kept', async () => {
+		const free = (schema: z.ZodString) =>
+			new FormatRegistry({ free: schema }).named('free').toZod().max(5);
+		const theirs = other
+			.string()
+			.refine((value) => value !== 'taken', { message: 'taken', abort: true })
+			.refine(async (value) => value !== 'gone', 'gone');
+		const changed = publicOnly(theirs, () => {
+			throw new Error('zod internals changed');
+		});
+		for (const value of ['ok', 'taken', 'gone', 'toolong']) {
+			const kept = await free(changed).safeParseAsync(value);
+			const built = await free(theirs).safeParseAsync(value);
+			expect([value, kept.success]).toEqual([value, built.success]);
+			expect(kept.error?.issues).toEqual(built.error?.issues);
+		}
 	});
 });

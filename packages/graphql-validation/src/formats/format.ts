@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { Narrow } from './marked';
 
 /** A string schema, plain or a format (`z.email()` is not a `z.ZodString`). */
 export type StringSchema = z.ZodString | z.ZodStringFormat;
@@ -13,6 +14,13 @@ export interface Format<N extends string = string> {
 	readonly name: N;
 	readonly toZod: () => StringSchema;
 	readonly toCode?: () => string;
+	/**
+	 * An application's format, narrowed by the rules written after it
+	 * (`leafSchema` hands them): they run inside it, after its checks, so
+	 * they see its abort even once it went async. A built-in format has none:
+	 * the rules are chained on `toZod()`.
+	 */
+	readonly narrowed?: (narrow: Narrow) => StringSchema;
 }
 
 /** A format this package ships: written twice, as a schema and as source. */
