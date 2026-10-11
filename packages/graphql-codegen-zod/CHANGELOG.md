@@ -1,5 +1,17 @@
 # @nxgt/graphql-codegen-zod
 
+## 0.3.0
+
+### Minor Changes
+
+- [#67](https://github.com/softistx/nxgt-graphql/pull/67) [`e1d3030`](https://github.com/softistx/nxgt-graphql/commit/e1d3030c553c1bcc46f98bf061ccdc0cba460178) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Your own formats: `formatSchemas: './formats'` names a module exporting the `formatSchemas` record that `withValidation(schema, { formats })` takes, and `zodFormats: { slug: './slug#slugSchema' }` one format, winning over the record. The plugin loads them and checks them, and every default against them, as `withValidation` does; a module it cannot load fails generation rather than being trusted, and so does a format that rewrites the value (`.trim()`, `z.url()`, `z.coerce.string()`, …). The generated file imports your schema and chains the other rules on it (`formatSchemas.slug.max(40)`), so the client refuses what the server refuses, with the same message; the built-in formats stay inline. Requires `@nxgt/graphql-validation` 0.3.
+
+### Patch Changes
+
+- [#72](https://github.com/softistx/nxgt-graphql/pull/72) [`c4e214e`](https://github.com/softistx/nxgt-graphql/commit/c4e214e980e10041fa987e8af1d5bf13df5dd8ea) Thanks [@SteveGT96](https://github.com/SteveGT96)! - The `typescript` peer now accepts TypeScript 7 as well (`^6.0.3 || ^7.0.0`). The declarations are checked under both; nothing in these packages calls the TypeScript API at runtime.
+- Updated dependencies [[`da548c1`](https://github.com/softistx/nxgt-graphql/commit/da548c1bb60e6e02aa8e1db4e1a1b6e749d7f33e), [`c4e214e`](https://github.com/softistx/nxgt-graphql/commit/c4e214e980e10041fa987e8af1d5bf13df5dd8ea)]:
+  - @nxgt/graphql-validation@0.3.0
+
 ## 0.2.2
 
 ### Patch Changes
