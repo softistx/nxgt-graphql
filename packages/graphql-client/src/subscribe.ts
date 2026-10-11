@@ -63,7 +63,10 @@ export class EventSubscription implements Subscription<unknown> {
 				yield* this.#results(this.#open(body));
 				return;
 			} catch (failure) {
-				if (signal?.aborted) throw failure; // the signal's reason, as is
+				// An abort wins, even one landing while a refused body was read.
+				if (signal?.aborted) throw signal.reason;
+				// close() aborted the read of a refused body: the loop just ends.
+				if (this.#closed) return;
 				const notFound = isPersistedQueryNotFound(persisted, failure);
 				if (registering || this.#delivered || !notFound) {
 					await this.onFailure(failure);

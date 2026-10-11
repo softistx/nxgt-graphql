@@ -108,8 +108,9 @@ Every failure is one of the errors queries throw (see [Errors](errors.md)):
 - **A refused connection** (a non-2xx) throws the `ApiError` its JSON body
   carries, else an `ApiStatusError` with its `status` and its body (text, or
   JSON when labelled so). A server that answers an error status with an event
-  stream (graphql-yoga does, for an error carrying `extensions.http.status`
-  thrown before the subscription starts, and for APQ's `PersistedQueryNotFound`)
+  stream (graphql-yoga does for a variable missing or of the wrong type, a 400;
+  for an error carrying `extensions.http.status` thrown before the
+  subscription starts; and for APQ's `PersistedQueryNotFound`, a 404)
   gives an `ApiStatusError` with that status, never an `ApiError`: the client
   does not parse an error status's event stream yet, so `body` is the stream's
   raw text (`event: next\ndata: {"errors":[…]}…`), the GraphQL errors inside it

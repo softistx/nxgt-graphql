@@ -689,3 +689,122 @@ describe('types', () => {
 		}
 	});
 });
+
+describe('races and transport', () => {
+	/** A refused connection whose JSON body sends half, then stalls. */
+	const stalledRefusal = () =>
+		new Response(
+			new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(
+						new TextEncoder().encode('{"errors":[{"message":'),
+					);
+				},
+			}),
+			{ status: 400, headers: { 'content-type': 'application/json' } },
+		);
+
+	test("an abort while a refused body is read rejects with the signal's reason", async () => {
+		const client = createGraphQLClient({
+			url,
+			fetch: server(stalledRefusal).fetch,
+		});
+		const controller = new AbortController();
+		const ticks = client.subscribe(
+			TickSubscription,
+			{},
+			{ signal: controller.signal },
+		);
+		const loop = collect(ticks);
+		await Bun.sleep(10);
+		const reason = new Error('left');
+		controller.abort(reason);
+		expect(await loop.catch((e: unknown) => e)).toBe(reason);
+	});
+
+	test('close() while a refused body is read ends the loop, and runs no hook', async () => {
+		let hooked = false;
+		const client = createGraphQLClient({
+			url,
+			fetch: server(stalledRefusal).fetch,
+			onUnauthenticated: () => {
+				hooked = true;
+			},
+		});
+		const ticks = client.subscribe(TickSubscription);
+		const loop = collect(ticks);
+		await Bun.sleep(10);
+		ticks.close();
+		expect(await loop).toEqual([]);
+		expect(hooked).toBe(false);
+	});
+
+	test('apq mode resends with the text after a refused connection whose JSON says not found', async () => {
+		const notFound = {
+			errors: [
+				{
+					message: 'PersistedQueryNotFound',
+					extensions: { code: 'PERSISTED_QUERY_NOT_FOUND' },
+				},
+			],
+		};
+		const api = server(
+			() => json(notFound, 404),
+			() => eventStream([next({ data: { tick: 1 } }), complete]).response,
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		expect(await collect(client.subscribe(TickSubscription))).toEqual([
+			{ tick: 1 },
+		]);
+		expect(api.sent.map(({ body }) => typeof body['query'])).toEqual([
+			'undefined',
+			'string',
+		]);
+	});
+
+	test("the client's timeout bounds the connection: ApiUnavailableError('timeout')", async () => {
+		const client = createGraphQLClient({
+			url,
+			timeout: 20,
+			fetch: (request) =>
+				new Promise<Response>((_, reject) =>
+					request.signal.addEventListener('abort', () =>
+						reject(request.signal.reason),
+					),
+				),
+		});
+		const error = await collect(client.subscribe(TickSubscription)).catch(
+			(e: unknown) => e,
+		);
+		expect(error).toBeInstanceOf(ApiUnavailableError);
+		expect((error as ApiUnavailableError).reason).toBe('timeout');
+	});
+
+	test("httpyz's refresh replays an HTTP 401 on connect", async () => {
+		let token = 'old';
+		const seen: (string | null)[] = [];
+		const client = createGraphQLClient({
+			url,
+			fetch: async (request) => {
+				seen.push(request.headers.get('authorization'));
+				return request.headers.get('authorization') === 'Bearer new'
+					? eventStream([next({ data: { tick: 1 } }), complete]).response
+					: new Response(null, { status: 401 });
+			},
+			auth: {
+				token: () => token,
+				refresh: () => {
+					token = 'new';
+				},
+			},
+		});
+		expect(await collect(client.subscribe(TickSubscription))).toEqual([
+			{ tick: 1 },
+		]);
+		expect(seen).toEqual(['Bearer old', 'Bearer new']);
+	});
+});

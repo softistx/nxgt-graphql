@@ -204,8 +204,9 @@ not parse (a gateway's HTML page, a cut body). An `ApiStatusError`, with
 On `subscribe`, it is also what a server answering an error status with an
 event stream gives, never an `ApiError`: the client does not parse an error
 status's event stream yet, so `body` is the stream's raw text, the GraphQL
-errors inside it unread. graphql-yoga does it for an error carrying
-`extensions.http.status` thrown before the subscription starts, and for APQ's
+errors inside it unread. graphql-yoga does it for a variable missing or of the
+wrong type (a 400), for an error carrying `extensions.http.status` thrown
+before the subscription starts, and for APQ's
 `PersistedQueryNotFound` (a 404), which the client then does not resend.
 **Why:** a proxy, a gateway or an auth layer answered before GraphQL ran; or,
 on `subscribe`, the server put a GraphQL error in an error status's event
