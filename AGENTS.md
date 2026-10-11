@@ -738,7 +738,8 @@ packages/graphql-client/test/
 - **Watch callbacks never nest**: a batch made from a callback is queued by
   `Watchers.notify` and run once the current one is over, so callbacks run
   in order, each whole, and every watch ends on the newest data. One notify
-  runs at most 100 rounds: past that `#pending` is cleared and `onError` gets
+  runs at most 100 rounds: past that `#pending` (call-backs, not writes: the cache keeps every write) is
+  cleared and `onError` gets
   `Watch callbacks kept writing: stopped after 100 rounds`. `onError` is
   called guarded (`try`/`catch` to `logError`) in `Watchers` and `report.ts`.
 - **An aborted signal wins over a cache hit**: `queryThrough` calls
@@ -821,7 +822,7 @@ packages/graphql-client/test/
   before it is read, as `isApiError` is cross-copy: an application may pass
   its own httpyz copy as `http`, whose classes are not this package's. A
   `DOMException` never matches; the #130 body-read timeout is its own check.
-  `transport.spec.ts` throws look-alike plain errors from a custom `fetch`.
+  `transport.spec.ts` throws look-alike plain errors from an httpyz middleware (`use`).
 
 ## The green bar
 

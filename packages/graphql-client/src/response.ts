@@ -95,7 +95,9 @@ export function transportError(error: unknown): unknown {
 
 /**
  * One of httpyz's errors, from whichever copy of httpyz threw it: an `Error`
- * of that `name`. Its fields are read by the caller, each checked.
+ * of that `name` that carries the fields httpyz's `ClientError` always has
+ * (`method`, `path`, and `timeout` for a `TimeoutError`). The caller checks
+ * the rest of the fields it reads.
  */
 export function isHttpyzError(
 	error: unknown,
@@ -105,10 +107,18 @@ export function isHttpyzError(
 		| 'ValidationError'
 		| 'UndeclaredStatusError',
 ): error is Error & Record<string, unknown> {
+	if (
+		!(error instanceof Error) ||
+		error.name !== name ||
+		error instanceof DOMException
+	) {
+		return false;
+	}
+	const fields = error as Error & Record<string, unknown>;
 	return (
-		error instanceof Error &&
-		error.name === name &&
-		!(error instanceof DOMException)
+		typeof fields['method'] === 'string' &&
+		typeof fields['path'] === 'string' &&
+		(name !== 'TimeoutError' || typeof fields['timeout'] === 'number')
 	);
 }
 

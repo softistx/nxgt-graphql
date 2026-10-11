@@ -390,7 +390,9 @@ process (Bun and Node end on an uncaught error):
 - A watch callback that throws goes to the cache's `onError`. The other
   watches still run, and the write that caused it stands.
 - Watch callbacks that keep writing (each write wakes a watch that writes
-  again) are stopped after 100 rounds of one write: the rest is dropped and
+  again) are stopped after 100 rounds of one write: the call-backs still pending are dropped (the
+  cache keeps every write, but some watches may not have been called with the
+  newest data) and
   `onError` gets `Watch callbacks kept writing: stopped after 100 rounds`. An
   `onError` that throws is logged with `console.error`, never thrown.
 - A write the client makes after a query or a mutation that throws (a `keys`

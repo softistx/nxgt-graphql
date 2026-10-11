@@ -428,8 +428,10 @@ console.log(client.cache?.read(BookQuery, { id: '1' })); // undefined: a miss
 ## `Watch callbacks kept writing: stopped after 100 rounds`
 
 **When:** the cache's `onError` (default `console.error`) gets an `Error`
-with this message after a write. The writes still pending are dropped; the
-call that made the first write is not affected.
+with this message after a write. The watch call-backs still pending are
+dropped, not the writes: the cache keeps every write, but some watches may not
+have been called with the newest data. The call that made the first write is
+not affected.
 **Why:** a watch callback writes to the cache, that write wakes a watch whose
 callback writes again, and so on: each round is called back after the one
 before, and one write is allowed 100 rounds. Usually a callback writes a value
