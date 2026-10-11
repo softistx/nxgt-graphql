@@ -897,8 +897,9 @@ packages/graphql-codegen-msw/test/
   interceptor, `@mswjs/interceptors` pinned at msw's version as a
   devDependency); `setup-server.spec.ts` bundles `test/node-scenario.ts` into
   the package's `.cache/` (ignored by git, so Node resolves the package's
-  dependencies) and runs `setupServer` under Node 22.12 or later, and is
-  skipped, saying so, without one on the PATH.
+  dependencies) and runs `setupServer` under Node 22.12 or later. Locally it is
+  skipped, saying so, without one on the PATH; when `CI` is set, a missing or
+  too-old Node fails it. The CI image currently provides Node 22.x.
 - **The generated files are typechecked and never edited**: `bun run --cwd
   packages/graphql-codegen-msw generated:write` regenerates them, and
   `plugin.spec.ts` fails, naming that command, when one is stale. Biome skips
@@ -1002,6 +1003,7 @@ typecheck, test and `verify:artifacts`, and restore with `git checkout -- .
 | `CLAUDE.md`, `.claude/settings.json` | nxgt-di's, byte for byte |
 | `src/cli.ts` and `src/typedefs-command.ts` in `graphql-scalars` and `graphql-validation` | each package ships its own `typedefs` bin and no package depends on the other. `cli.ts` is the same file apart from its doc comment; `typedefs-command.ts` shares `--out` and `--help`, the usage layout, the exit codes and `--help`. A change to one bin's flags or exit codes is made in the other |
 | `naming.ts` in `graphql-codegen-zod` and `graphql-codegen-msw` | the msw plugin must name every type and schema exactly as codegen-zod does, and codegen-zod exports only `plugin`; exporting its `Naming` would widen its public API. The msw copy drops what it does not name (args, fragments, input types) and adds `handler()`. A naming change is made in both |
+| `imports.ts` in `graphql-codegen-zod` and `graphql-codegen-msw` | codegen-zod exports only `plugin`, so the msw plugin cannot reuse its `Imports`. The msw copy adds `import type` (a module whose every name is a type is written `import type`). An aliasing fix is made in both |
 | The 65 scalar names (GraphQL names and `<name>Schema` exports) | copied outside this repository: `@nxgt/typespec` (softistx/nxgt-http) declares each as a TypeSpec scalar and OpenAPI component of the same name, with `x-nxgt-scalar: <Name>`, and pins the list in its `test/scalars/index.ts` (`GRAPHQL_SCALARS`); the rules are no longer copied: they live in `@nxgt/zod` (softistx/nxgt-zod), whose schemas this package re-exports, the same instances. Adding or renaming a scalar means a PR in `@nxgt/zod` first and the same change in `@nxgt/typespec`: tell the session or open the PR in each |
 
 ## Declared divergences from nxgt-data

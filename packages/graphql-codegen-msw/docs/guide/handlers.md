@@ -270,11 +270,13 @@ message>`. Status 200, as a GraphQL server answers a resolver's error.
 }
 ```
 
-Two differences with the server's: `<operation>` is the operation's name
+Three differences with the server's: `<operation>` is the operation's name
 (`SignUp`), where the server names the field (`Mutation.signUp`); each path
 starts with the variable's name, where the server's starts with the
-argument's. They are the same when the variable is named after the argument.
-There is no `constraint` on an issue, as on a client.
+argument's (the first two are the same when the variable is named after the
+argument); and the mock answers `{ errors }` alone, with no `data`, and no
+`path` or `locations` on the error, which the server's execution adds. There
+is no `constraint` on an issue, as on a client.
 
 ### `'<module>#<export>'`: your own
 

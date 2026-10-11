@@ -11,6 +11,7 @@ import { fieldsError } from '@nxgt/graphql-validation';
 import { GraphQLError } from 'graphql';
 import { HttpResponse } from 'msw';
 import { ENDPOINT } from '../test/fixture';
+import { iteratorMessage } from '../test/iterator-message';
 import * as defaults from '../test/msw';
 import * as badUserInput from '../test/msw-bad-user-input';
 import * as own from '../test/msw-own';
@@ -259,6 +260,29 @@ describe('the resolver', () => {
 		});
 	});
 
+	test('a GraphQLError subclass with its own name is answered at its status', async () => {
+		class NotFoundError extends GraphQLError {
+			override name = 'NotFoundError';
+		}
+		server.use(
+			defaults.mockUserQuery(() => {
+				throw new NotFoundError('No such user', {
+					extensions: { code: 'NOT_FOUND', http: { status: 404 } },
+				});
+			}),
+		);
+		const { status, body } = await post(USER, { id: 'u_1' });
+		expect(status).toBe(404);
+		expect(body).toEqual({
+			errors: [
+				{
+					message: 'No such user',
+					extensions: { code: 'NOT_FOUND', http: { status: 404 } },
+				},
+			],
+		});
+	});
+
 	test('a GraphQLError without a status answers 200', async () => {
 		server.use(
 			defaults.mockUserQuery(() => {
@@ -310,7 +334,7 @@ describe('the resolver', () => {
 		);
 		expect(status).toBe(500);
 		expect(JSON.stringify(body)).toContain(
-			'the resolver of User returned an iterator',
+			JSON.stringify(iteratorMessage('User')).slice(1, -1),
 		);
 	});
 });

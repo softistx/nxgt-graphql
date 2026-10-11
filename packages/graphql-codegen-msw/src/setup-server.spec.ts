@@ -6,7 +6,8 @@ import { $ } from 'bun';
 /**
  * Node's version, when a Node that msw 3 runs on (22.12 or later) is on the
  * PATH. msw/node's setupServer intercepts nothing under Bun, so it is
- * proved under Node; without one this file is skipped, saying so.
+ * proved under Node; without one this file is skipped, saying so, except
+ * under CI (`CI` set), where a missing or too-old Node fails.
  */
 async function nodeVersion(): Promise<string | undefined> {
 	const ran = await $`node --version`.quiet().nothrow();
@@ -17,10 +18,17 @@ async function nodeVersion(): Promise<string | undefined> {
 }
 
 const node = await nodeVersion();
-if (!node)
+if (!node && !process.env['CI'])
 	console.warn(
 		'setup-server.spec.ts skipped: no Node 22.12 or later on the PATH to run msw/node.',
 	);
+
+if (!node && process.env['CI'])
+	test('Node 22.12 or later is on the PATH under CI', () => {
+		throw new Error(
+			'setup-server.spec.ts needs Node 22.12 or later on the PATH to run msw/node: CI must provide it.',
+		);
+	});
 
 describe.skipIf(!node)(`msw/node's setupServer, under Node ${node}`, () => {
 	test('serves the generated handlers to real fetch requests', async () => {

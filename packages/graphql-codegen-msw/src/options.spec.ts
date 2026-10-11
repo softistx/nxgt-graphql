@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { parse } from 'graphql';
 import { schema } from '../test/fixture';
+import { iteratorMessage } from '../test/iterator-message';
 import { type CodegenMswConfig, plugin } from './index';
 
 const base = {
@@ -72,7 +73,7 @@ const refusals: [string, CodegenMswConfig, string][] = [
 /** The messages raised elsewhere: the plugin's duplicate, the runtime's iterator. */
 const elsewhere = [
 	'@nxgt/graphql-codegen-msw: the file would declare mockGetUserQuery twice: two operations give it the same name. Rename one of them.',
-	"@nxgt/graphql-codegen-msw: the resolver of User returned an iterator (a generator function?). Each request's variables are checked before the resolver runs, which msw cannot do once it keeps an iterator: answer each request from a plain function, or register one handler per answer with { once: true }.",
+	iteratorMessage('User'),
 ];
 
 describe('the config', () => {

@@ -34,7 +34,10 @@ refusals, comes with it.
 
 ## Setup
 
-Three files, generated side by side: the operations' types (the client
+The schema must declare `@constraint` (the first entry below) when it uses
+it, and `scalarSchemas` names the module holding a schema per custom scalar;
+drop either from the example when your schema has no `@constraint` or no
+custom scalar. Three files, generated side by side: the operations' types (the client
 preset's `graphql.ts`, or `typescript-operations`' file), the Zod schemas of
 `@nxgt/graphql-codegen-zod`, and the handlers.
 
@@ -46,6 +49,7 @@ const config: CodegenConfig = {
 	schema: ['generated/graphql/constraint.graphqls', 'src/schema/**/*.graphql'],
 	documents: 'src/operations/**/*.graphql',
 	generates: {
+		// The operations' types: the client preset...
 		'src/generated/': { preset: 'client' },
 		'src/generated/zod.ts': {
 			plugins: ['@nxgt/graphql-codegen-zod'],
@@ -63,6 +67,21 @@ const config: CodegenConfig = {
 };
 export default config;
 ```
+
+Without the client preset, `typescript-operations` writes the same types
+(`typesImport: './types'` then names its file):
+
+```ts
+'src/generated/types.ts': {
+	plugins: ['typescript', 'typescript-operations'],
+},
+```
+
+Where they come from: `generated/graphql/constraint.graphqls` is written by
+`bunx nxgt-graphql-validation typedefs --out` (see
+[`@nxgt/graphql-validation`](https://www.npmjs.com/package/@nxgt/graphql-validation)),
+and `@nxgt/graphql-scalars` is `bun add @nxgt/graphql-scalars`, which exports
+the `scalarSchemas` record codegen-zod reads.
 
 `schemasImport` and `typesImport` are written into the generated imports as
 you give them, relative to the generated file. Under `moduleResolution:
@@ -182,6 +201,7 @@ mockUserQuery(resolver, { endpoint: 'https://staging.example.com/graphql', once:
 ### In tests
 
 ```ts
+import { HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { mockUserQuery } from './generated/msw';
 

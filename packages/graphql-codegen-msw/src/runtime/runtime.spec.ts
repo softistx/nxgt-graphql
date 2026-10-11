@@ -143,6 +143,19 @@ describe('errorResponse', () => {
 		});
 	});
 
+	test('ignores a status a response cannot carry: 99, 600, 204, 205, 304', () => {
+		for (const status of [99, 600, 204, 205, 304, 409.5])
+			expect(
+				errorResponse({ message: 'a', extensions: { http: { status } } })
+					.status,
+			).toBe(200);
+		for (const status of [200, 599])
+			expect(
+				errorResponse({ message: 'a', extensions: { http: { status } } })
+					.status,
+			).toBe(status);
+	});
+
 	test('ignores a status that is not an integer', () => {
 		expect(
 			errorResponse({ message: 'a', extensions: { http: { status: '409' } } })
@@ -162,6 +175,10 @@ describe('isGraphQLError', () => {
 		expect(isGraphQLError(new GraphQLError('a'))).toBe(true);
 		expect(isGraphQLError(new GraphQLErrorCopy('a'))).toBe(true);
 		expect(isGraphQLError(new Error('a'))).toBe(false);
+		class NotFoundError extends GraphQLError {
+			override name = 'NotFoundError';
+		}
+		expect(isGraphQLError(new NotFoundError('a'))).toBe(true);
 		expect(isGraphQLError({ name: 'GraphQLError', message: 'a' })).toBe(false);
 	});
 });
