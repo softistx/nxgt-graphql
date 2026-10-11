@@ -327,14 +327,15 @@ What a format of your own is:
   whose function returns a promise without being `async` — is learnt from the
   first value: for that one value it runs twice (Zod tries a synchronous parse
   first, as its own Standard Schema `validate` does), and if that first,
-  dropped run rejects, the rejection is unhandled. Write the check as
-  `.refine(async (value) => …)` and it runs once from the first value. A default value is checked
-  at startup synchronously, so a field whose format is async cannot have a
+  dropped run rejects, the rejection is unhandled, which ends a Node process
+  by default. Write the check as `.refine(async (value) => …)`, compiled
+  for ES2017 or later, and it runs once from the first value. A default
+  value is checked at startup synchronously, so a field whose format is async cannot have a
   default: startup throws `The default value of Query.a(s:) cannot be checked
   at startup: the format "free" checks asynchronously, …`.
 
 - **Only Zod's public API runs it.** Your format is parsed with `safeParse`
-  and `safeParseAsync`, an abort is read from a `superRefine` chained after
+  and `safeParseAsync`, an abort is read from two `.refine()`s chained after
   your checks, and its issues are the ones `safeParse` returns: no Zod
   internal is called, so a Zod 4 release that changes its internals changes
   nothing here, and a format from another copy of Zod (another version

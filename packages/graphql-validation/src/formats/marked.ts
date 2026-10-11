@@ -12,23 +12,28 @@ import type { StringSchema } from './format';
  * cannot see) throws, naming the format, as a resolver's bug would.
  *
  * Only zod's public API runs the schema, whatever zod 4 copy it comes from:
- * `safeParse`, `safeParseAsync`, `superRefine` and the issues they return,
- * so a zod release that changes its internals changes nothing here.
+ * `safeParse`, `safeParseAsync`, `refine` (with `when`), `check` pushing to
+ * `ctx.issues`, and the issues `safeParse` returns, so a zod release that
+ * changes its internals changes nothing here.
  *
- * - **An abort** is read from a check of our own chained last on the schema
- *   (`superRefine`): zod runs it unless an earlier check aborted, so a
- *   refusal that never reached it aborted, and its issues are re-raised
- *   with `continue: false`, stopping the rules after the format as they
- *   stop in the generated client.
+ * - **An abort** is read from two refinements of our own chained last on the
+ *   schema. Zod skips a plain one after any issue that does not continue
+ *   (`abort: true`, or an issue a `.check()` pushed with no `continue`), and
+ *   one with a `when` only after an explicit abort (`continue: false`), which
+ *   also stops the length checks (`.max()`, …). Which of the two ran says
+ *   which abort it was, and the issues are re-raised with that same
+ *   `continue`, so the rules after the format stop as they stop when chained
+ *   on the schema itself, in the generated client.
  * - **An async check** is run by `safeParseAsync`, once, when the schema is
  *   known to be async: `async` says so from its definition (an `async`
  *   function in a `.refine()`), or the format learnt it from a value. A
  *   format not known to be async runs `safeParse` first; when that throws
- *   (zod's async error, or anything else) it runs again with
- *   `safeParseAsync`, as zod's own Standard Schema `validate` does: for that
- *   value the check runs twice, and the promise the synchronous attempt
- *   dropped is zod's, out of our reach. The format is then known to be
- *   async, so this happens once per process.
+ *   zod's async error (`$ZodAsyncError`, a public export, matched by class or
+ *   by name across copies) it runs again with `safeParseAsync`, as zod's own
+ *   Standard Schema `validate` does: for that value the check runs twice, and
+ *   the promise the synchronous attempt dropped is zod's, out of our reach.
+ *   The format is then known to be async, so this happens once per format.
+ *   Any other error is the check's own, and is thrown as it is.
  *
  * The promise returned to the enclosing parse gets a handler, so a
  * synchronous parse (a default value's check) that throws zod's async error
@@ -41,21 +46,28 @@ export function marked(
 	options: { async: boolean; onAsync: () => void },
 ): StringSchema {
 	let async = options.async;
-	let reached = false;
-	// Zod runs a refinement unless an earlier check aborted: a failed parse
-	// that did not reach this one aborted.
-	const probe = schema.superRefine(() => {
-		reached = true;
-	});
+	let continued = false;
+	let notStopped = false;
+	const probe = schema
+		.refine(() => {
+			continued = true;
+			return true;
+		})
+		.refine(
+			() => {
+				notStopped = true;
+				return true;
+			},
+			{ when: () => true },
+		);
 
 	const raise = (
-		value: string,
-		ctx: z.core.$RefinementCtx<string>,
+		ctx: z.core.ParsePayload<string>,
 		result: z.ZodSafeParseResult<unknown>,
-		aborted: boolean,
+		next: boolean | undefined,
 	) => {
 		if (result.success) {
-			if (result.data !== value) {
+			if (result.data !== ctx.value) {
 				throw new Error(
 					`The format "${name}" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().`,
 				);
@@ -64,45 +76,40 @@ export function marked(
 		}
 		for (const issue of result.error.issues) {
 			const params = 'params' in issue ? issue.params : undefined;
-			ctx.addIssue({
+			ctx.issues.push({
 				...issue,
+				input: ctx.value,
 				params: { ...params, [RULE_PARAM]: 'format' },
-				...(aborted && { continue: false }),
-			} as Parameters<typeof ctx.addIssue>[0]);
+				...(next !== undefined && { continue: next }),
+			} as z.core.$ZodRawIssue);
 		}
 	};
 
 	// Once async, zod has already run the rules chained after the format
 	// when its issues arrive: an abort then stops nothing, on the server only.
-	const later = (
-		value: string,
-		ctx: z.core.$RefinementCtx<string>,
-		learn: boolean,
-	) => {
-		const pending = schema.safeParseAsync(value).then((result) => {
-			if (learn) async = true;
-			raise(value, ctx, result, false);
-		});
+	const later = (ctx: z.core.ParsePayload<string>) => {
+		const pending = schema
+			.safeParseAsync(ctx.value)
+			.then((result) => raise(ctx, result, true));
 		pending.catch(() => {});
 		options.onAsync();
 		return pending;
 	};
 
-	return z.string().superRefine((value, ctx) => {
-		if (async) return later(value, ctx, false);
+	return z.string().check((ctx) => {
+		if (async) return later(ctx);
 		let result: z.ZodSafeParseResult<unknown>;
-		reached = false;
+		continued = notStopped = false;
 		try {
-			result = probe.safeParse(value);
+			result = probe.safeParse(ctx.value);
 		} catch (error) {
-			// zod's async error, from any copy: async from now on. Anything
-			// else may be one a later zod renamed, or the check's own throw:
-			// the async run tells, and rethrows the latter.
-			const known = isAsyncError(error);
-			if (known) async = true;
-			return later(value, ctx, !known);
+			if (!isAsyncError(error)) throw error;
+			async = true;
+			return later(ctx);
 		}
-		raise(value, ctx, result, !result.success && !reached);
+		// Both ran: every issue continues. Only the `when` one: an issue that
+		// does not continue. Neither: an explicit abort.
+		raise(ctx, result, continued ? true : notStopped ? undefined : false);
 		return undefined;
 	});
 }

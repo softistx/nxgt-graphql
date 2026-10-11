@@ -345,41 +345,48 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   none after some, throws (the record is kept on the schema under a
   `Symbol.for` key); with the same names and the very same schemas it is the
   usual no-op. A string definition without `safeParse`, `safeParseAsync` and
-  `superRefine` (an object shaped like a schema, a `zod/mini` one) is refused
+  `refine` (an object shaped like a schema, a `zod/mini` one) is refused
   at startup too, since every request calls them.
 - **An application format runs through zod's public API only** (owner: a zod
   4 release must not break it). `formats/marked.ts` calls the schema's
-  `safeParse`/`safeParseAsync` and `superRefine`, and reads the issues they
-  return: never `_zod.run`, `z.core.util.finalizeIssue`, `z.core.config` nor
+  `safeParse`/`safeParseAsync` and `refine`, pushes to a `.check()`'s
+  `ctx.issues`, and reads the issues `safeParse` returns: never `_zod.run`, `z.core.util.finalizeIssue`, `z.core.config` nor
   a raw issue's `continue`. Startup reads `_zod.def` (zod's introspection)
   only to refuse a schema and to hint that a check is async; what it misses
   is caught at run time. `marked.spec.ts` runs the matrix (sync, async,
-  abort, rewriting, default value) on schemas whose `_zod.run` is gone or
-  throws (`test/public-only.ts`), and `another-zod.spec.ts` on another copy;
-  never reach into zod internals again to win back a degradation below.
+  abort, rewriting, default value) on schemas reached through their public
+  API only, `_zod.run` gone or throwing, and on schemas whose `_zod.run`
+  returns issues without `continue` (`test/public-only.ts`);
+  `another-zod.spec.ts` does it on another copy. Never reach into zod
+  internals again to win back a degradation below.
 - **An application format's issue is `format`'s, whatever its code.** Its
-  schema runs inside a `z.string().superRefine` (`marked`) that re-raises
+  schema runs inside a `z.string().check` (`marked`) that re-raises
   each issue `safeParse` returns unchanged but for
   `params.nxgtConstraint: 'format'` (`RULE_PARAM`), and `constraintOf` reads
   that mark before any `owns`: a `.regex()` or `.refine()` inside the format
-  is not `pattern`'s or `notContains`'. An aborting check stops the rules
-  after it as on the client: `marked` parses the schema with a
-  `superRefine` chained last, which zod skips only after an abort, so a
-  refusal that never reached it is re-raised with `continue: false`. Once
+  is not `pattern`'s or `notContains`'. An abort stops the rules after it
+  as on the client: `marked` parses the schema with two refinements chained
+  last, a plain one, which zod skips after any issue that does not continue
+  (`abort: true`, an issue a `.check()` pushed with no `continue`), and one
+  with a `when`, skipped only after `continue: false`, which also stops the
+  length checks. Which ran says which abort it was, and the issues are
+  re-raised with that `continue` (true, absent, false). Once
   the format has gone async, zod has already run those rules: the abort then
   stops nothing, on the server only. A successful parse whose output differs
   from its input throws (the rewriting backstop above).
 - **An async check stays async, from any zod copy, and runs once per value
   when it is known.** A format whose definition shows an `async` function
   (`.refine(async …)`), or that went async once, runs `safeParseAsync` only.
-  Any other runs `safeParse` first; when that throws (zod's
-  `$ZodAsyncError`, recognised by class or by name across copies, or
-  anything else) the value runs again with `safeParseAsync`, as zod's own
-  Standard Schema `validate` does. Documented degradation (troubleshooting,
-  "runs twice, once"): for an async check the definition does not show (an
-  async `.superRefine()`, a non-`async` function returning a promise), the
-  first value runs it twice, and the dropped first run's rejection, zod's
-  promise, is unhandled. The promise `marked` returns gets a handler, so a
+  Any other runs `safeParse` first; when that throws zod's `$ZodAsyncError`
+  (a public export, recognised by class or by name across copies) the value
+  runs again with `safeParseAsync`, as zod's own Standard Schema `validate`
+  does; any other error is the check's own and is thrown as it is.
+  Documented degradation (troubleshooting, "runs twice for the first
+  value"): for an async check the definition does not show (an async
+  `.superRefine()`, a non-`async` function returning a promise, an `async`
+  function compiled down to a generator), the first value runs it twice, and
+  the dropped first run's rejection, zod's promise, is unhandled, which
+  terminates Node by default. The promise `marked` returns gets a handler, so a
   synchronous parse that drops it (a default value's check) leaves no
   unhandled rejection; `checkDefaults` then throws naming the field and the
   format (`FormatRegistry.takeAsync`).

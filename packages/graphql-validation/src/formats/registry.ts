@@ -58,7 +58,7 @@ export class FormatRegistry {
 			}
 			if (!runnable(schema)) {
 				throw new Error(
-					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no safeParse, safeParseAsync or superRefine, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
+					`The format "${name}" cannot be run: its definition reads type: 'string' but it has no safeParse, safeParseAsync or refine, so it is not a schema of zod 4's classic API. Pass the schema z.string() or a string format returns, not an object shaped like one.`,
 				);
 			}
 			if (rewrites(schema)) {
@@ -114,7 +114,7 @@ function isStringSchema(value: unknown): value is StringSchema {
  */
 function runnable(schema: StringSchema): boolean {
 	const api = schema as unknown as Record<string, unknown>;
-	return ['safeParse', 'safeParseAsync', 'superRefine'].every(
+	return ['safeParse', 'safeParseAsync', 'refine'].every(
 		(method) => typeof api[method] === 'function',
 	);
 }

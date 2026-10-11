@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 import { buildSchema, type GraphQLObjectType, graphql } from 'graphql';
 import { z } from 'zod';
-import { publicOnly } from '../../test/public-only';
+import { publicOnly, withoutContinue } from '../../test/public-only';
 import { constraintTypeDefs } from '../constraint-directive';
 import { withValidation } from '../with-validation';
 import type { StringSchema } from './format';
@@ -17,12 +17,16 @@ const changed = () => {
 const internals = [
 	['as zod 4.6 builds it', <S extends StringSchema>(schema: S) => schema],
 	[
-		'with no _zod.run',
+		'reached through its public API, with no _zod.run',
 		<S extends StringSchema>(schema: S) => publicOnly(schema),
 	],
 	[
-		'with a _zod.run that throws',
+		'reached through its public API, with a _zod.run that throws',
 		<S extends StringSchema>(schema: S) => publicOnly(schema, changed),
+	],
+	[
+		'whose _zod.run returns issues with no continue',
+		<S extends StringSchema>(schema: S) => withoutContinue(schema),
 	],
 ] as const;
 
@@ -125,6 +129,30 @@ for (const [label, wrap] of internals) {
 			}
 		});
 
+		test('lets the length rules after it run past an issue a .check() pushed with no continue, as the schema alone does', async () => {
+			const raw = z.string().check((ctx) => {
+				if (!/^[a-z]+$/.test(ctx.value))
+					ctx.issues.push({ code: 'custom', input: ctx.value, message: 'raw' });
+			});
+			const { ask } = server(wrap(raw));
+			for (const value of ['abcd1', 'A1', 'ab']) {
+				expect([
+					value,
+					(await ask(value)).issues?.map((issue) => issue.message),
+				]).toEqual([
+					value,
+					raw
+						.max(3)
+						.safeParse(value)
+						.error?.issues.map((i) => i.message),
+				]);
+			}
+			expect((await ask('abcd1')).issues?.map((i) => i.constraint)).toEqual([
+				'format',
+				'maxLength',
+			]);
+		});
+
 		test('runs an async check once per value, and refuses as it says', async () => {
 			let calls = 0;
 			const { ask } = server(
@@ -197,7 +225,8 @@ for (const [label, wrap] of internals) {
 
 describe('an async check the definition does not show', () => {
 	// An async .superRefine(): its definition holds zod's wrapper, no async
-	// function, so the format learns it from the first value.
+	// function, so the format learns it from the first value. So would a
+	// function a low TypeScript target compiles to a generator.
 	const counted = () => {
 		const calls = { n: 0 };
 		const f = z.string().superRefine(async (value, ctx) => {
@@ -218,13 +247,19 @@ describe('an async check the definition does not show', () => {
 		expect(calls.n).toBe(3);
 	});
 
-	test('is told apart from a check that throws, which fails the operation', async () => {
+	test('is told apart from a check that throws, which fails the operation, run once', async () => {
+		let calls = 0;
 		const f = z.string().refine(() => {
+			calls++;
 			throw new Error('boom');
 		});
 		const { ask } = server(f);
 		expect((await ask('a')).result.errors?.[0]?.message).toBe('boom');
 		expect((await ask('b')).result.errors?.[0]?.message).toBe('boom');
+		expect(calls).toBe(2);
+		expect(() =>
+			server(f, 'a(s: String = "x" @constraint(format: "f")): String'),
+		).toThrow('boom');
 	});
 });
 
