@@ -97,11 +97,22 @@ const resolvers = {
 
 ## From a zod parse
 
-Map each Zod issue to a `FieldIssue`. `inputPath` turns a GraphQL path into
-a dotted one, dropping the leading `input` argument:
+`fieldIssueOf(issue)` maps one Zod issue to a `FieldIssue`: its path through
+`inputPath`, and a code under `validation.errors.`, without params:
+
+| Zod issue | `code` |
+| --- | --- |
+| a string too short or too long (`min`, `max`, `length`) | `validation.errors.too-short` / `validation.errors.too-long` |
+| a number or bigint out of its bounds, or not a multiple | `validation.errors.out-of-range` |
+| a list or set too small or too big | `validation.errors.too-few` / `validation.errors.too-many` |
+| a named format (`email`, `uuid`, …) or a pattern (`regex`) | `validation.errors.invalid-format` |
+| anything else: `startsWith`, `endsWith`, `includes`, a refinement, a wrong type, a date's bound | `validation.errors.invalid` |
+
+The codes are also exported as `FIELD_CODES` (`FIELD_CODES.tooShort`, …),
+for your translations.
 
 ```ts
-import { type FieldIssue, inputPath, invalidInputError } from '@nxgt/graphql-validation';
+import { fieldIssueOf, invalidInputError } from '@nxgt/graphql-validation';
 import { z } from 'zod';
 
 const PersonInput = z.object({
@@ -111,23 +122,36 @@ const PersonInput = z.object({
   }),
 });
 
-function issuesOf(error: z.ZodError): FieldIssue[] {
-  return error.issues.map((issue) => {
-    const path = inputPath(['input', ...issue.path.map((key) => (typeof key === 'number' ? key : String(key)))]);
-    if (issue.code === 'too_small' && issue.origin === 'string')
-      return { path, code: 'validation.errors.too-short', params: { min: Number(issue.minimum) } };
-    return { path, code: `validation.errors.${issue.code}` };
-  });
-}
-
 const result = PersonInput.safeParse(input);
 if (!result.success)
-  throw invalidInputError(issuesOf(result.error), { translate: t, originalError: result.error });
+  throw invalidInputError(result.error.issues.map(fieldIssueOf), {
+    translate: t,
+    originalError: result.error,
+  });
+// fields: person.firstName (validation.errors.too-short),
+//         person.email (validation.errors.invalid-format)
 ```
 
-`inputPath(['input', 'person', 'firstName'])` is `person.firstName`,
-`['input', 'tags', 1]` is `tags.1`; a path that does not start with `input`
-(`['first']`), or is `['input']` alone, is only joined with dots.
+[`@nxgt/graphql-codegen-msw`](https://github.com/softistx/nxgt-graphql/blob/develop/packages/graphql-codegen-msw/docs/guide/handlers.md)'s
+mocks apply the same mapping by default, so a mocked refusal reads as the
+server's. For a code of your own, or params (`{ min: 2 }`), map the issue
+yourself and keep `fieldIssueOf` for the rest:
+
+```ts
+import { type FieldIssue, fieldIssueOf } from '@nxgt/graphql-validation';
+
+const issueOf = (issue: z.core.$ZodIssue): FieldIssue =>
+  issue.code === 'too_small' && issue.origin === 'string'
+    ? { ...fieldIssueOf(issue), params: { min: Number(issue.minimum) } }
+    : fieldIssueOf(issue);
+```
+
+`inputPath` turns a GraphQL or Zod path into a dotted one, dropping the
+leading `input` argument: `inputPath(['input', 'person', 'firstName'])` is
+`person.firstName`, `['input', 'tags', 1]` is `tags.1`; a path that does not
+start with `input` (`['first']`), or is `['input']` alone, is only joined
+with dots. It takes a Zod issue's path as it is, a symbol key written as
+`String(key)`.
 
 The same mapping reads [`BAD_USER_INPUT`](errors.md)'s `issues[].path`, which
 starts with the argument name.
@@ -172,6 +196,7 @@ throw fieldsError(
 
 ```ts
 import type { GraphQLError, GraphQLErrorOptions } from 'graphql';
+import type { z } from 'zod';
 
 type IssueParams = Record<string, string | number>;
 
@@ -200,5 +225,16 @@ type FieldsErrorOptions = InvalidInputOptions & {
 declare const INVALID_INPUT: 'validation.errors.invalid-input';
 declare function invalidInputError(issues: readonly FieldIssue[], options?: InvalidInputOptions): GraphQLError;
 declare function fieldsError(code: string, issues: readonly FieldIssue[], options?: FieldsErrorOptions): GraphQLError;
-declare function inputPath(path: readonly (string | number)[]): string;
+declare function inputPath(path: readonly PropertyKey[]): string;
+
+declare const FIELD_CODES: {
+  readonly tooShort: 'validation.errors.too-short';
+  readonly tooLong: 'validation.errors.too-long';
+  readonly outOfRange: 'validation.errors.out-of-range';
+  readonly tooFew: 'validation.errors.too-few';
+  readonly tooMany: 'validation.errors.too-many';
+  readonly invalidFormat: 'validation.errors.invalid-format';
+  readonly invalid: 'validation.errors.invalid';
+};
+declare function fieldIssueOf(issue: z.core.$ZodIssue): FieldIssue;
 ```

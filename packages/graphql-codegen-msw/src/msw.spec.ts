@@ -7,7 +7,6 @@ import {
 	spyOn,
 	test,
 } from 'bun:test';
-import { fieldsError } from '@nxgt/graphql-validation';
 import { GraphQLError } from 'graphql';
 import { HttpResponse } from 'msw';
 import { ENDPOINT } from '../test/fixture';
@@ -18,7 +17,7 @@ import * as own from '../test/msw-own';
 import * as translated from '../test/msw-translate';
 import { setupFetchNetwork } from '../test/network';
 import { zUsersQueryVariables } from '../test/zod';
-import { type InvalidInput, mockOperation } from './runtime';
+import { fieldsError, type InvalidInput, mockOperation } from './runtime';
 
 // The generated handlers, served by msw's network in this process: every
 // request is a real fetch, answered by the handler the spec registers.

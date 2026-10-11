@@ -359,7 +359,16 @@ in the order Zod reports them.
 
 A field has no `params`: the bound or the format is not written. These codes
 are the ones the API the mocks stand in for answers; a new param would be an
-addition, a changed code a breaking change.
+addition, a changed code a breaking change. The mapping is
+`@nxgt/graphql-validation`'s `fieldIssueOf`, so a server that answers its own
+Zod parses with it answers the same fields.
+
+Each field's path starts at the variable's name, since the handler parses
+the variables: `inputPath` drops a leading `input` only. It matches the
+server's `inputPath(['input', …])` when the variable is named `input`, after
+the argument (`mutation SignUp($input: SignUpInput!) { signUp(input:
+$input) }`); a variable named otherwise (`$person`) keeps its name
+(`person.firstName`), where the server's path would not.
 
 ```json
 {
@@ -377,8 +386,8 @@ addition, a changed code a breaking change.
 }
 ```
 
-The status is 400. `fieldIssueOf(issue)` is the mapping above, exported from
-`./runtime` for a function of your own that keeps it.
+The status is 400. `fieldIssueOf(issue)` is the mapping above, re-exported
+from `./runtime` for a function of your own that keeps it.
 
 #### `translate`
 
@@ -388,7 +397,7 @@ config: { …, translate: '../i18n#translate' }
 
 ```ts
 // src/i18n.ts
-import type { Translate } from '@nxgt/graphql-validation';
+import type { Translate } from '@nxgt/graphql-codegen-msw/runtime';
 
 export const translate: Translate = (code) => messages[code] ?? code;
 ```
@@ -451,8 +460,11 @@ error's own `extensions.http.status`, else 200.
 
 ```ts
 // src/mocks/invalid-input.ts
-import { fieldIssueOf, type InvalidInput } from '@nxgt/graphql-codegen-msw/runtime';
-import { invalidInputError } from '@nxgt/graphql-validation';
+import {
+	fieldIssueOf,
+	type InvalidInput,
+	invalidInputError,
+} from '@nxgt/graphql-codegen-msw/runtime';
 import { translate } from '../i18n';
 
 /** The default shape, with the bound as a param on a string's length. */
@@ -577,17 +589,22 @@ interface MockOptions extends RequestHandlerOptions { // msw's: `once`
 
 declare function invalidInputRefusal(options?: { readonly translate?: Translate }): InvalidInput;
 declare const badUserInputRefusal: InvalidInput;
-declare function fieldIssueOf(issue: z.core.$ZodIssue): FieldIssue;
 declare function errorResponse(
 	error: AnyGraphQLError | readonly AnyGraphQLError[],
 	init?: { readonly status?: number },
 ): HttpResponse<{ errors: GraphQLFormattedError[] }>;
 declare function isGraphQLError(value: unknown): value is GraphQLError;
+
+// Re-exported from @nxgt/graphql-validation, as they are there:
+// invalidInputError, fieldsError, fieldIssueOf, inputPath,
+// and the types Translate, FieldIssue, FieldError.
+declare function fieldIssueOf(issue: z.core.$ZodIssue): FieldIssue;
+declare function inputPath(path: readonly PropertyKey[]): string;
 ```
 
 Types: `GraphQLMockResolver`, `GraphQLMockInfo`, `MockedOperation`,
 `MockOptions`, `InvalidInput`, `InvalidInputAnswer`, `RefusedOperation`,
-`AnyGraphQLError`, and `InputTypes` / `InputType`, internal: exported for the
+`AnyGraphQLError`, `Translate`, `FieldIssue`, `FieldError`, and `InputTypes` / `InputType`, internal: exported for the
 generated file's annotation, their shape may change in any version.
 
 ### A handler written by hand

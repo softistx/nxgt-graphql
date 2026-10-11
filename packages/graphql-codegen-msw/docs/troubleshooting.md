@@ -86,6 +86,13 @@ config: { …, translate: '../i18n#translate' }
 **Fix:** remove `translate`, or call your translator inside your function.
 
 ```ts
+import {
+	fieldIssueOf,
+	type InvalidInput,
+	invalidInputError,
+} from '@nxgt/graphql-codegen-msw/runtime';
+import { translate } from '../i18n';
+
 export const invalidInput: InvalidInput = (issues) => ({
 	error: invalidInputError(issues.map(fieldIssueOf), { translate }),
 	status: 400,

@@ -4,11 +4,7 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Now
 
-- **Answering invalid input as one error** (in progress, not released yet).
-  `invalidInputError(issues, { translate })` builds one 400 error whose
-  `extensions.fields` lists every field at fault with your own codes,
-  translated; `fieldsError` does the same for a refusal such as a 409
-  conflict; `inputPath` turns a GraphQL path into `person.firstName`.
+Nothing in progress.
 
 ## Next
 
@@ -23,6 +19,14 @@ What `@nxgt/graphql-validation` is heading for, phrased as what you get.
 
 ## Shipped
 
+- **Answering invalid input as one error** — 0.4.0.
+  `invalidInputError(issues, { translate })` builds one 400 error whose
+  `extensions.fields` lists every field at fault with your own codes,
+  translated; `fieldsError` does the same for a refusal such as a 409
+  conflict; `fieldIssueOf` maps a Zod issue to a field and a code
+  (`too-short`, `invalid-format`, …), the mapping
+  [`@nxgt/graphql-codegen-msw`](https://www.npmjs.com/package/@nxgt/graphql-codegen-msw)'s
+  mocks apply; `inputPath` turns a GraphQL or Zod path into `person.firstName`.
 - **Your own formats** — 0.3.0. Name a Zod string schema in
   `@constraint(format: "...")`: `withValidation(schema, { formats })`, one
   record your module exports, checked at startup, its refusals named

@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import * as validation from '@nxgt/graphql-validation';
 import { GraphQLError } from 'graphql';
 import { z } from 'zod';
 import {
 	badUserInputRefusal,
 	errorResponse,
 	fieldIssueOf,
+	fieldsError,
+	inputPath,
+	invalidInputError,
 	invalidInputRefusal,
 	isGraphQLError,
 } from './index';
@@ -22,63 +26,30 @@ const signUp = z.object({
 	}),
 });
 
-describe('fieldIssueOf', () => {
-	const codeOf = (schema: z.ZodType, value: unknown) =>
-		issuesOf(z.object({ v: schema }), { v: value }).map(fieldIssueOf);
-
-	test.each([
-		['a string too short', z.string().min(2), 'a', 'too-short'],
-		['a string of an exact length', z.string().length(3), 'ab', 'too-short'],
-		['a string too long', z.string().max(2), 'abc', 'too-long'],
-		['a number below its minimum', z.number().gte(1), 0, 'out-of-range'],
-		['a number above its maximum', z.number().lte(50), 51, 'out-of-range'],
-		['an int below its minimum', z.int32().gte(1), 0, 'out-of-range'],
-		['a bigint above its maximum', z.bigint().max(2n), 3n, 'out-of-range'],
-		['a number not a multiple', z.number().multipleOf(2), 3, 'out-of-range'],
-		['a list too short', z.array(z.string()).min(2), ['a'], 'too-few'],
-		['a list too long', z.array(z.string()).max(1), ['a', 'b'], 'too-many'],
-		['a set too small', z.set(z.string()).min(2), new Set(['a']), 'too-few'],
-		[
-			'a set too big',
-			z.set(z.string()).max(1),
-			new Set(['a', 'b']),
-			'too-many',
-		],
-		['a format', z.email(), 'nope', 'invalid-format'],
-		['a pattern', z.string().regex(/^a/), 'b', 'invalid-format'],
-		['a prefix', z.string().startsWith('a'), 'b', 'invalid'],
-		['a suffix', z.string().endsWith('a'), 'b', 'invalid'],
-		['a substring', z.string().includes('a'), 'b', 'invalid'],
-		[
-			'a date too early',
-			z.date().min(new Date(2020, 0, 1)),
-			new Date(2000, 0, 1),
-			'invalid',
-		],
-		['a refinement', z.string().refine(() => false), 'a', 'invalid'],
-		['a wrong type, when called directly', z.string(), 1, 'invalid'],
-	])('%s is validation.errors.%s', (_, schema, value, code) => {
-		expect(codeOf(schema, value)).toEqual([
-			{ path: 'v', code: `validation.errors.${code}` },
-		]);
+describe("@nxgt/graphql-validation's builders", () => {
+	test('are re-exported as they are', () => {
+		expect(fieldIssueOf).toBe(validation.fieldIssueOf);
+		expect(invalidInputError).toBe(validation.invalidInputError);
+		expect(fieldsError).toBe(validation.fieldsError);
+		expect(inputPath).toBe(validation.inputPath);
 	});
 
-	test('drops the leading input and writes no params', () => {
+	test('map the issues as the default answer does', async () => {
 		const issues = issuesOf(signUp, {
 			input: { person: { firstName: 'A', email: 'x' }, tags: ['a', 'b'] },
 		});
-		expect(issues.map(fieldIssueOf)).toEqual([
-			{ path: 'person.firstName', code: 'validation.errors.too-short' },
-			{ path: 'person.email', code: 'validation.errors.invalid-format' },
-			{ path: 'tags', code: 'validation.errors.too-many' },
-		]);
-	});
-
-	test('reads a list index as a path segment', () => {
-		const [issue] = issuesOf(z.object({ ids: z.array(z.string().min(2)) }), {
-			ids: ['ab', 'c'],
+		const { error } = await invalidInputRefusal()(issues, {
+			type: 'mutation',
+			name: 'SignUp',
 		});
-		expect(issue && fieldIssueOf(issue).path).toBe('ids.1');
+		expect(error.extensions).toEqual(
+			invalidInputError(issues.map(fieldIssueOf)).extensions,
+		);
+		expect(issues.map(fieldIssueOf).map(({ path }) => path)).toEqual([
+			'person.firstName',
+			'person.email',
+			'tags',
+		]);
 	});
 });
 

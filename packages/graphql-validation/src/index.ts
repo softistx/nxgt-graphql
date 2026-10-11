@@ -4,6 +4,7 @@ export {
 	type ValidationIssue,
 } from './bad-user-input';
 export { constraintTypeDefs } from './constraint-directive';
+export { FIELD_CODES, fieldIssueOf } from './field-issue-of';
 export type { FormatName } from './formats';
 export type { StringSchema } from './formats/format';
 export type { FormatSchemas, OwnFormats } from './formats/registry';
