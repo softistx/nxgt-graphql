@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { dateTimeSchema } from "./scalars";
 
+export const zRole = z.enum(["ADMIN", "MEMBER"]);
+export type Role = z.output<typeof zRole>;
+
 export const zPersonInput = z.strictObject({
 	firstName: z.string().min(2),
 	email: z.email(),
@@ -23,6 +26,7 @@ export type QueryUserArgs = z.output<typeof zQueryUserArgs>;
 
 export const zQueryUsersArgs = z.object({
 	first: z.int32().lte(50).gte(1).prefault(10).nullable(),
+	role: zRole.nullish(),
 });
 export type QueryUsersArgs = z.output<typeof zQueryUsersArgs>;
 
@@ -75,6 +79,7 @@ export type UserQueryVariables = z.input<typeof zUserQueryVariables>;
 
 export const zUsersQueryVariables = z.object({
 	first: z.int32().lte(50).gte(1).nullish(),
+	role: zRole.nullish(),
 });
 export type UsersQueryVariables = z.input<typeof zUsersQueryVariables>;
 

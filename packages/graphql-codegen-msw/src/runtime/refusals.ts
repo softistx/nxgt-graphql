@@ -37,28 +37,59 @@ function pathOf(issue: z.core.$ZodIssue): (string | number)[] {
 }
 
 /**
- * A Zod issue as a `FieldIssue`: the path through `inputPath`, the code
- * `validation.errors.<Zod's code>`, and the bound Zod names as params
- * (`min`, `max`, `format`) when the issue has one.
+ * A Zod issue as a `FieldIssue`: the path through `inputPath`, and the code
+ * the API answers for the constraint, without params:
+ * `validation.errors.too-short` / `too-long` (a string's length),
+ * `out-of-range` (a number's or bigint's bound, a multiple),
+ * `too-few` / `too-many` (a list's or set's size), `invalid-format` (a
+ * format or pattern), `invalid` (anything else).
  */
 export function fieldIssueOf(issue: z.core.$ZodIssue): FieldIssue {
-	const path = inputPath(pathOf(issue));
-	const code = `validation.errors.${issue.code}`;
-	const params =
-		issue.code === 'too_small'
-			? { min: Number(issue.minimum) }
-			: issue.code === 'too_big'
-				? { max: Number(issue.maximum) }
-				: issue.code === 'invalid_format'
-					? { format: issue.format }
-					: undefined;
-	return params ? { path, code, params } : { path, code };
+	return { path: inputPath(pathOf(issue)), code: codeOf(issue) };
 }
+
+function codeOf(issue: z.core.$ZodIssue): string {
+	switch (issue.code) {
+		case 'too_small':
+		case 'too_big': {
+			const small = issue.code === 'too_small';
+			switch (issue.origin) {
+				case 'string':
+					return small ? FIELD_CODES.tooShort : FIELD_CODES.tooLong;
+				case 'number':
+				case 'bigint':
+					return FIELD_CODES.outOfRange;
+				case 'array':
+				case 'set':
+					return small ? FIELD_CODES.tooFew : FIELD_CODES.tooMany;
+				default:
+					return FIELD_CODES.invalid;
+			}
+		}
+		case 'not_multiple_of':
+			return FIELD_CODES.outOfRange;
+		case 'invalid_format':
+			return FIELD_CODES.invalidFormat;
+		default:
+			return FIELD_CODES.invalid;
+	}
+}
+
+/** The field codes the default answer writes, as the API answers them. */
+const FIELD_CODES = {
+	tooShort: 'validation.errors.too-short',
+	tooLong: 'validation.errors.too-long',
+	outOfRange: 'validation.errors.out-of-range',
+	tooFew: 'validation.errors.too-few',
+	tooMany: 'validation.errors.too-many',
+	invalidFormat: 'validation.errors.invalid-format',
+	invalid: 'validation.errors.invalid',
+} as const;
 
 /**
  * The default answer: `invalidInputError`'s one 400 error, its `fields`
- * the issues in order (see `fieldIssueOf`), each message
- * `translate(code, params)`, or the code without a translator.
+ * the issues in order (see `fieldIssueOf`), each message `translate(code)`,
+ * or the code without a translator.
  */
 export function invalidInputRefusal(
 	options: { readonly translate?: Translate } = {},

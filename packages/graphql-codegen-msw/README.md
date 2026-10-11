@@ -145,16 +145,29 @@ shape, one field per Zod issue.
       "code": "validation.errors.invalid-input",
       "http": { "status": 400 },
       "fields": [
-        { "path": "person.firstName", "code": "validation.errors.too_small",
-          "message": "validation.errors.too_small", "params": { "min": 2 } }
+        { "path": "person.firstName", "code": "validation.errors.too-short",
+          "message": "validation.errors.too-short" }
       ]
     }
   }]
 }
 ```
 
+The codes are `too-short`, `too-long`, `out-of-range`, `too-few`, `too-many`,
+`invalid-format` and `invalid`, under `validation.errors.`, with no params.
 Each message is its code, unless you name a translator:
-`translate: './i18n#translate'`. Two other answers:
+`translate: './i18n#translate'`.
+
+A value the API refuses before its validation (a missing or `null` value for a
+non-null type, a wrong type, an unknown enum value or input field) is answered
+as graphql-yoga answers it, whatever `invalidInput` is: status 400, one plain
+error per problem in graphql-js's wording, no `extensions`:
+
+```json
+{ "errors": [{ "message": "Variable \"$id\" of required type \"ID!\" was not provided.", "locations": [{ "line": 1, "column": 12 }] }] }
+```
+
+Two other answers to an invalid input:
 
 | `invalidInput` | Answer |
 | --- | --- |

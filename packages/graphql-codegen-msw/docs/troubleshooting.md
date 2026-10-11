@@ -211,11 +211,27 @@ interceptor, as in [Under Bun](guide/handlers.md#under-bun).
 ### Every request answers 400 `validation.errors.invalid-input`
 
 **When:** a handler refuses variables the server takes.
-**Why:** the variables' schema refuses them; `extensions.fields` says where.
-Often an `ID` sent as a number (codegen-zod takes an `ID` as a string only),
-or a field the input type does not declare (input types are strict).
-**Fix:** send what the schema takes, or read the field's `code` and `path`
-to see which rule refused.
+**Why:** a constraint of the variables' schema refuses them;
+`extensions.fields` says where, each field's `code` which kind of rule
+(`too-short`, `out-of-range`, `invalid-format`, …).
+**Fix:** send what the schema takes; the field's `path` and `code` name the
+rule that refused.
+
+### A request answers 400 `Variable "$id" got invalid value 1; ID cannot represent value: 1`
+
+**When:** the variables hold a value the API refuses while coercing them: a
+missing or `null` value for a non-null type, a value of the wrong type, an
+unknown enum value, an input field the type does not declare.
+**Why:** graphql-yoga refuses these before any resolver or validation runs,
+with one plain error per problem and status 400; the mock answers the same,
+whatever `invalidInput` is. One difference with a real server: codegen-zod
+takes an `ID` as a string only, where GraphQL also takes an integer, so the
+mock refuses `id: 1`.
+**Fix:** send what the variable's type takes; for an `ID`, send a string.
+
+```ts
+await client.query(UserDocument, { id: String(user.id) });
+```
 
 ### The resolver's error answers 500
 

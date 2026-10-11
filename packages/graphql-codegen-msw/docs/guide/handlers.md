@@ -197,8 +197,60 @@ server.use(
 
 Before the resolver runs, the handler parses the variables with the
 operation's schema (`safeParseAsync`, so an asynchronous format of yours
-works). When they fail, the resolver is not called: the handler answers with
-the generated `invalidInput`'s error and status, as `{ errors: [error] }`.
+works). When they fail, the resolver is not called. The handler answers in
+two steps, always in this order:
+
+1. a value the API refuses while coercing the variables is answered as
+   graphql-yoga answers it, whatever `invalidInput` is (see
+   [What the API refuses before your resolvers](#what-the-api-refuses-before-your-resolvers));
+2. any other invalid input, a constraint, with the generated
+   `invalidInput`'s error and status, as `{ errors: [error] }`.
+
+### What the API refuses before your resolvers
+
+graphql-yoga checks the variables against their GraphQL types before it
+executes anything: a missing value for a non-null type, a `null` for one, a
+value of the wrong type (a number for a `String`, an `Int` beyond 32 bits), an
+unknown enum value, an input field the type does not declare. Your server's
+validation never sees these, so its invalid-input answer never names them.
+The mock answers them as graphql-yoga 5.24 does:
+
+- status **400**, under `Accept: application/json` and
+  `application/graphql-response+json` alike;
+- one plain GraphQL error per problem, `{ message, locations }`, with no
+  `extensions`: no `code`, no `fields`;
+- the message in graphql-js's wording, located at the variable's definition.
+
+```json
+{
+  "errors": [
+    { "message": "Variable \"$id\" of required type \"ID!\" was not provided.", "locations": [{ "line": 1, "column": 12 }] },
+    { "message": "Variable \"$role\" got invalid value \"NOPE\"; Value \"NOPE\" does not exist in \"Role\" enum.", "locations": [{ "line": 1, "column": 26 }] }
+  ]
+}
+```
+
+When any issue is of this kind, the whole request gets this answer and no
+other: the constraint issues beside it are not reported, as the API never
+reaches its validation. It applies whatever `invalidInput` is, a function of
+yours included, which therefore only receives constraint issues.
+
+| Zod issue | The API's refusal |
+| --- | --- |
+| `invalid_type`, the value absent | `Variable "$id" of required type "ID!" was not provided.`; inside an input object, `… at "input.person"; Expected value of type "PersonInput" to include required field "firstName", found: …` |
+| `invalid_type`, the value `null` | `Variable "$id" of non-null type "ID!" must not be null.`; inside, `Expected value of non-null type "String!" not to be null.` |
+| `invalid_type`, another value | `Variable "$id" got invalid value true; ID cannot represent value: true` (`String`, `Int`, `Float`, `Boolean`, `ID` as graphql-js words them; an input object `Expected value of type "SignUpInput" to be an object, found: "x".`) |
+| `invalid_value` | `Value "NOPE" does not exist in "Role" enum.`, or `Enum "Role" cannot represent non-string value: 5.` |
+| `unrecognized_keys` | `Expected value of type "SignUpInput" not to include unknown field "extra", found: …`, one error per field |
+| `too_big` / `too_small` at Int's 32-bit bound | `Int cannot represent non 32-bit signed integer value: 3000000000` |
+| `invalid_union`, every branch failing on one of these | the branch that went deepest: `[1]` for `[String!]` is refused at `tags[0]` |
+
+The wording is the API's for every type the operation's document declares:
+a variable's own type and its list items. The mock does not hold the schema,
+so inside an input object it leaves the type's name out: `Expected value to
+include required field "firstName"`, `Expected value of another type, found:
+1.` graphql-js's `Did you mean …?` suggestions are not written either. Match
+on the status and the error's shape rather than on the text after the `;`.
 
 ### `'invalid-input'`, the default
 
@@ -209,9 +261,20 @@ in the order Zod reports them.
 | Field | From the Zod issue |
 | --- | --- |
 | `path` | `inputPath(issue.path)`: dotted, the leading `input` dropped (`person.firstName`, `tags.1`); another variable keeps its name (`first`) |
-| `code` | `validation.errors.<issue.code>`: `validation.errors.too_small`, `validation.errors.invalid_format`, `validation.errors.invalid_type`, … |
-| `params` | `{ min }` for `too_small`, `{ max }` for `too_big`, `{ format }` for `invalid_format`; none otherwise |
-| `message` | `translate(code, params)`, or the code without `translate` |
+| `code` | the constraint, as in the table below |
+| `message` | `translate(code)`, or the code without `translate` |
+
+| Zod issue | `code` |
+| --- | --- |
+| `too_small` / `too_big` on a string | `validation.errors.too-short` / `validation.errors.too-long` |
+| `too_small` / `too_big` on a number or a bigint, `not_multiple_of` | `validation.errors.out-of-range` |
+| `too_small` / `too_big` on a list or a set | `validation.errors.too-few` / `validation.errors.too-many` |
+| `invalid_format` (a format such as `email`, or a `pattern`) | `validation.errors.invalid-format` |
+| any other constraint (a date's bound, a refinement, …) | `validation.errors.invalid` |
+
+A field has no `params`: the bound or the format is not written. These codes
+are the ones the API the mocks stand in for answers; a new param would be an
+addition, a changed code a breaking change.
 
 ```json
 {
@@ -221,9 +284,9 @@ in the order Zod reports them.
       "code": "validation.errors.invalid-input",
       "http": { "status": 400 },
       "fields": [
-        { "path": "person.firstName", "code": "validation.errors.too_small", "message": "validation.errors.too_small", "params": { "min": 2 } },
-        { "path": "person.email", "code": "validation.errors.invalid_format", "message": "validation.errors.invalid_format", "params": { "format": "email" } },
-        { "path": "tags", "code": "validation.errors.too_big", "message": "validation.errors.too_big", "params": { "max": 2 } }
+        { "path": "person.firstName", "code": "validation.errors.too-short", "message": "validation.errors.too-short" },
+        { "path": "person.email", "code": "validation.errors.invalid-format", "message": "validation.errors.invalid-format" },
+        { "path": "tags", "code": "validation.errors.too-many", "message": "validation.errors.too-many" }
       ]
     }
   }]
@@ -243,12 +306,12 @@ config: { …, translate: '../i18n#translate' }
 // src/i18n.ts
 import type { Translate } from '@nxgt/graphql-validation';
 
-export const translate: Translate = (code, params) => messages[code]?.(params) ?? code;
+export const translate: Translate = (code) => messages[code] ?? code;
 ```
 
 The generated file writes `invalidInputRefusal({ translate })`: the error's
 message is `translate('validation.errors.invalid-input')`, each field's
-`translate(code, params)`. `translate` goes with the default answer only; with
+`translate(code)`. `translate` goes with the default answer only; with
 another `invalidInput`, generation fails.
 
 ### `'bad-user-input'`
@@ -294,8 +357,9 @@ interface InvalidInputAnswer {
 }
 ```
 
-`issues` are Zod's, each `path` starting with the variable's name. The
-handler answers `{ errors: [error] }` at `status`; a `GraphQLError` is
+`issues` are Zod's, each `path` starting with the variable's name, and only
+constraint issues: a value the API refuses while coercing the variables is
+answered before your function is called. The handler answers `{ errors: [error] }` at `status`; a `GraphQLError` is
 written through its `toJSON()`.
 
 ```ts
@@ -304,13 +368,13 @@ import { fieldIssueOf, type InvalidInput } from '@nxgt/graphql-codegen-msw/runti
 import { invalidInputError } from '@nxgt/graphql-validation';
 import { translate } from '../i18n';
 
-/** The default shape, with the application's own codes. */
+/** The default shape, with the bound as a param on a string's length. */
 export const invalidInput: InvalidInput = (issues) => ({
 	error: invalidInputError(
 		issues.map((issue) => {
 			const field = fieldIssueOf(issue);
 			return issue.code === 'too_small' && issue.origin === 'string'
-				? { ...field, code: 'validation.errors.too-short' }
+				? { ...field, params: { min: Number(issue.minimum) } }
 				: field;
 		}),
 		{ translate },
@@ -399,8 +463,9 @@ requests (an array of operations in one POST) are not matched either.
 ## The runtime
 
 `@nxgt/graphql-codegen-msw/runtime` is what the generated file calls. It
-imports `msw`, `msw/graphql`, `zod` and `@nxgt/graphql-validation` at run
-time, never the plugin.
+imports `msw`, `msw/graphql`, `graphql` (to read the operation's document for
+the coercion answer), `zod` and `@nxgt/graphql-validation` at run time, never
+the plugin.
 
 ```ts
 declare function mockOperation<Result extends GraphQLQuery, Variables extends GraphQLVariables>(

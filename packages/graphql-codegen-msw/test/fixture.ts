@@ -7,6 +7,11 @@ export const sdl = `${constraintTypeDefs}
 """A point in time, ISO 8601 with an offset."""
 scalar DateTime
 
+enum Role {
+	ADMIN
+	MEMBER
+}
+
 input PersonInput {
 	firstName: String! @constraint(minLength: 2)
 	email: String! @constraint(format: "email")
@@ -26,7 +31,7 @@ type User {
 
 type Query {
 	user(id: ID! @constraint(minLength: 3)): User
-	users(first: Int = 10 @constraint(min: 1, max: 50)): [User!]!
+	users(first: Int = 10 @constraint(min: 1, max: 50), role: Role): [User!]!
 }
 
 type Mutation {
@@ -45,7 +50,7 @@ export const documents = [
 		location: 'operations.graphql',
 		document: parse(`
 			query User($id: ID!) { user(id: $id) { id name joined } }
-			query Users($first: Int) { users(first: $first) { id } }
+			query Users($first: Int, $role: Role) { users(first: $first, role: $role) { id } }
 			mutation SignUp($input: SignUpInput!) { signUp(input: $input) { id name } }
 			# A subscription and an anonymous operation get no handler.
 			subscription Joined { joined { id } }

@@ -27,7 +27,8 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 const USER = 'query User($id: ID!) { user(id: $id) { id name joined } }';
-const USERS = 'query Users($first: Int) { users(first: $first) { id } }';
+const USERS =
+	'query Users($first: Int, $role: Role) { users(first: $first, role: $role) { id } }';
 const SIGN_UP =
 	'mutation SignUp($input: SignUpInput!) { signUp(input: $input) { id name } }';
 
@@ -36,10 +37,14 @@ async function post(
 	query: string,
 	variables: Record<string, unknown>,
 	url = ENDPOINT,
+	accept?: string,
 ): Promise<{ status: number; body: { data?: unknown; errors?: unknown } }> {
 	const response = await fetch(url, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			...(accept ? { accept } : {}),
+		},
 		body: JSON.stringify({ query, variables }),
 	});
 	return { status: response.status, body: await response.json() };
@@ -112,21 +117,18 @@ describe("invalidInput: 'invalid-input', the default", () => {
 						fields: [
 							{
 								path: 'person.firstName',
-								code: 'validation.errors.too_small',
-								message: 'validation.errors.too_small',
-								params: { min: 2 },
+								code: 'validation.errors.too-short',
+								message: 'validation.errors.too-short',
 							},
 							{
 								path: 'person.email',
-								code: 'validation.errors.invalid_format',
-								message: 'validation.errors.invalid_format',
-								params: { format: 'email' },
+								code: 'validation.errors.invalid-format',
+								message: 'validation.errors.invalid-format',
 							},
 							{
 								path: 'tags',
-								code: 'validation.errors.too_big',
-								message: 'validation.errors.too_big',
-								params: { max: 2 },
+								code: 'validation.errors.too-many',
+								message: 'validation.errors.too-many',
 							},
 						],
 					},
@@ -143,23 +145,21 @@ describe("invalidInput: 'invalid-input', the default", () => {
 		expect(error?.extensions.fields).toEqual([
 			{
 				path: 'first',
-				code: 'validation.errors.too_small',
-				message: 'validation.errors.too_small',
-				params: { min: 1 },
+				code: 'validation.errors.out-of-range',
+				message: 'validation.errors.out-of-range',
 			},
 		]);
 	});
 
-	test('a missing variable is refused too', async () => {
-		server.use(defaults.mockUserQuery(answering(ada).resolver));
-		const { status, body } = await post(USER, {});
-		expect(status).toBe(400);
+	test('each field has a code and no params', async () => {
+		server.use(defaults.mockUsersQuery(answering({ users: [] }).resolver));
+		const { body } = await post(USERS, { first: 51 });
 		const [error] = body.errors as { extensions: { fields: unknown[] } }[];
 		expect(error?.extensions.fields).toEqual([
 			{
-				path: 'id',
-				code: 'validation.errors.invalid_type',
-				message: 'validation.errors.invalid_type',
+				path: 'first',
+				code: 'validation.errors.out-of-range',
+				message: 'validation.errors.out-of-range',
 			},
 		]);
 	});
@@ -174,9 +174,9 @@ describe("invalidInput: 'invalid-input', the default", () => {
 		}[];
 		expect(error?.message).toBe('Some fields are invalid');
 		expect(error?.extensions.fields.map((field) => field.message)).toEqual([
-			'At least 2',
-			'Not a valid email',
-			'validation.errors.too_big',
+			'Too short',
+			'Not valid',
+			'validation.errors.too-many',
 		]);
 	});
 });
@@ -224,6 +224,151 @@ describe("invalidInput: '<module>#<export>'", () => {
 				},
 			],
 		});
+	});
+});
+
+describe('what the API refuses before validation', () => {
+	// graphql-yoga 5.24 refuses these while coercing the variables: one
+	// error per problem, no extensions, status 400 under either Accept.
+	const refusal = (...errors: [string, number][]) => ({
+		status: 400,
+		body: {
+			errors: errors.map(([message, column]) => ({
+				message,
+				locations: [{ line: 1, column }],
+			})),
+		},
+	});
+
+	for (const accept of [
+		undefined,
+		'application/json',
+		'application/graphql-response+json',
+	])
+		describe(`accept: ${accept ?? 'none'}`, () => {
+			test('a missing required variable', async () => {
+				const { calls, resolver } = answering(ada);
+				server.use(defaults.mockUserQuery(resolver));
+				expect(await post(USER, {}, ENDPOINT, accept)).toEqual(
+					refusal([
+						'Variable "$id" of required type "ID!" was not provided.',
+						12,
+					]),
+				);
+				expect(calls).toEqual([]);
+			});
+
+			test('a null for a non-null variable', async () => {
+				server.use(defaults.mockUserQuery(answering(ada).resolver));
+				expect(await post(USER, { id: null }, ENDPOINT, accept)).toEqual(
+					refusal([
+						'Variable "$id" of non-null type "ID!" must not be null.',
+						12,
+					]),
+				);
+			});
+
+			test('a value of the wrong type', async () => {
+				server.use(defaults.mockUserQuery(answering(ada).resolver));
+				expect(await post(USER, { id: true }, ENDPOINT, accept)).toEqual(
+					refusal([
+						'Variable "$id" got invalid value true; ID cannot represent value: true',
+						12,
+					]),
+				);
+			});
+
+			test('an unknown enum value', async () => {
+				server.use(defaults.mockUsersQuery(answering({ users: [] }).resolver));
+				expect(await post(USERS, { role: 'NOPE' }, ENDPOINT, accept)).toEqual(
+					refusal([
+						'Variable "$role" got invalid value "NOPE"; Value "NOPE" does not exist in "Role" enum.',
+						26,
+					]),
+				);
+			});
+		});
+
+	test('an Int that is not one, or beyond 32 bits', async () => {
+		server.use(defaults.mockUsersQuery(answering({ users: [] }).resolver));
+		expect(await post(USERS, { first: 'a', role: 5 })).toEqual(
+			refusal(
+				[
+					'Variable "$first" got invalid value "a"; Int cannot represent non-integer value: "a"',
+					13,
+				],
+				[
+					'Variable "$role" got invalid value 5; Enum "Role" cannot represent non-string value: 5.',
+					26,
+				],
+			),
+		);
+		expect(await post(USERS, { first: 3_000_000_000 })).toEqual(
+			refusal([
+				'Variable "$first" got invalid value 3000000000; Int cannot represent non 32-bit signed integer value: 3000000000',
+				13,
+			]),
+		);
+	});
+
+	test("inside an input object: the variable's own type named, a field's not", async () => {
+		server.use(defaults.mockSignUpMutation(answering({}).resolver));
+		const input = { person: { email: 'ada@example.com' }, extra: 1, tags: [1] };
+		expect(await post(SIGN_UP, { input })).toEqual(
+			refusal(
+				[
+					'Variable "$input" got invalid value { email: "ada@example.com" } at "input.person"; Expected value to include required field "firstName", found: { email: "ada@example.com" }.',
+					17,
+				],
+				[
+					'Variable "$input" got invalid value 1 at "input.tags[0]"; Expected value of another type, found: 1.',
+					17,
+				],
+				[
+					'Variable "$input" got invalid value { person: { email: "ada@example.com" }, extra: 1, tags: [1] }; Expected value of type "SignUpInput" not to include unknown field "extra", found: { person: { email: "ada@example.com" }, extra: 1, tags: [1] }.',
+					17,
+				],
+			),
+		);
+		expect(await post(SIGN_UP, { input: 'x' })).toEqual(
+			refusal([
+				'Variable "$input" got invalid value "x"; Expected value of type "SignUpInput" to be an object, found: "x".',
+				17,
+			]),
+		);
+		expect(
+			await post(SIGN_UP, {
+				input: { person: { firstName: null, email: 'ada@example.com' } },
+			}),
+		).toEqual(
+			refusal([
+				'Variable "$input" got invalid value null at "input.person.firstName"; Expected value of non-null type not to be null.',
+				17,
+			]),
+		);
+	});
+
+	test('wins over a constraint: the API never reaches its validation', async () => {
+		server.use(defaults.mockUsersQuery(answering({ users: [] }).resolver));
+		const { status, body } = await post(USERS, { first: 0, role: 'NOPE' });
+		expect(status).toBe(400);
+		expect(body.errors).toHaveLength(1);
+		expect(JSON.stringify(body)).not.toContain('validation.errors');
+	});
+
+	test("under invalidInput: 'bad-user-input' and a function of yours alike", async () => {
+		const expected = refusal([
+			'Variable "$first" got invalid value "a"; Int cannot represent non-integer value: "a"',
+			13,
+		]);
+		server.use(badUserInput.mockUsersQuery(answering({ users: [] }).resolver));
+		expect(await post(USERS, { first: 'a' })).toEqual(expected);
+		server.resetHandlers();
+		server.use(own.mockUsersQuery(answering({ users: [] }).resolver));
+		expect(await post(USERS, { first: 'a' })).toEqual(expected);
+		server.resetHandlers();
+		server.use(translated.mockUsersQuery(answering({ users: [] }).resolver));
+		expect(await post(USERS, { first: 'a' })).toEqual(expected);
 	});
 });
 

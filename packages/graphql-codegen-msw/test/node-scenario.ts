@@ -40,6 +40,7 @@ try {
 	);
 	results['data'] = await post(USER, { id: 'u_1' });
 	results['invalidInput'] = await post(SIGN_UP, invalid);
+	results['coercion'] = await post(USER, {});
 	server.resetHandlers(
 		badUserInput.mockSignUpMutation(() =>
 			HttpResponse.json({ data: { signUp: null } }),

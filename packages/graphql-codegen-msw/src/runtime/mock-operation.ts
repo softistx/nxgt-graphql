@@ -12,6 +12,7 @@ import {
 	graphql,
 } from 'msw/graphql';
 import type { z } from 'zod';
+import { COERCION_STATUS, coercionErrors, isCoercionIssue } from './coercion';
 import type { InvalidInput } from './refusals';
 import { errorResponse, isGraphQLError } from './response';
 
@@ -64,8 +65,12 @@ export interface MockedOperation {
 /**
  * An msw handler for one operation: `graphql.link(endpoint)`'s `query` or
  * `mutation` by the operation's name. Its variables are checked with the
- * operation's schema first; an invalid input is answered with
- * `invalidInput`'s error and status, without calling `resolver`. A
+ * operation's schema first, without calling `resolver` when they fail: a
+ * value the API refuses while coercing the variables (missing, null, of
+ * the wrong type, an unknown enum value or field) is answered as
+ * graphql-yoga answers it (`coercionErrors`, status 400), whatever
+ * `invalidInput` is; any other invalid input with `invalidInput`'s error
+ * and status. A
  * `GraphQLError` the resolver throws is answered as `errorResponse` answers
  * it; anything else it throws is msw's to answer (a 500).
  */
@@ -85,10 +90,14 @@ export function mockOperation<
 		async (info) => {
 			const checked = await operation.variables.safeParseAsync(info.variables);
 			if (!checked.success) {
-				const { error, status } = await operation.invalidInput(
-					checked.error.issues,
-					where,
-				);
+				const { issues } = checked.error;
+				// The API refuses these while coercing the variables, before
+				// its own validation: whatever invalidInput says.
+				if (issues.some(isCoercionIssue))
+					return errorResponse(coercionErrors(issues, info), {
+						status: COERCION_STATUS,
+					});
+				const { error, status } = await operation.invalidInput(issues, where);
 				return errorResponse(error, { status });
 			}
 			try {

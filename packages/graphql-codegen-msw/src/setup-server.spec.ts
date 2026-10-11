@@ -64,11 +64,22 @@ describe.skipIf(!node)(`msw/node's setupServer, under Node ${node}`, () => {
 				fields: [
 					{
 						path: 'person.firstName',
-						code: 'validation.errors.too_small',
-						message: 'validation.errors.too_small',
-						params: { min: 2 },
+						code: 'validation.errors.too-short',
+						message: 'validation.errors.too-short',
 					},
 				],
+			});
+			expect(results.coercion).toEqual({
+				status: 400,
+				body: {
+					errors: [
+						{
+							message:
+								'Variable "$id" of required type "ID!" was not provided.',
+							locations: [{ line: 1, column: 12 }],
+						},
+					],
+				},
 			});
 			expect(results.badUserInput.status).toBe(200);
 			expect(results.badUserInput.body.errors[0].extensions.code).toBe(

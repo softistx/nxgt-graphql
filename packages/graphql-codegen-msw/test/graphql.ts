@@ -2,6 +2,10 @@
 type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 /** Internal type. DO NOT USE DIRECTLY. */
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+export type Role =
+  | 'ADMIN'
+  | 'MEMBER';
+
 export type PersonInput = {
   firstName: string;
   email: string;
@@ -22,6 +26,7 @@ export type UserQuery = { user: { id: string, name: string, joined: string | nul
 
 export type UsersQueryVariables = Exact<{
   first?: number | null | undefined;
+  role?: Role | null | undefined;
 }>;
 
 
