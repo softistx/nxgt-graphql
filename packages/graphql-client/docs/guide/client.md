@@ -14,7 +14,8 @@ const { hello } = await client.query(Hello);
 
 ## Documents
 
-`query` and `mutate` take what the client preset writes: a `TypedDocumentNode`
+`query`, `mutate` and `subscribe` (see [Subscriptions](subscriptions.md)) take
+what the client preset writes: a `TypedDocumentNode`
 (`documentMode: 'documentNode'`, the default) or a `TypedDocumentString`
 (`documentMode: 'string'`). Both carry the result and variables types.
 

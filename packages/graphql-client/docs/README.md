@@ -5,6 +5,7 @@
 | Page | Read it when |
 | --- | --- |
 | [Client](guide/client.md) | you create a client, run queries and mutations, retry, dedupe, send persisted queries, batch, or use it on a server |
+| [Subscriptions](guide/subscriptions.md) | you subscribe over server-sent events, close or abort a subscription, or set up the server for it |
 | [Errors](guide/errors.md) | you catch a failure, read its code or fields, or map it to an HTTP response |
 
 ## Reference

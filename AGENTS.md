@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`) and query batching (`batch: { max, wait }`). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`) and `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -553,14 +553,18 @@ variables and the data, and every failure is a typed error.
 ```
 packages/graphql-client/src/
   index.ts       the public barrel
-  client.ts      createGraphQLClient: query and mutate, the hook, the transport choice
+  client.ts      createGraphQLClient: query, mutate and subscribe, the kind check, the hook,
+                 the transport choice
   options.ts     the option and client types (url or http shape, QueryRetry, NoInfer variables)
   send.ts        one operation sent (APQ's register resend included), and post: one POST of a
                  body or a batch's array, its headers, signal, timeout, retry; errors mapped
-  response.ts    dataOf (errors, status, data), replyError (a whole reply) and transportError
-                 (timeout, network, unparsable body)
+  response.ts    dataOf (errors, status, data), replyError (a whole reply), refusedError (a
+                 non-2xx stream reply, its body read) and transportError (timeout, network,
+                 unparsable body)
   persisted.ts   the body for each persisted mode, the documentId check, the APQ hash (SHA-256,
                  cached per Operation) and the PersistedQueryNotFound test
+  subscribe.ts   EventSubscription: one subscription over SSE (graphql-sse distinct
+                 connections mode), each `next`'s data yielded, closed on every exit
   batch.ts       the Batcher: queries with the same call options posted as one array
   dedupe.ts      the Deduplicator: identical queries in flight share one request
   share.ts       Party: callers on one request, each with its own signal (dedupe and batch)
@@ -586,6 +590,16 @@ packages/graphql-client/src/
   errors, `ApiStatusError` on a non-2xx, else
   `ApiUnavailableError('invalid-response')`. Each array entry goes
   through `dataOf` with the reply's HTTP status.
+- **A subscription is never retried, reconnected, deduplicated or batched**:
+  `retry: false` and `reconnect: false` on httpyz's `events()`, whatever the
+  client's `retry`. Its one second connection is APQ's register resend, after
+  `PersistedQueryNotFound` on connect or as the first event (nothing ran).
+  Exactly once.
+- **A subscription's connection is closed on every exit path**: `complete`,
+  the stream's end, `close()`, `break`/`return`, an error (a `next` carrying
+  errors throws its `ApiError` and ends it, as a query does), and an abort,
+  which rejects with the signal's reason. `subscribe()` checks the kind and the
+  persisted hash at once; it connects only on the first iteration.
 - **`documentId` mode refuses a document with no hash before anything is
   sent** (`checkPersistable` in `run`), so one bad document never fails a batch.
 - **`retry.delay`, a function, is not part of a key**: calls differing only in

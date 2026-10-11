@@ -89,6 +89,31 @@ try {
 
 See [Errors](docs/guide/errors.md).
 
+### Subscribe over server-sent events
+
+```ts
+const OnMessage = graphql(`
+  subscription OnMessage($room: ID!) {
+    message(room: $room) { id text }
+  }
+`);
+
+const controller = new AbortController();
+for await (const { message } of client.subscribe(
+  OnMessage,
+  { room: 'r1' },
+  { signal: controller.signal },
+)) {
+  console.log(message.text);
+}
+```
+
+The server must speak the GraphQL over SSE protocol's distinct connections
+mode: graphql-yoga does out of the box; elsewhere, mount
+[graphql-sse](https://github.com/enisdenjo/graphql-sse)'s handler. It connects
+when the loop starts, and the connection closes on `complete`, `close()`,
+`break`, an error or an abort. See [Subscriptions](docs/guide/subscriptions.md).
+
 ### Persisted queries and batching
 
 Both are off by default, and both need the server set up for them.
@@ -127,6 +152,11 @@ See [Persisted queries](docs/guide/client.md#persisted-queries) and
   (and `mutate()` a query) with a `TypeError`. The one second post of a
   mutation is APQ's registration, after the server answered
   `PersistedQueryNotFound` without running it.
+- **A subscription is never retried, reconnected, deduplicated or batched.**
+  A dropped connection rejects the loop with
+  `ApiUnavailableError('unreachable')`; subscribe again to resume. `subscribe()`
+  refuses a query or a mutation with a `TypeError`, and a subscription is read
+  once.
 - **`documentId` mode needs the client preset's `persistedDocuments`**: a
   document without its hash throws a `TypeError` before anything is sent.
 - **Identical in-flight queries share one request.** Pass `dedupe: false` to
