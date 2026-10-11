@@ -107,7 +107,17 @@ describe('withValidation with formats of the application', () => {
 		).not.toThrow();
 	});
 
-	test('wraps again with the same formats as a no-op', () => {
+	test('wraps again with the very same record as a no-op', () => {
+		const { schema } = server();
+		const company = () =>
+			(schema.getQueryType() as GraphQLObjectType).getFields()['company']
+				?.resolve;
+		const wrapped = company();
+		expect(withValidation(schema, { formats: formatSchemas })).toBe(schema);
+		expect(company()).toBe(wrapped);
+	});
+
+	test('wraps again with another record of the same names and the very same schemas as a no-op', () => {
 		const { schema } = server();
 		expect(() =>
 			withValidation(schema, { formats: { ...formatSchemas } }),
@@ -115,7 +125,23 @@ describe('withValidation with formats of the application', () => {
 	});
 
 	describe('fails at startup', () => {
-		test('when wrapped again with other formats', () => {
+		test('when wrapped with formats, then with other formats', () => {
+			const { schema } = server();
+			expect(() =>
+				withValidation(schema, { formats: { iban: z.string() } }),
+			).toThrow(
+				'withValidation: this schema is already wrapped with other formats. Call withValidation once, with every format.',
+			);
+		});
+
+		test('when wrapped with formats, then without', () => {
+			const { schema } = server();
+			expect(() => withValidation(schema)).toThrow(
+				'withValidation: this schema is already wrapped with other formats. Call withValidation once, with every format.',
+			);
+		});
+
+		test('when wrapped again with a record that differs by one name or one schema', () => {
 			const { schema } = server();
 			const message =
 				'withValidation: this schema is already wrapped with other formats. Call withValidation once, with every format.';

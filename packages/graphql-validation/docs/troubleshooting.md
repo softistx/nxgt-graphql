@@ -124,14 +124,37 @@ resolver:
 const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not .transform(Number)
 ```
 
+### `The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
+
+**When:** calling `withValidation` (or generating with
+`@nxgt/graphql-codegen-zod`) with a format whose schema rewrites the value:
+`.trim()`, `.toLowerCase()`, `.toUpperCase()`, `.normalize()` or
+`.overwrite()`. Each keeps a string schema, so the type allows it; this check
+does not.
+**Why:** the server checks the value as the client sent it, and the resolver
+receives it unchanged, but a generated client chains the other rules on your
+schema and would check the rewritten value: with `slug:
+z.string().trim().toLowerCase()` and `@constraint(format: "slug", maxLength:
+2)`, the server refuses `" AB "` and the client accepts it as `"ab"`.
+**Fix:** refuse what is not canonical, and let the client normalise before it
+sends:
+
+```ts
+const formatSchemas = {
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug: lowercase words joined by hyphens'),
+};
+```
+
 ### `withValidation: this schema is already wrapped with other formats. Call withValidation once, with every format.`
 
-**When:** calling `withValidation` a second time on the same schema with
-other formats than the first call (other names, other schemas, or formats
-where the first call had none).
+**When:** calling `withValidation` a second time on the same schema with a
+record that is not the first call's: another name, another schema object for
+a name (even one written the same, `z.string()` twice), formats where the first
+call had none, or none where it had some.
 **Why:** the first call already wrapped the fields, checked against its own
-formats; a second set would be ignored in silence. With the same formats, a
-second call wraps nothing and does not throw.
+formats; a second set would be ignored in silence. With the same names, each
+the very same schema object (the same record, or a copy of it), a second call
+wraps nothing and does not throw.
 **Fix:** call it once, last, with every format in one record.
 
 ### `@constraint(format: "siret") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.`
