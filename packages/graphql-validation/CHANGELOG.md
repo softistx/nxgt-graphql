@@ -1,5 +1,11 @@
 # @nxgt/graphql-validation
 
+## 0.4.0
+
+### Minor Changes
+
+- [#87](https://github.com/softistx/nxgt-graphql/pull/87) [`3e30d35`](https://github.com/softistx/nxgt-graphql/commit/3e30d35534c3ff8c74437ec2c8dfc527e3be3f86) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Answering invalid input as one error: for an API that answers invalid input as one 400 error with a list of fields, `invalidInputError(issues, { translate })` builds that `GraphQLError`. Its `extensions` are `{ code: 'validation.errors.invalid-input', http: { status: 400 }, fields }`, each field `{ path, code, message, params? }` in the order given, its message `translate(code, params)` or the code itself without a translator. `params` is written only when it has a key, never `{}`. `fieldsError(code, issues, { translate, status, params })` does the same for a refusal of your own that names the fields at fault (a 409 conflict, say): `extensions` `{ code, params?, http?, fields }`. Both keep `GraphQLError`'s own options (`originalError`, `path`, `nodes`, …) but replace any `extensions` among them. `fieldIssueOf(zodIssue)` maps a Zod issue to a field: its path through `inputPath`, and a code under `validation.errors.` without params, `too-short` / `too-long` (a string's length), `out-of-range` (a number's or bigint's bound, a multiple), `too-few` / `too-many` (a list's or set's size), `invalid-format` (a named format or a pattern) or `invalid` (anything else, a prefix, suffix or substring included), the codes also exported as `FIELD_CODES`; `@nxgt/graphql-codegen-msw`'s mocks apply the same mapping. `inputPath(['input', 'person', 'firstName'])` gives `person.firstName`, to map a Zod issue or a `BAD_USER_INPUT` issue to a field; it takes any `PropertyKey[]`, a Zod path as it is, a symbol written as `String(key)`. Also exported: `INVALID_INPUT` and the types `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions`. What `withValidation`, `validated` and `badUserInput` raise is unchanged.
+
 ## 0.3.1
 
 ### Patch Changes
