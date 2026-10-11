@@ -146,7 +146,9 @@ name.
 ## Query and mutate
 
 ```ts
-interface GraphQLClient {
+interface GraphQLClient<
+  TCache extends GraphQLCache | undefined = GraphQLCache | undefined,
+> {
   query<TResult, TVariables>(
     document: GraphQLDocument<TResult, TVariables>,
     // NoInfer: the document alone sets the variables' type
@@ -161,7 +163,7 @@ interface GraphQLClient {
     ...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
   ): Promise<TResult>;
   readonly http: HttpClient;
-  readonly cache: GraphQLCache | undefined; // see The client's type follows `cache`
+  readonly cache: TCache; // see The client's type follows `cache`
 }
 ```
 

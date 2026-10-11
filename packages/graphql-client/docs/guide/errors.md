@@ -58,7 +58,7 @@ class ApiError extends Error {
 | `httpStatus` | the HTTP status the response came with, as it is: `200` for a refusal sent on a success |
 | `extensions` | the first error's `extensions`, every key of them |
 | `code` | `extensions.code` |
-| `status` | a failure status, never a success: `extensions.http.status`, else the HTTP status when it is 400 or above, else `400` |
+| `status` | a failure status unless `extensions.http.status` names another: `extensions.http.status`, else the HTTP status when it is 400 or above, else `400` |
 | `params` | `extensions.params`: values a message interpolates, `{ retryAfter: 30 }` |
 | `fields` | the refused fields, below |
 
@@ -122,9 +122,10 @@ if (isApiError(error)) {
 
 The declaration says what the API sends; nothing checks it at runtime. Keep
 each key optional: a key one error carries, another may not. A key of the
-package's own (`code`, `http`, `params`, `fields`) keeps its type; declaring
-it again with another type is a compile error. Every key not declared stays
-`unknown`, read with `extensions['key']`.
+package's own (`code`, `http`, `params`, `fields`) can be repeated only
+exactly, `readonly` included, and cannot be narrowed. To type your own codes,
+put them under a key of your own, or read `code` as `string`. Every key not
+declared stays `unknown`, read with `extensions['key']`.
 
 ### isApiError
 

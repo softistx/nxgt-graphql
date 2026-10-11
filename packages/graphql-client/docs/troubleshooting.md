@@ -17,6 +17,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`The API answered <status> with no GraphQL response`](#the-api-answered-status-with-no-graphql-response)
 - [An `ApiError` whose `status` is 400 on an HTTP 200](#an-apierror-whose-status-is-400-on-an-http-200)
 - [`client.cache` is `undefined`, or `'cache' is possibly 'undefined'`](#clientcache-is-undefined-or-cache-is-possibly-undefined)
+- [`No overload matches this call`](#no-overload-matches-this-call)
 - [`The API could not be reached`](#the-api-could-not-be-reached)
 - [`The API did not answer in time`](#the-api-did-not-answer-in-time)
 - [`The API answered with neither data nor errors`](#the-api-answered-with-neither-data-nor-errors)
@@ -300,6 +301,23 @@ client.cache.evict('User:42'); // a GraphQLCache: no `!`
 function forget(client: GraphQLClient, id: string) {
   client.cache?.evict(`User:${id}`);
 }
+```
+
+## `No overload matches this call`
+
+**When:** at compile time, calling `createGraphQLClient` with an option of the
+wrong type.
+**Why:** `createGraphQLClient` is overloaded to type `client.cache` from its
+options, so TypeScript reports the failure as `No overload matches this call`
+rather than naming the option first.
+**Fix:** read the option named in the error's last overload, and give it the
+type it expects:
+
+```ts
+// error: No overload matches this call ... Type 'string' is not assignable to type 'QueryRetry'
+// in the last overload: the option is `retry`
+createGraphQLClient({ url, retry: 'twice' });
+createGraphQLClient({ url, retry: 2 }); // fixed
 ```
 
 ## `The API could not be reached`

@@ -717,7 +717,7 @@ packages/graphql-client/test/
   HTTP status** (httpyz replays only on an HTTP 401). It runs once per caller,
   deduplicated callers included, and is awaited; what it throws is what the
   caller gets.
-- **An `ApiError`'s `status` is a failure status, never a success**:
+- **An `ApiError`'s `status` is a failure status unless `extensions.http.status` names another**:
   `extensions.http.status`, else the HTTP status when it is ≥ 400, else 400.
   `httpStatus` is the HTTP status as it came. A refusal on HTTP 200 reads 400
   (`errors.spec.ts`, `client.spec.ts`: 200 gives 400 and `httpStatus` 200, 502

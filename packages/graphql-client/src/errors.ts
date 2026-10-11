@@ -79,8 +79,9 @@ export class ApiError extends Error {
 	}
 
 	/**
-	 * A failure status, never a success: `extensions.http.status`, else the
-	 * HTTP status when it is 400 or above, else 400. A refusal sent on HTTP
+	 * A failure status unless `extensions.http.status` names another:
+	 * `extensions.http.status`, else the HTTP status when it is 400 or above,
+	 * else 400. A refusal sent on HTTP
 	 * 200 reads 400; `httpStatus` keeps the 200.
 	 */
 	get status(): number {

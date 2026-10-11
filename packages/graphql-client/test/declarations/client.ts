@@ -9,6 +9,7 @@ import {
 	type ApiErrorParams,
 	type ApiFieldError,
 	ApiStatusError,
+	type ApiStatusErrorOptions,
 	ApiUnavailableError,
 	type BatchOptions,
 	type CacheKeys,
@@ -224,10 +225,11 @@ export const typedCachedClient: GraphQLClient = cached;
 // The last overload is the one `ReturnType` and `Parameters` read: as before.
 export const returned: ReturnType<typeof createGraphQLClient> = cached;
 export const parameters: Parameters<typeof createGraphQLClient>[0] = options();
-export const statusError = new ApiStatusError(404, undefined, {
+export const statusOptions: ApiStatusErrorOptions = {
 	statusText: 'Not Found',
 	cause: new Error('x'),
-});
+};
+export const statusError = new ApiStatusError(404, undefined, statusOptions);
 export const bareStatusError = new ApiStatusError(503, 'down');
 export const document: GraphQLDocument<{ ok: boolean }, never> | undefined =
 	undefined;
