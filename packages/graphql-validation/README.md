@@ -342,4 +342,4 @@ Every startup error and its fix is in [Troubleshooting](docs/troubleshooting.md)
 - [Documentation index](docs/README.md)
 - Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md), [Answering invalid input as one error](docs/guide/invalid-input.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- [Roadmap](docs/roadmap.md): answering invalid input as one error, schemas that read the context
+- [Roadmap](docs/roadmap.md): schemas that read the context, emitting the invalid-input shape directly
