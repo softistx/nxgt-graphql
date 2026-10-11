@@ -138,7 +138,7 @@ describe("another httpyz copy's errors, matched by name", () => {
 		expect(error).toBe(thrown);
 	});
 
-	test("the body-read deadline's DOMException is still a timeout", async () => {
+	test("an httpyz copy before 0.4: the body-read deadline's DOMException is still a timeout", async () => {
 		const thrown = new DOMException('The operation timed out.', 'TimeoutError');
 		const error = await rejection(clientThrowing(thrown).query(ViewerQuery));
 		expect(error).toBeInstanceOf(ApiUnavailableError);
@@ -149,6 +149,42 @@ describe("another httpyz copy's errors, matched by name", () => {
 		const thrown = new DOMException('gone', 'NetworkError');
 		const error = await rejection(clientThrowing(thrown).query(ViewerQuery));
 		expect(error).toBe(thrown);
+	});
+});
+
+describe('a deadline firing while the body is read', () => {
+	/** Headers at once, then a body that never ends: it errors on abort, as real fetch's does. */
+	const stalling = (request: Request) => {
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode('{"data":'));
+				request.signal.addEventListener('abort', () =>
+					controller.error(request.signal.reason),
+				);
+			},
+		});
+		return Promise.resolve(
+			new Response(body, { headers: { 'content-type': 'application/json' } }),
+		);
+	};
+
+	test("is ApiUnavailableError('timeout'), caused by httpyz's TimeoutError", async () => {
+		const client = createGraphQLClient({
+			url: 'https://api.test/graphql',
+			fetch: stalling,
+			timeout: 20,
+		});
+		const error = await rejection(client.query(ViewerQuery));
+		expect(error).toBeInstanceOf(ApiUnavailableError);
+		expect((error as ApiUnavailableError).reason).toBe('timeout');
+		const cause = (error as ApiUnavailableError).cause as Error &
+			Record<string, unknown>;
+		expect(cause.name).toBe('TimeoutError');
+		expect(cause).not.toBeInstanceOf(DOMException);
+		expect(cause.message).toEndWith('reply body not read within 20 ms');
+		expect(cause['method']).toBe('post');
+		expect(cause['timeout']).toBe(20);
+		expect(cause.cause).toBeInstanceOf(DOMException);
 	});
 });
 

@@ -19,8 +19,9 @@ Candidates, not commitments.
 - **A GraphQL error carried by an error status's event stream read as an
   `ApiError`**, rather than an `ApiStatusError` holding the stream's raw text.
   APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
-  `forceStatusCodeOk`, which they need today. Waits on
-  [nxgt-http#131](https://github.com/softistx/nxgt-http/issues/131).
+  `forceStatusCodeOk`, which they need today. `@nxgt/httpyz` 0.4 exports the
+  event-stream parser it needs (`createSseParser`); the error a subscription
+  rejects with would change, so it waits for a minor of its own.
 - **Suspense for `useQuery`.** A query that suspends the component until its
   first answer, for a `<Suspense>` boundary and streaming server rendering,
   instead of returning `loading`.

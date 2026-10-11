@@ -50,7 +50,7 @@
 	},
 	"dependencies": {
 		"@graphql-typed-document-node/core": "^3.2.0",
-		"@nxgt/httpyz": "^0.3.3"
+		"@nxgt/httpyz": "^0.4.0"
 	},
 	"nxgt": {
 		"entrypoints": [

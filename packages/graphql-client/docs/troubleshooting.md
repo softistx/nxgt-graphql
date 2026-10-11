@@ -337,7 +337,11 @@ const client = createGraphQLClient({ url, retry: 2 });
 ## `The API did not answer in time`
 
 **When:** the `timeout` passed before an answer, or while the body was read. An `ApiUnavailableError`,
-`reason: 'timeout'`.
+`reason: 'timeout'`. Its `cause` is `@nxgt/httpyz`'s `TimeoutError`, whose
+message ends with which: `no reply within 10000 ms` or
+`reply body not read within 10000 ms` (after the call, such as
+`POST /graphql: `). With an httpyz client of your own from before 0.4 passed
+as `http`, a body-read timeout's `cause` is the signal's `DOMException`.
 **Why:** the API is slow, or the timeout is shorter than the operation needs.
 **Fix:**
 

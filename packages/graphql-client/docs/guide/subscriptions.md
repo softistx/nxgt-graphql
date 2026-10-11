@@ -165,8 +165,8 @@ declare function render(message: { id: string; text: string }): void;
 
 **On graphql-yoga, APQ subscriptions need `forceStatusCodeOk`.** By default
 `@graphql-yoga/plugin-apq` answers `PersistedQueryNotFound` with HTTP 404, and
-graphql-yoga sends it as a 404 event stream, which the client cannot read yet
-([nxgt-http#131](https://github.com/softistx/nxgt-http/issues/131)):
+graphql-yoga sends it as a 404 event stream, which the client does not read
+yet (it is on the [roadmap](../roadmap.md)):
 the loop rejects with `ApiStatusError(404)`, its `body` the stream's raw text,
 and the text is never sent. Have the plugin answer 200, where the error is the
 stream's first `next` event and the client resends:

@@ -133,8 +133,6 @@ function resultOf(data: string): unknown {
 	}
 }
 
-// Temporary, until nxgt-http#131: httpyz exports no SSE parser, so a refused
-// connection's event stream reaches the caller as an ApiStatusError of raw text.
 /**
  * What a stream threw, as this package's errors: a refused connection's body
  * read. httpyz's `UndeclaredStatusError` is matched by name, as in

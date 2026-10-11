@@ -107,14 +107,16 @@ export function cacheRefusals() {
 	client.cache.read(Viewer);
 	// @ts-expect-error: nor may a client of either kind be read without a check
 	either.cache.read(Viewer);
-	// A wrong option, cache or not: no overload matches. A wrong type rather
-	// than an unknown key: under nodenext, httpyz 0.3.3's declarations lose
-	// `HttpClientOptions` (extensionless imports), so the `url` shape takes
-	// any unknown key there, before 0.2.0 as after.
+	// A wrong option, cache or not: no overload matches, for a wrong type as
+	// for an unknown key.
 	// @ts-expect-error: `dedupe` is a boolean
 	createGraphQLClient({ url: 'https://a.example', cache, dedupe: 'yes' });
 	// @ts-expect-error: `dedupe` is a boolean
 	createGraphQLClient({ url: 'https://a.example', dedupe: 'yes' });
+	// @ts-expect-error: no such option
+	createGraphQLClient({ url: 'https://a.example', cache, dedup: true });
+	// @ts-expect-error: no such option
+	createGraphQLClient({ url: 'https://a.example', dedup: true });
 }
 export const read = cache.read(Viewer);
 export const stop = cache.watch(Rename, { name: 'a' }, (data) => data?.rename);

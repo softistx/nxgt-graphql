@@ -697,8 +697,11 @@ packages/graphql-client/test/
   `PersistedQueryNotFound` in a refused connection's JSON body or as the first
   event (nothing ran). Exactly once.
 - **An error status's event stream is an `ApiStatusError(status)` whose `body`
-  is the stream's raw text**, never parsed (httpyz exports no SSE parser:
-  Temporary, until nxgt-http#131). Do not hand-parse SSE here. So graphql-yoga's default
+  is the stream's raw text**, never parsed. Reading its events as GraphQL
+  errors changes the error a subscription rejects with (`ApiError` instead of
+  `ApiStatusError`): the roadmap's Next entry, a minor of its own, through
+  `createSseParser` from `@nxgt/httpyz/integration` (`push` the text, then
+  `end()`). Never hand-parse SSE here. So graphql-yoga's default
   APQ answer, a 404 event stream, is not resent: APQ subscriptions on yoga
   need `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`, and the docs
   say so until the roadmap's Next entry lands.
@@ -888,15 +891,22 @@ packages/graphql-client/test/
   and two field keys in the cache; reading a `Date` as a plain object would
   key every one as `{}`.
 - **Source imports carry no extension.**
-- **Temporary, until nxgt-http#130**: `response.ts` checks for the
-  `DOMException` named `TimeoutError`, which is what a deadline firing while the
-  body is read rejects with, and maps it to `ApiUnavailableError('timeout')`.
+- **A deadline firing while the body is read is httpyz's `TimeoutError`**
+  (from 0.4, message `reply body not read within <n> ms`), so
+  `ApiUnavailableError('timeout')` with it as `cause`; `transport.spec.ts`
+  checks it over a stalling body. `isBodyTimeout` in `response.ts` still maps
+  the signal's `DOMException` named `TimeoutError`: that is what an
+  application's own httpyz copy before 0.4, passed as `http`, rejects with,
+  and the client guide promises another copy's timeout is an
+  `ApiUnavailableError`. A caller's own deadline never reaches it: `post` and
+  `#results` rethrow an aborted `signal`'s reason first.
 - **httpyz's errors are matched by `name`, never `instanceof`**
   (`isHttpyzError` in `response.ts`: `TimeoutError`, `NetworkError`,
   `ValidationError`, `UndeclaredStatusError`), each field they need checked
   before it is read, as `isApiError` is cross-copy: an application may pass
   its own httpyz copy as `http`, whose classes are not this package's. A
-  `DOMException` never matches; the #130 body-read timeout is its own check.
+  `DOMException` never matches; an older copy's body-read timeout is
+  `isBodyTimeout`'s own check.
   `transport.spec.ts` throws look-alike plain errors from an httpyz middleware (`use`).
 
 ## @nxgt/graphql-codegen-msw
