@@ -21,6 +21,8 @@ export interface Operation {
 	readonly kind: 'query' | 'mutation' | 'subscription';
 	/** `__meta__.hash`: on the `DocumentNode`, or on the `TypedDocumentString`. */
 	readonly hash?: string;
+	/** The parsed document: the one passed, or the text's, parsed once. */
+	readonly node: DocumentNode;
 }
 
 const operations = new WeakMap<object, Operation>();
@@ -77,6 +79,7 @@ function fromNode(document: DocumentNode): Operation {
 		query: print(document),
 		operationName: definition.name?.value,
 		kind: definition.operation as Operation['kind'],
+		node: document,
 	};
 }
 

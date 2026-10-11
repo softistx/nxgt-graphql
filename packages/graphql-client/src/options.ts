@@ -1,7 +1,9 @@
 import type { HttpClient, HttpClientOptions, RetryOptions } from '@nxgt/httpyz';
 import type { BatchOptions } from './batch';
+import type { GraphQLCache } from './cache/types';
 import type { GraphQLDocument } from './document';
 import type { ApiError, ApiStatusError } from './errors';
+import type { FetchPolicy } from './fetch-policy';
 import type { PersistedQueries } from './persisted';
 
 /** A query's retries: always over POST, which is how GraphQL is sent. */
@@ -34,6 +36,14 @@ interface CommonOptions {
 	 * sent alone. The server must accept batches. Default: `false`.
 	 */
 	batch?: false | BatchOptions;
+	/**
+	 * A normalized cache, `normalizedCache()`: every query's and mutation's
+	 * result is written to it, and `cache-first` queries are served from it.
+	 * The client then adds `__typename` to each selection set it sends. For
+	 * a browser: on a server, where one client serves one request, leave it
+	 * off. Default: none.
+	 */
+	cache?: GraphQLCache;
 }
 
 /** A client of its own: the endpoint's URL, and `@nxgt/httpyz`'s options. */
@@ -69,6 +79,12 @@ export interface CallOptions {
 export interface QueryOptions extends CallOptions {
 	/** This query's retries, instead of the client's. */
 	retry?: QueryRetry;
+	/**
+	 * Where the result comes from: the cache, the network, or both. Default:
+	 * `cache-first` with a cache; without one, the network, and `cache-only`
+	 * throws.
+	 */
+	fetchPolicy?: FetchPolicy;
 }
 
 /** What a subscription may add. */
@@ -95,13 +111,19 @@ export type VariablesArgs<TVariables, TOptions> =
 		: [variables: TVariables, options?: TOptions];
 
 export interface GraphQLClient {
-	/** Runs a query and returns its `data`; any GraphQL error throws. */
+	/**
+	 * Runs a query and returns its `data`; any GraphQL error throws. With a
+	 * cache, `fetchPolicy` says whether the cache answers it.
+	 */
 	query<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
 		// NoInfer: the document alone sets the variables' type, so an extra key is refused.
 		...args: VariablesArgs<NoInfer<TVariables>, QueryOptions>
 	): Promise<TResult>;
-	/** Runs a mutation and returns its `data`; any GraphQL error throws. It is never retried. */
+	/**
+	 * Runs a mutation and returns its `data`; any GraphQL error throws. It is
+	 * never retried. With a cache, the entities it returns are written to it.
+	 */
 	mutate<TResult, TVariables>(
 		document: GraphQLDocument<TResult, TVariables>,
 		...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
@@ -117,4 +139,6 @@ export interface GraphQLClient {
 	): Subscription<TResult>;
 	/** The transport, for what is not GraphQL. */
 	readonly http: HttpClient;
+	/** The cache given as `cache`, for reads, writes, evictions and watches; else `undefined`. */
+	readonly cache: GraphQLCache | undefined;
 }

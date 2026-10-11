@@ -1,8 +1,11 @@
 import { createHttpClient } from '@nxgt/httpyz';
 import { Batcher } from './batch';
+import { cachedOperation } from './cache/typename';
+import type { GraphQLCache } from './cache/types';
 import { Deduplicator } from './dedupe';
 import { type GraphQLDocument, type Operation, operationOf } from './document';
 import { ApiError, ApiStatusError } from './errors';
+import { queryThrough } from './fetch-policy';
 import { dedupeKey } from './keys';
 import type {
 	GraphQLClient,
@@ -27,7 +30,7 @@ const callers = {
 export function createGraphQLClient(
 	options: GraphQLClientOptions,
 ): GraphQLClient {
-	const { retry: clientRetry, dedupe = true } = options;
+	const { retry: clientRetry, dedupe = true, cache } = options;
 	const transport = transportOf(options);
 	const onFailure = failureHook(options);
 	const flights = new Deduplicator();
@@ -62,15 +65,22 @@ export function createGraphQLClient(
 		variables: unknown,
 		call: QueryOptions = {},
 	): Promise<unknown> {
-		const operation = operationFor(document, expected, transport);
+		const operation = operationFor(document, expected, transport, cache);
 		try {
 			if (expected === 'query')
-				return await sendQuery(operation, variables, call);
-			return await send(transport, operation, variables, {
+				return await queryThrough(
+					cache,
+					{ document, variables, operationName: operation.operationName },
+					call.fetchPolicy,
+					() => sendQuery(operation, variables, call),
+				);
+			const data = await send(transport, operation, variables, {
 				call,
 				retry: false,
 				signal: call.signal,
 			});
+			cache?.write(document, variables as never, data as never);
+			return data;
 		} catch (error) {
 			await onFailure(error);
 			throw error;
@@ -85,26 +95,31 @@ export function createGraphQLClient(
 		subscribe: (document, ...[variables, options]) =>
 			new EventSubscription(
 				transport,
-				operationFor(document, 'subscription', transport),
+				operationFor(document, 'subscription', transport, cache),
 				variables,
 				options ?? {},
 				onFailure,
 			) as Subscription<never>,
 		http: transport.http,
+		cache,
 	};
 }
 
-/** The document's operation, refused before anything is sent when it is not `expected`. */
+/**
+ * The document's operation as it is sent: refused before anything is sent
+ * when it is not `expected`, and with a cache, `__typename` added.
+ */
 function operationFor(
 	document: AnyDocument,
 	expected: Operation['kind'],
 	transport: Transport,
+	cache: GraphQLCache | undefined,
 ): Operation {
 	const operation = operationOf(document);
 	if (operation.kind !== expected)
 		throw new TypeError(`${callers[expected]} was given a ${operation.kind}`);
 	checkPersistable(operation, transport.persisted);
-	return operation;
+	return cache ? cachedOperation(operation, transport.persisted) : operation;
 }
 
 /** What runs before a caller gets an error: the 401 hook, awaited. */
@@ -126,6 +141,7 @@ function transportOf(options: GraphQLClientOptions): Transport {
 		dedupe: _dedupe,
 		persisted: _persisted,
 		batch: _batch,
+		cache: _cache,
 		...http
 	} = options;
 	return {

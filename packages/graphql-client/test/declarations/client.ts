@@ -11,14 +11,23 @@ import {
 	ApiStatusError,
 	ApiUnavailableError,
 	type BatchOptions,
+	type CacheKeys,
+	CacheMissError,
 	type CallOptions,
 	createGraphQLClient,
+	type EntityRef,
+	type FetchPolicy,
+	type FieldModifier,
+	type GraphQLCache,
 	type GraphQLClient,
 	type GraphQLClientOptions,
 	type GraphQLDocument,
 	type HttpClientBasedOptions,
 	isApiError,
+	type NormalizedCacheOptions,
+	normalizedCache,
 	type PersistedQueries,
+	type PossibleTypes,
 	type QueryOptions,
 	type QueryRetry,
 	type SubscribeOptions,
@@ -66,6 +75,33 @@ export const OnTick = {} as TypedDocumentNode<
 	{ tick: number },
 	Exact<{ room: string }>
 >;
+
+export const possibleTypes: PossibleTypes = { Node: ['User', 'Book'] };
+export const keys: CacheKeys = { Book: (book) => String(book['isbn']) };
+export const cacheOptions: NormalizedCacheOptions = { possibleTypes, keys };
+export const cache = normalizedCache(cacheOptions);
+export const cached = createGraphQLClient({
+	url: 'https://api.example.com/graphql',
+	cache,
+});
+export const policy: FetchPolicy = 'cache-first';
+export const fromCache = cached.query(
+	Viewer,
+	{},
+	{ fetchPolicy: 'cache-only' },
+);
+export const clientCache: GraphQLCache | undefined = cached.cache;
+export const read = cache.read(Viewer);
+export const stop = cache.watch(Rename, { name: 'a' }, (data) => data?.rename);
+export const ref: EntityRef = { __typename: 'Book', id: '1' };
+export const renamed2 = cache.modify(ref, {
+	title: ((title) => String(title)) satisfies FieldModifier,
+});
+export function writeViewer() {
+	cache.write(Viewer, {}, { viewer: { id: 'u' } });
+	cache.evict('User:u');
+	cache.reset();
+}
 
 export const persisted: PersistedQueries = { mode: 'apq' };
 export const batch: BatchOptions = { max: 10 };
@@ -120,6 +156,7 @@ export async function failure() {
 			return reason;
 		}
 		if (error instanceof ApiError) return error.httpStatus;
+		if (error instanceof CacheMissError) return error.operationName;
 		throw error;
 	}
 	return undefined;

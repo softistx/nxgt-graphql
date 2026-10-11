@@ -70,6 +70,7 @@ declare function fetchNewToken(): Promise<string>;
 | `dedupe` | `boolean` | `true` | identical in-flight queries share one request |
 | `persisted` | `false \| { mode: 'documentId' } \| { mode: 'apq' }` | `false` | operations sent by a hash instead of their text; see [Persisted queries](#persisted-queries) |
 | `batch` | `false \| { max?: number; wait?: number }` | `false` | queries issued together posted as one array; see [Batching](#batching) |
+| `cache` | `GraphQLCache` | none | `normalizedCache()`: results kept entity by entity, for the browser; see [Normalized cache](cache.md) |
 | `onUnauthenticated` | `(error) => void \| Promise<void>` | none | see [Errors](errors.md#onunauthenticated) |
 
 Mocking in a test:
@@ -97,7 +98,7 @@ const client = createGraphQLClient({ http, path: '/graphql' });
 
 `path` defaults to `/graphql`. The transport is on `client.http` for what is
 not GraphQL. `url`-only options (`headers`, `timeout`, `auth`…) belong to the
-client you pass; `retry`, `dedupe`, `persisted`, `batch` and
+client you pass; `retry`, `dedupe`, `persisted`, `batch`, `cache` and
 `onUnauthenticated` stay available.
 
 ```ts
@@ -118,6 +119,7 @@ interface GraphQLClient {
     ...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
   ): Promise<TResult>;
   readonly http: HttpClient;
+  readonly cache: GraphQLCache | undefined;
 }
 ```
 
@@ -141,6 +143,7 @@ Per-call options:
 | `headers` | `HeadersInit` | both | over the client's headers, for this call |
 | `timeout` | `number` | both | milliseconds, instead of the client's |
 | `retry` | `number \| Omit<RetryOptions, 'methods'> \| false` | `query` only | instead of the client's |
+| `fetchPolicy` | `'cache-first' \| 'network-only' \| 'cache-only' \| 'no-cache'` | `query` only | whether the cache answers; see [Fetch policies](cache.md#fetch-policies) |
 
 ```ts
 const controller = new AbortController();
@@ -325,7 +328,8 @@ const [user, settings] = await Promise.all([
 
 Create one client per incoming request, and never share it between users: the
 headers carry that user's token, and identical queries from two users must not
-meet.
+meet. Leave `cache` off there: the cache is for a browser, where one client
+lives as long as the page.
 
 ```ts
 import { Hono } from 'hono';

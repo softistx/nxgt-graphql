@@ -17,7 +17,7 @@ are public.
 | `@nxgt/graphql-scalars` | GraphQL scalars whose every crossing is checked by one Zod schema: `zodScalar(schema, { name })` and the scalars built on it, by category (one page each under `docs/guide/scalars/`), with `scalarTypeDefs` and `scalarResolvers` for a schema-first server, `pickScalars(...names)` for some of them, `graphql/scalars.graphqls` and the `nxgt-graphql-scalars typedefs` bin for IDEs and servers that scan `.graphql(s)` files, each schema (`dateTimeSchema`, `schemas.dateTime`, or `scalarSchemas.DateTime` by GraphQL name, read by `@nxgt/graphql-codegen-zod`) for use outside GraphQL, and graphql-codegen's `scalars` config (`codegenScalars` for a server, `clientCodegenScalars` for a client). Depends on `@nxgt/zod`, which holds every schema; peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-validation` | `@constraint` on arguments and input fields (graphql-constraint-directive's arguments minus `uniqueTypeName`), each checked by a Zod schema built from the directives: `constraintTypeDefs`, `withValidation(schema, { formats? })` (the application's own formats, a record of Zod string schemas), `validated(schema, resolver)` for what a directive cannot say, `badUserInput(where, zodError)`. One `BAD_USER_INPUT` error whose `extensions.issues` carry the path and the refusing rule. Ships `graphql/constraint.graphqls` and the bin `nxgt-graphql-validation typedefs [--out [<file>]]` for IDEs. Peers: `graphql`, `zod`, `typescript` |
 | `@nxgt/graphql-codegen-zod` | A graphql-codegen plugin writing Zod schemas and their types from the SDL: enums, input types, each field's arguments (`z.output`, what the resolver receives), each named operation's variables (`z.input`, what a client sends), each object type, interface and union (`z.output`, what a resolver returns), and each named operation's result and fragment (`z.output`, what the response holds), with every `@constraint` through `@nxgt/graphql-validation/codegen`. Schemas `zSignUpInput`, types named as the typescript plugins name them. Custom scalars from a `scalarSchemas` record or `zodScalars`; the application's own formats from a `formatSchemas` record or `zodFormats`, imported and chained on (`formatSchemas.slug.max(40)`). Depends on `@nxgt/graphql-validation`; peers `graphql`, `zod`, `typescript` |
-| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`) and `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
+| `@nxgt/graphql-client` | A typed GraphQL client for the client preset's documents (`TypedDocumentNode` or `TypedDocumentString`), built on `@nxgt/httpyz`: `createGraphQLClient({ url, …httpyz options } \| { http, path })`, `query` and `mutate` returning `data`, typed errors (`ApiError` with the first error's whole `extensions`, `ApiStatusError`, `ApiUnavailableError`), an awaitable `onUnauthenticated` hook (after httpyz's refresh for an HTTP 401, directly for a GraphQL-level 401, once per caller), identical queries in flight shared, persisted queries (`persisted: { mode: 'documentId' \| 'apq' }`), query batching (`batch: { max, wait }`), `subscribe` over SSE (graphql-sse distinct connections mode, never retried nor reconnected) and an optional browser-side normalized cache (`cache: normalizedCache({ possibleTypes, keys })`, `fetchPolicy`, `client.cache` with `read`, `write`, `watch`, `evict`, `modify`, `reset`). A mutation is never retried. Not published yet. Depends on `@nxgt/httpyz`, `@graphql-typed-document-node/core`; peers `graphql`, `typescript` |
 
 A package here is named `@nxgt/graphql-<what>`: the `@nxgt` scope is shared
 by every nxgt repository, and `scalars` alone would not say what it is for.
@@ -570,8 +570,28 @@ packages/graphql-client/src/
   share.ts       Party: callers on one request, each with its own signal (dedupe and batch)
   keys.ts        callKey (headers, timeout, retry) and dedupeKey (text, variables, callKey)
   document.ts    operationOf: a TypedDocumentNode or TypedDocumentString read once, cached,
-                 with the preset's __meta__.hash; the only place that reads documents
-  errors.ts      ApiError, ApiStatusError, ApiUnavailableError, isApiError
+                 with the preset's __meta__.hash and the parsed node; the only place that
+                 reads the preset's documents (the cache walks the DocumentNode it returns)
+  errors.ts      ApiError, ApiStatusError, ApiUnavailableError, isApiError, CacheMissError
+  fetch-policy.ts  FetchPolicy and queryThrough: a query through the cache as its policy says
+  cache/
+    types.ts            the public cache types: GraphQLCache, NormalizedCacheOptions,
+                        PossibleTypes, CacheKeys, EntityRef, FieldModifier
+    normalized-cache.ts normalizedCache(): the GraphQLCache over one store and its watchers;
+                        each public method is one batch, flushed to the watchers at its end
+    typename.ts         withTypename (a copy with __typename, cached per DocumentNode) and
+                        cachedOperation (what a client with a cache sends; documentId check)
+    selection.ts        cacheDocumentOf (operation, fragments, root key), variablesOf
+                        (defaults), collectFields (@skip/@include, fragments, response keys)
+    type-match.ts       typeMatcher: a type condition against a __typename, by possibleTypes
+    identity.ts         identify: `<__typename>:<id | _id | keys[type]()>`, or none
+    field-key.ts        fieldKey: the name and its sorted arguments; stableJson
+    write.ts            writeResult: normalizes a result into the store
+    read.ts             readResult: denormalizes a result and records its dependencies
+    store.ts            EntityStore: entities by key, merge, evict, modify, clear, takeChanges
+    changes.ts          Changes (what a batch changed) and Dependencies (what a read used)
+    watchers.ts         Watchers: each watch refreshed once per batch that touched it
+    values.ts           Reference, StoreObject, equal, deepMerge
 ```
 
 ### Invariants
@@ -627,8 +647,30 @@ packages/graphql-client/src/
   caller unchanged. A reply labelled JSON that does not parse is an
   `ApiStatusError` (its `cause` the parse error) on a non-2xx and an
   `ApiUnavailableError('invalid-response')` on a 2xx.
-- **`graphql` is a peer used at runtime** (`parse`, `print`, `Kind`), not only
-  for types.
+- **The cache never changes what the network returns to a caller**: with
+  `network-only`, `no-cache`, a `cache-first` miss and a mutation, the caller
+  gets the very object parsed from the response, and the cache keeps its own
+  copy (`fetch-policy.spec.ts`: the object written is the one returned, and
+  changing it leaves the cache as it was). A failed call writes nothing.
+- **Documents are never mutated.** With a cache, `__typename` is added to a
+  copy (`withTypename`, cached per `DocumentNode`, `typename.spec.ts` freezes
+  the document); without one, the operation is sent exactly as before. The
+  operation's own selection set and a subscription are left as they are.
+- **`documentId` mode with a cache refuses a document missing `__typename`
+  before anything is sent**: its hash names the server's text, which the client
+  cannot change. The client preset adds `__typename` only through
+  `addTypenameSelectionDocumentTransform`; the docs say so. `apq` hashes the
+  text sent, `__typename` included.
+- **A watch is called back once per batch, never per field**: each public cache
+  method, and each result the client writes, is one batch; a write that leaves
+  a value equal records no change. A subscription's `next` is not written.
+- **A mutation's root fields are not kept** (`ROOT_MUTATION` is never stored):
+  their arguments may hold secrets. Its entities are.
+- **A server-side client should not use a cache**: one client per request.
+  Documented, not enforced.
+- **`graphql` is a peer used at runtime** (`parse`, `print`, `Kind`, `visit`,
+  `valueFromASTUntyped`), not only for types. The cache takes no schema and no
+  other dependency.
 - **Source imports carry no extension.**
 - **Temporary, until nxgt-http wraps body reads**: `response.ts` checks for the
   `DOMException` named `TimeoutError`, which is what a deadline firing while the
