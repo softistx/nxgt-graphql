@@ -21,6 +21,8 @@ import {
 	type PersistedQueries,
 	type QueryOptions,
 	type QueryRetry,
+	type SubscribeOptions,
+	type Subscription,
 	type UnavailableReason,
 	type UrlClientOptions,
 	type VariablesArgs,
@@ -60,12 +62,32 @@ export const apq = createGraphQLClient({
 	batch: false,
 });
 
+export const OnTick = {} as TypedDocumentNode<
+	{ tick: number },
+	Exact<{ room: string }>
+>;
+
 export const persisted: PersistedQueries = { mode: 'apq' };
 export const batch: BatchOptions = { max: 10 };
 
 export const viewer = client.query(Viewer);
 export const renamed = client.mutate(Rename, { name: 'a' });
 export const retried = client.query(Viewer, {}, { retry: false, timeout: 500 });
+
+export const ticks = client.subscribe(
+	OnTick,
+	{ room: 'a' },
+	{ signal: AbortSignal.timeout(1000), headers: { 'x-room': 'a' } },
+);
+export const subscribeOptions: SubscribeOptions = { headers: {} };
+export const subscription: Subscription<{ tick: number }> = ticks;
+
+export async function lastTick() {
+	let last: number | undefined;
+	for await (const { tick } of ticks) last = tick;
+	ticks.close();
+	return last;
+}
 
 export const options: GraphQLClientOptions = { url: 'https://api.example.com' };
 export const urlOptions: UrlClientOptions = { url: 'https://api.example.com' };

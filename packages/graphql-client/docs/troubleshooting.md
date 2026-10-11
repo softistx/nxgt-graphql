@@ -4,6 +4,10 @@ One entry per error you can hit, headed by the message you will search for.
 
 - [`query() was given a mutation`](#query-was-given-a-mutation)
 - [`mutate() was given a query`](#mutate-was-given-a-query)
+- [`query() was given a subscription`, `mutate() was given a subscription`](#query-was-given-a-subscription-mutate-was-given-a-subscription)
+- [`subscribe() was given a query`, `subscribe() was given a mutation`](#subscribe-was-given-a-query-subscribe-was-given-a-mutation)
+- [`A subscription is read once`](#a-subscription-is-read-once)
+- [A subscription that yields nothing](#a-subscription-that-yields-nothing)
 - [`The document holds no operation`](#the-document-holds-no-operation)
 - [`The document carries no persisted hash: enable persistedDocuments in the client preset`](#the-document-carries-no-persisted-hash-enable-persisteddocuments-in-the-client-preset)
 - [`APQ needs crypto.subtle: serve the page over https or localhost`](#apq-needs-cryptosubtle-serve-the-page-over-https-or-localhost)
@@ -33,6 +37,58 @@ await client.mutate(RenameUser, { id: '42', name: 'Ada' });
 ```ts
 await client.query(UserQuery, { id: '42' });
 ```
+
+## `query() was given a subscription`, `mutate() was given a subscription`
+
+**When:** calling `client.query(...)` or `client.mutate(...)` with a
+subscription document. A `TypeError`.
+**Why:** a subscription yields many results over an event stream; it has its
+own method.
+**Fix:**
+
+```ts
+for await (const { message } of client.subscribe(OnMessage, { room: 'r1' })) {
+  console.log(message);
+}
+```
+
+## `subscribe() was given a query`, `subscribe() was given a mutation`
+
+**When:** calling `client.subscribe(...)` with a query or a mutation document.
+A `TypeError`, thrown by `subscribe` itself, before anything is sent.
+**Why:** a query or a mutation has one result; `subscribe` opens an event
+stream for a subscription only.
+**Fix:**
+
+```ts
+await client.query(UserQuery, { id: '42' });
+await client.mutate(RenameUser, { id: '42', name: 'Ada' });
+```
+
+## `A subscription is read once`
+
+**When:** a second `for await` (or `[Symbol.asyncIterator]()`) over the same
+`Subscription`. A `TypeError`.
+**Why:** each subscription is one connection; once read, it is spent.
+**Fix:** call `subscribe` again for a new connection:
+
+```ts
+const watch = () => client.subscribe(OnMessage, { room: 'r1' });
+for await (const event of watch()) handle(event);
+for await (const event of watch()) handle(event); // a fresh connection
+```
+
+## A subscription that yields nothing
+
+**When:** the loop over `client.subscribe(...)` ends at once, or never yields,
+with no error.
+**Why:** the server answers an event stream whose events are not named `next`
+(an older or custom server sending unnamed `data:` events, which the client
+ignores), or ends the stream before any result.
+**Fix:** serve the GraphQL over SSE protocol's distinct connections mode:
+graphql-yoga does it by default; elsewhere, mount graphql-sse's handler and
+point the client at its route (see
+[Subscriptions](guide/subscriptions.md#the-server)).
 
 ## `The document holds no operation`
 
@@ -145,9 +201,25 @@ createGraphQLClient({ url, batch: { max: 20 } }); // client
 (a 401, 403, 404, or a gateway's 503), or whose reply is labelled JSON but does
 not parse (a gateway's HTML page, a cut body). An `ApiStatusError`, with
 `status` and `body` (undefined when the body did not parse).
-**Why:** a proxy, a gateway or an auth layer answered before GraphQL ran.
+On `subscribe`, it is also what a server answering an error status with an
+event stream gives, never an `ApiError`: the client does not parse an error
+status's event stream yet, so `body` is the stream's raw text, the GraphQL
+errors inside it unread. graphql-yoga does it for a variable missing or of the
+wrong type (a 400), for an error carrying `extensions.http.status` thrown
+before the subscription starts, and for APQ's
+`PersistedQueryNotFound` (a 404), which the client then does not resend.
+**Why:** a proxy, a gateway or an auth layer answered before GraphQL ran; or,
+on `subscribe`, the server put a GraphQL error in an error status's event
+stream.
 **Fix:** read `error.status` and `error.body`; for a 401, set
-`onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)).
+`onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)). For an
+APQ subscription answered 404 by graphql-yoga, have the plugin answer 200, so
+the error comes as the stream's first event and the client resends the text
+(see [Persisted subscriptions](guide/subscriptions.md#persisted-subscriptions)):
+
+```ts
+useAPQ({ responseConfig: { forceStatusCodeOk: true } });
+```
 
 ```ts
 if (error instanceof ApiStatusError) console.log(error.status, error.body);
@@ -155,11 +227,13 @@ if (error instanceof ApiStatusError) console.log(error.status, error.body);
 
 ## `The API could not be reached`
 
-**When:** the request never got an answer: DNS, refused connection, offline. An
+**When:** the request never got an answer: DNS, refused connection, offline;
+or a subscription's connection dropped while it was read. An
 `ApiUnavailableError`, `reason: 'unreachable'`.
 **Why:** the network failed; `error.cause` holds the transport's error.
 **Fix:** check the `url` (and `baseUrl` of an httpyz client), then retry the
-query; set `retry` to do it for you.
+query; set `retry` to do it for you. A subscription is never retried nor
+reconnected: subscribe again.
 
 ```ts
 const client = createGraphQLClient({ url, retry: 2 });
@@ -179,7 +253,8 @@ await client.query(SlowReport, undefined, { timeout: 30_000 });
 ## `The API answered with neither data nor errors`
 
 **When:** a 2xx response whose body holds no `data` and no `errors`, or is
-labelled JSON but does not parse. An
+labelled JSON but does not parse; on `subscribe`, a 2xx that is not an event
+stream, or a `next` event whose data is not JSON. An
 `ApiUnavailableError`, `reason: 'invalid-response'`.
 **Why:** the `url` points at something that is not a GraphQL endpoint (an HTML
 page, an empty 200), or a proxy rewrote the body.

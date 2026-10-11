@@ -71,6 +71,23 @@ export interface QueryOptions extends CallOptions {
 	retry?: QueryRetry;
 }
 
+/** What a subscription may add. */
+export interface SubscribeOptions {
+	/** Ends the subscription: the loop reading it rejects with the signal's reason. */
+	signal?: AbortSignal;
+	/** Over the client's headers, for this subscription. */
+	headers?: HeadersInit;
+}
+
+/**
+ * A subscription's results, read once with `for await`. It connects when the
+ * loop starts, and its connection closes whichever way the loop ends.
+ */
+export interface Subscription<TResult> extends AsyncIterable<TResult> {
+	/** Ends it: the connection closes, and the loop reading it ends. */
+	close(): void;
+}
+
 /** The variables, optional when the operation requires none. */
 export type VariablesArgs<TVariables, TOptions> =
 	Record<string, never> extends TVariables
@@ -89,6 +106,15 @@ export interface GraphQLClient {
 		document: GraphQLDocument<TResult, TVariables>,
 		...args: VariablesArgs<NoInfer<TVariables>, CallOptions>
 	): Promise<TResult>;
+	/**
+	 * Subscribes over server-sent events and yields each result's `data`; any
+	 * GraphQL error throws and ends it. It connects on the first iteration,
+	 * and is never retried, reconnected, deduplicated or batched.
+	 */
+	subscribe<TResult, TVariables>(
+		document: GraphQLDocument<TResult, TVariables>,
+		...args: VariablesArgs<NoInfer<TVariables>, SubscribeOptions>
+	): Subscription<TResult>;
 	/** The transport, for what is not GraphQL. */
 	readonly http: HttpClient;
 }

@@ -120,7 +120,8 @@ class ApiUnavailableError extends Error {
 ## Aborts
 
 When the call's `signal` aborts, the call rejects with the signal's reason, not
-with an `ApiUnavailableError`.
+with an `ApiUnavailableError`. A subscription's loop does the same, and its
+connection closes.
 
 ```ts
 const controller = new AbortController();
@@ -142,6 +143,8 @@ error surfaces unchanged. It may be async: the call waits for it.
   directly. `auth.refresh` only replays on an HTTP 401, so no refresh is tried.
   Have the server answer HTTP 401 for it, or refresh inside the hook so the
   next call carries a fresh token.
+- **On `subscribe`**: it runs for a refused connection's 401 and for a `next`
+  event's GraphQL 401, before the loop rejects.
 - **Once per caller.** Deduplicated callers share one request but each runs the
   hook, so a hook that throws a redirect reaches every caller. Keep its side
   effects idempotent.

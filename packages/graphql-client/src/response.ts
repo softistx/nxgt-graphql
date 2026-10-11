@@ -45,6 +45,33 @@ export function replyError(reply: AnyReply): unknown {
 	return new ApiUnavailableError('invalid-response');
 }
 
+/**
+ * What a reply refusing a stream stands for, its body read by its media type:
+ * its GraphQL errors as an `ApiError`, else an `ApiStatusError`.
+ */
+export async function refusedError(response: Response): Promise<unknown> {
+	let body: unknown;
+	try {
+		body = await bodyOfReply(response);
+	} catch (error) {
+		return new ApiStatusError(response.status, undefined, { cause: error });
+	}
+	try {
+		dataOf(body, response.status);
+	} catch (error) {
+		return error;
+	}
+	return new ApiStatusError(response.status, body);
+}
+
+/** JSON when labelled so, else text; nothing for an empty body. */
+async function bodyOfReply(response: Response): Promise<unknown> {
+	const text = await response.text();
+	if (text === '') return undefined;
+	const type = response.headers.get('content-type') ?? '';
+	return /[/+]json\b/i.test(type) ? JSON.parse(text) : text;
+}
+
 /** What the transport threw, as this package's errors; anything else as it is. */
 export function transportError(error: unknown): unknown {
 	if (error instanceof TimeoutError || isBodyTimeout(error))

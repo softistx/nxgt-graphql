@@ -19,6 +19,8 @@ export type {
 	HttpClientBasedOptions,
 	QueryOptions,
 	QueryRetry,
+	SubscribeOptions,
+	Subscription,
 	UrlClientOptions,
 	VariablesArgs,
 } from './options';

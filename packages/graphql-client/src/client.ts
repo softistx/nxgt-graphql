@@ -8,18 +8,28 @@ import type {
 	GraphQLClient,
 	GraphQLClientOptions,
 	QueryOptions,
+	Subscription,
 } from './options';
 import { checkPersistable } from './persisted';
 import { type Sending, send, type Transport } from './send';
+import { EventSubscription, type OnFailure } from './subscribe';
 
 /** Any operation's document: its variables' type is contravariant. */
 type AnyDocument = GraphQLDocument<unknown, never>;
 
+/** Which call takes which kind of operation, as its refusal names it. */
+const callers = {
+	query: 'query()',
+	mutation: 'mutate()',
+	subscription: 'subscribe()',
+} as const;
+
 export function createGraphQLClient(
 	options: GraphQLClientOptions,
 ): GraphQLClient {
-	const { onUnauthenticated, retry: clientRetry, dedupe = true } = options;
+	const { retry: clientRetry, dedupe = true } = options;
 	const transport = transportOf(options);
+	const onFailure = failureHook(options);
 	const flights = new Deduplicator();
 	const batcher = options.batch
 		? new Batcher(transport, options.batch)
@@ -52,13 +62,7 @@ export function createGraphQLClient(
 		variables: unknown,
 		call: QueryOptions = {},
 	): Promise<unknown> {
-		const operation = operationOf(document);
-		if (operation.kind !== expected) {
-			throw new TypeError(
-				`${expected === 'query' ? 'query()' : 'mutate()'} was given a ${operation.kind}`,
-			);
-		}
-		checkPersistable(operation, transport.persisted);
+		const operation = operationFor(document, expected, transport);
 		try {
 			if (expected === 'query')
 				return await sendQuery(operation, variables, call);
@@ -68,8 +72,7 @@ export function createGraphQLClient(
 				signal: call.signal,
 			});
 		} catch (error) {
-			if (onUnauthenticated && isUnauthenticated(error))
-				await onUnauthenticated(error);
+			await onFailure(error);
 			throw error;
 		}
 	}
@@ -79,7 +82,36 @@ export function createGraphQLClient(
 			run(document, 'query', variables, call) as Promise<never>,
 		mutate: (document, ...[variables, call]) =>
 			run(document, 'mutation', variables, call) as Promise<never>,
+		subscribe: (document, ...[variables, options]) =>
+			new EventSubscription(
+				transport,
+				operationFor(document, 'subscription', transport),
+				variables,
+				options ?? {},
+				onFailure,
+			) as Subscription<never>,
 		http: transport.http,
+	};
+}
+
+/** The document's operation, refused before anything is sent when it is not `expected`. */
+function operationFor(
+	document: AnyDocument,
+	expected: Operation['kind'],
+	transport: Transport,
+): Operation {
+	const operation = operationOf(document);
+	if (operation.kind !== expected)
+		throw new TypeError(`${callers[expected]} was given a ${operation.kind}`);
+	checkPersistable(operation, transport.persisted);
+	return operation;
+}
+
+/** What runs before a caller gets an error: the 401 hook, awaited. */
+function failureHook({ onUnauthenticated }: GraphQLClientOptions): OnFailure {
+	return async (error) => {
+		if (onUnauthenticated && isUnauthenticated(error))
+			await onUnauthenticated(error);
 	};
 }
 
