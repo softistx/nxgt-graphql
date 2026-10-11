@@ -383,7 +383,7 @@ packages/graphql-codegen-zod/src/
   plugin.spec.ts           the guards below
 packages/graphql-codegen-zod/test/
   fixture.ts               the SDL and operations the specs generate from
-  formats.ts, sku.ts       the application's formats: a formatSchemas record (one hyphenated key) and one zodFormats export (plus a rewriting one generation refuses)
+  formats.ts, sku.ts       the application's formats: a formatSchemas record (one hyphenated key) and one zodFormats export (plus the rewriting ones generation refuses: .trim(), z.url(), z.coerce.string())
   generated.ts             generated, typechecked: `bun run generated:write`
   real-scalars.ts          every @nxgt/graphql-scalars scalar, alone and in a list
   generated-scalars.ts     generated against the real scalarSchemas record, typechecked

@@ -7,8 +7,8 @@ import { formats as builtIns, type FormatName } from './index';
  * The application's own formats, keyed by the name `@constraint(format:
  * "...")` gives them: each a Zod string schema, `z.string()` or a string
  * format (`z.email()`), narrowed (`.regex()`, `.refine()`) but never
- * transformed nor rewritten (`.trim()`, `.toLowerCase()`), so the resolver
- * receives what was sent.
+ * transformed nor rewritten (`.trim()`, `.toLowerCase()`, `z.url()`,
+ * `z.coerce.string()`), so the resolver receives what was sent.
  */
 export type FormatSchemas = { readonly [name: string]: StringSchema };
 
@@ -57,10 +57,10 @@ export class FormatRegistry {
 			}
 			if (rewrites(schema)) {
 				throw new Error(
-					`The format "${name}" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`,
+					`The format "${name}" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`,
 				);
 			}
-			const own = marked(schema);
+			const own = marked(name, schema);
 			this.#formats.set(name, { name, toZod: () => own });
 		}
 	}
@@ -81,38 +81,60 @@ export class FormatRegistry {
  * transform or a codec is a pipe, `.optional()` an optional: neither passes.
  */
 function isStringSchema(value: unknown): value is StringSchema {
-	const def = (value as { _zod?: { def?: { type?: unknown } } } | null)?._zod
-		?.def;
-	return def?.type === 'string';
+	return definition(value)?.type === 'string';
 }
 
 /**
- * Whether a string schema rewrites the value it checks: `.trim()`,
- * `.toLowerCase()`, `.toUpperCase()`, `.normalize()` and `.overwrite()` are
- * each a check whose definition reads `check: 'overwrite'`, on a schema
- * that stays `type: 'string'`. The server checks the value as sent; a
- * client chaining rules on a rewriting schema would check the rewritten one.
+ * Whether a string schema rewrites the value it checks, though it stays
+ * `type: 'string'`: `z.coerce.string()` (`coerce: true`) turns a number
+ * into a string; `z.url()`, `z.httpUrl()` and `.url()` (`format: 'url'`, as
+ * the schema or as one of its checks) trim the value and drop its tabs and
+ * newlines, or normalise it; `.trim()`, `.toLowerCase()`, `.toUpperCase()`,
+ * `.normalize()`, `.slugify()` and `.overwrite()` are each a check whose
+ * definition reads `check: 'overwrite'`. Every other string format of zod 4
+ * only checks. The server checks the value as sent; a client chaining rules
+ * on a rewriting schema would check the rewritten one. A custom check that
+ * sets the value cannot be read here: `marked` catches it when it runs.
  */
 function rewrites(schema: StringSchema): boolean {
-	const checks = (schema as { _zod: { def: { checks?: readonly unknown[] } } })
-		._zod.def.checks;
-	return (checks ?? []).some(
-		(check) =>
-			(check as { _zod?: { def?: { check?: unknown } } } | null)?._zod?.def
-				?.check === 'overwrite',
-	);
+	const def = definition(schema);
+	if (def?.coerce || def?.format === 'url') return true;
+	return (def?.checks ?? []).some((check) => {
+		const own = definition(check);
+		return own?.check === 'overwrite' || own?.format === 'url';
+	});
+}
+
+type Definition = {
+	type?: unknown;
+	coerce?: unknown;
+	format?: unknown;
+	check?: unknown;
+	checks?: readonly unknown[];
+};
+
+function definition(value: unknown): Definition | undefined {
+	return (value as { _zod?: { def?: Definition } } | null)?._zod?.def;
 }
 
 /**
  * The application's schema as a plain string schema the rules can narrow,
  * each of its issues re-raised as it was (code, message) and marked as the
  * format's: a `.regex()` inside it is the format's refusal, not `pattern`'s.
- * The value is checked, never changed. An async check stays async: a
- * synchronous parse throws as the schema itself would.
+ * The value is checked, never changed: a schema that still returns another
+ * value (a custom `.check()` setting `payload.value`, which `rewrites`
+ * cannot see) throws, naming the format, as a resolver's bug would. An
+ * async check stays async: a synchronous parse throws as the schema itself
+ * would.
  */
-function marked(schema: StringSchema): StringSchema {
+function marked(name: string, schema: StringSchema): StringSchema {
 	return z.string().superRefine((value, ctx) => {
 		const raise = (result: z.ZodSafeParseResult<string>) => {
+			if (result.success && result.data !== value) {
+				throw new Error(
+					`The format "${name}" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().`,
+				);
+			}
 			for (const issue of result.error?.issues ?? []) {
 				const params = 'params' in issue ? issue.params : undefined;
 				ctx.addIssue({

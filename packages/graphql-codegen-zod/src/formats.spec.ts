@@ -192,4 +192,20 @@ describe("plugin, the application's formats", () => {
 			generate('a: Int', { zodFormats: { sku: './sku#trimmedSkuSchema' } }),
 		).rejects.toThrow('The format "sku" rewrites the value');
 	});
+
+	test.each([
+		['z.url()', './sku#linkSchema'],
+		['z.coerce.string()', './sku#coercedSkuSchema'],
+	])(
+		'refuses %s, which rewrites the value, as withValidation does',
+		async (_, module) => {
+			const fields =
+				'a(x: String @constraint(format: "x", maxLength: 14)): Int';
+			await expect(
+				generate(fields, { zodFormats: { x: module } }),
+			).rejects.toThrow(
+				'The format "x" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string())',
+			);
+		},
+	);
 });

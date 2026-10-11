@@ -124,13 +124,15 @@ resolver:
 const formatSchemas = { code: z.string().regex(/^[0-9]+$/) }; // not .transform(Number)
 ```
 
-### `The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize() or .overwrite()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
+### `The format "slug" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`
 
 **When:** calling `withValidation` (or generating with
 `@nxgt/graphql-codegen-zod`) with a format whose schema rewrites the value:
-`.trim()`, `.toLowerCase()`, `.toUpperCase()`, `.normalize()` or
-`.overwrite()`. Each keeps a string schema, so the type allows it; this check
-does not.
+`.trim()`, `.toLowerCase()`, `.toUpperCase()`, `.normalize()`, `.slugify()`
+or `.overwrite()`; `z.url()`, `z.httpUrl()` or `.url()`, which trim the value
+and drop its tabs and newlines (`z.url({ normalize: true })` rewrites it
+whole); or `z.coerce.string()`, which turns `12345` into `"12345"`. Each
+keeps a string schema, so the type allows it; this check does not.
 **Why:** the server checks the value as the client sent it, and the resolver
 receives it unchanged, but a generated client chains the other rules on your
 schema and would check the rewritten value: with `slug:
@@ -142,7 +144,26 @@ sends:
 ```ts
 const formatSchemas = {
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug: lowercase words joined by hyphens'),
+  // not z.url(): a URL as sent, no white space to trim
+  link: z.string().refine((value) => value.trim() === value && URL.canParse(value), 'Invalid URL'),
+  code: z.string(), // not z.coerce.string()
 };
+```
+
+### `The format "slug" rewrote the value it checked: a format checks the value and never changes it, so the server and the client check the value as it was sent. Refuse what is not canonical with .regex() or .refine() instead of setting payload.value in a .check().`
+
+**When:** a request, not startup: a value reached a format whose schema
+returned another value than the one it was handed — a `.check()` callback
+that sets `ctx.value`, which no definition shows, so startup could not refuse
+it. The operation fails with this error (no `BAD_USER_INPUT`: it is a bug in
+the format, not in the input), and the resolver is not called.
+**Why:** the resolver must receive what was sent, and a generated client
+chaining rules on that schema would check the rewritten value.
+**Fix:** refuse the value instead of changing it:
+
+```ts
+// not z.string().check((ctx) => { ctx.value = ctx.value.trim(); })
+const slug = z.string().refine((value) => value.trim() === value, 'Invalid slug: no surrounding spaces');
 ```
 
 ### `withValidation: this schema is already wrapped with other formats. Call withValidation once, with every format.`
