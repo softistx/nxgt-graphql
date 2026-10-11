@@ -23,7 +23,7 @@ Peers, all **required**:
 | --- | --- |
 | `graphql` | `^16.11.0 \|\| ^17.0.0` |
 | `zod` | `>=4.6.5 <5` |
-| `typescript` | `^6.0.3 || ^7.0.0` |
+| `typescript` | `^6.0.3 \|\| ^7.0.0` |
 
 `@nxgt/graphql-validation` is a dependency; you install it yourself only to
 run `withValidation` on a server.
