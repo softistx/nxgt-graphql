@@ -59,6 +59,10 @@ an `AsyncIterable<TResult>` with a `close()` method.
 | `signal` | Ends the subscription: the loop rejects with the signal's reason |
 | `headers` | Over the client's headers, for this subscription |
 
+`SubscribeOptions` takes no `retry` nor `timeout`. The request always asks for
+`accept: text/event-stream`, whatever `accept` the client's headers set; only
+the subscription's own `headers` can change it.
+
 - **It connects when the loop starts**, not when `subscribe` is called. Create
   it, hand it around, and the request leaves on the first iteration.
 - **It is read once.** A second `for await` over the same subscription throws
@@ -102,10 +106,14 @@ Every failure is one of the errors queries throw (see [Errors](errors.md)):
   on `error.data`, and ends the subscription. Partial data is never yielded
   silently, as for a query.
 - **A refused connection** (a non-2xx) throws the `ApiError` its JSON body
-  carries, else an `ApiStatusError` with its `status` and its body. A server
-  that answers an error status with an event stream (graphql-yoga does, for an
-  error carrying `extensions.http.status` thrown before the subscription
-  starts) gives an `ApiStatusError` whose `body` is the stream's raw text.
+  carries, else an `ApiStatusError` with its `status` and its body (text, or
+  JSON when labelled so). A server that answers an error status with an event
+  stream (graphql-yoga does, for an error carrying `extensions.http.status`
+  thrown before the subscription starts, and for APQ's `PersistedQueryNotFound`)
+  gives an `ApiStatusError` with that status, never an `ApiError`: the client
+  does not parse an error status's event stream yet, so `body` is the stream's
+  raw text (`event: next\ndata: {"errors":[…]}…`), the GraphQL errors inside it
+  unread. Reading them is on the [roadmap](../roadmap.md).
 - **A connection that fails or drops**: `ApiUnavailableError('unreachable')`;
   the client's `timeout` passing before the server answers:
   `ApiUnavailableError('timeout')`. The timeout bounds the connection until its
@@ -150,5 +158,26 @@ declare function render(message: { id: string; text: string }): void;
 - **`documentId`** posts the document's hash instead of its text; a document
   with no hash throws a `TypeError` from `subscribe`, before anything is sent.
 - **`apq`** posts the text's SHA-256. When the server answers
-  `PersistedQueryNotFound`, on connect or as the first event, nothing ran: the
-  client connects once more with the text, exactly once.
+  `PersistedQueryNotFound`, as a refused connection's JSON body or as the
+  first event, nothing ran: the client connects once more with the text,
+  exactly once. After a result was yielded, it is never sent again.
+
+**On graphql-yoga, APQ subscriptions need `forceStatusCodeOk`.** By default
+`@graphql-yoga/plugin-apq` answers `PersistedQueryNotFound` with HTTP 404, and
+graphql-yoga sends it as a 404 event stream, which the client cannot read yet:
+the loop rejects with `ApiStatusError(404)`, its `body` the stream's raw text,
+and the text is never sent. Have the plugin answer 200, where the error is the
+stream's first `next` event and the client resends:
+
+```ts
+import { useAPQ } from '@graphql-yoga/plugin-apq';
+import { createYoga } from 'graphql-yoga';
+
+const yoga = createYoga({
+  schema, // your executable schema
+  plugins: [useAPQ({ responseConfig: { forceStatusCodeOk: true } })],
+});
+```
+
+Queries and mutations work either way: their 404 is a JSON body the client
+reads.

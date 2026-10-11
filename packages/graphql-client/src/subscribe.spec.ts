@@ -45,6 +45,46 @@ function eventStream(chunks: readonly string[], { open = false } = {}) {
 	return { response, cancelled: () => cancelled };
 }
 
+/** Statuses whose response may hold no body. */
+const nullBody = new Set([101, 103, 204, 205, 304]);
+
+/**
+ * `response` as a real fetch gives it: its body errors once the request's
+ * signal aborts, so a double cannot pass where a body read after the
+ * request closed fails.
+ */
+function abortable(request: Request, response: Response): Response {
+	if (nullBody.has(response.status)) return response;
+	const { signal } = request;
+	const source = (response.body ?? new Blob([]).stream()).getReader();
+	const body = new ReadableStream<Uint8Array>({
+		start(controller) {
+			const abort = () => {
+				try {
+					controller.error(signal.reason);
+				} catch {}
+				source.cancel(signal.reason).catch(() => {});
+			};
+			if (signal.aborted) abort();
+			else signal.addEventListener('abort', abort, { once: true });
+		},
+		async pull(controller) {
+			try {
+				const chunk = await source.read();
+				if (chunk.done) controller.close();
+				else controller.enqueue(chunk.value);
+			} catch (error) {
+				try {
+					controller.error(error);
+				} catch {}
+			}
+		},
+		cancel: (reason) => source.cancel(reason),
+	});
+	const { status, statusText, headers } = response;
+	return new Response(body, { status, statusText, headers });
+}
+
 /** A fetch answering each request in turn, recording what it was sent. */
 function server(...answers: (() => Response | Promise<Response>)[]) {
 	const sent: { request: Request; body: Record<string, unknown> }[] = [];
@@ -53,7 +93,7 @@ function server(...answers: (() => Response | Promise<Response>)[]) {
 		sent.push({ request, body });
 		const answer = answers[sent.length - 1] ?? answers.at(-1);
 		if (!answer) throw new Error('No answer');
-		return answer();
+		return abortable(request, await answer());
 	};
 	return { fetch, sent };
 }
@@ -105,6 +145,29 @@ describe('subscribe', () => {
 		expect(api.sent[0]?.request.headers.get('x-room')).toBe('r1');
 	});
 
+	test("asks for an event stream over a client-level accept; the call's own accept wins", async () => {
+		const api = server(() => eventStream([complete]).response);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			headers: { accept: 'application/json' },
+		});
+		await collect(client.subscribe(TickSubscription));
+		await collect(
+			client.subscribe(
+				TickSubscription,
+				{},
+				{ headers: { accept: 'text/event-stream; q=1' } },
+			),
+		);
+		expect(api.sent[0]?.request.headers.get('accept')).toBe(
+			'text/event-stream',
+		);
+		expect(api.sent[1]?.request.headers.get('accept')).toBe(
+			'text/event-stream; q=1',
+		);
+	});
+
 	test('unknown events and comments are ignored; the stream ending ends the loop', async () => {
 		const stream = eventStream([
 			': keep-alive\n\n',
@@ -114,7 +177,7 @@ describe('subscribe', () => {
 		]);
 		const client = createGraphQLClient({
 			url,
-			fetch: () => stream.response,
+			fetch: server(() => stream.response).fetch,
 		});
 		expect(await collect(client.subscribe(TickSubscription))).toEqual([
 			{ tick: 1 },
@@ -124,7 +187,7 @@ describe('subscribe', () => {
 	test('is read once', () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () => eventStream([complete]).response,
+			fetch: server(() => eventStream([complete]).response).fetch,
 		});
 		const ticks = client.subscribe(TickSubscription);
 		ticks[Symbol.asyncIterator]();
@@ -168,7 +231,7 @@ describe('errors in the stream', () => {
 		);
 		const client = createGraphQLClient({
 			url,
-			fetch: () => stream.response,
+			fetch: server(() => stream.response).fetch,
 		});
 		const seen: unknown[] = [];
 		const error = await (async () => {
@@ -185,7 +248,9 @@ describe('errors in the stream', () => {
 	test('a next whose data is not JSON throws ApiUnavailableError("invalid-response")', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () => eventStream(['event: next\ndata: {oops\n\n']).response,
+			fetch: server(
+				() => eventStream(['event: next\ndata: {oops\n\n']).response,
+			).fetch,
 		});
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
@@ -197,7 +262,7 @@ describe('errors in the stream', () => {
 	test('a 2xx that is not an event stream throws ApiUnavailableError("invalid-response")', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () => json({ data: { tick: 1 } }),
+			fetch: server(() => json({ data: { tick: 1 } })).fetch,
 		});
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
@@ -209,14 +274,19 @@ describe('errors in the stream', () => {
 		const seen: unknown[] = [];
 		const client = createGraphQLClient({
 			url,
-			fetch: () =>
-				eventStream([
-					next({
-						errors: [
-							{ message: 'Signed out', extensions: { http: { status: 401 } } },
-						],
-					}),
-				]).response,
+			fetch: server(
+				() =>
+					eventStream([
+						next({
+							errors: [
+								{
+									message: 'Signed out',
+									extensions: { http: { status: 401 } },
+								},
+							],
+						}),
+					]).response,
+			).fetch,
 			onUnauthenticated: (error) => {
 				seen.push(error);
 			},
@@ -227,6 +297,36 @@ describe('errors in the stream', () => {
 		expect(error).toBeInstanceOf(ApiError);
 		expect(seen).toEqual([error]);
 	});
+	test('a next 401 runs the hook once, though more events follow', async () => {
+		let calls = 0;
+		const stream = eventStream(
+			[
+				next({
+					errors: [
+						{ message: 'Signed out', extensions: { http: { status: 401 } } },
+					],
+				}),
+				next({ data: { tick: 2 } }),
+			],
+			{ open: true },
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: server(() => stream.response).fetch,
+			onUnauthenticated: () => {
+				calls++;
+			},
+		});
+		const seen: unknown[] = [];
+		const error = await (async () => {
+			for await (const tick of client.subscribe(TickSubscription))
+				seen.push(tick);
+		})().catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(ApiError);
+		expect(seen).toEqual([]);
+		expect(calls).toBe(1);
+		expect(stream.cancelled()).toBe(true);
+	});
 });
 
 describe('closing', () => {
@@ -234,7 +334,7 @@ describe('closing', () => {
 		const stream = eventStream([next({ data: { tick: 1 } })], { open: true });
 		const client = createGraphQLClient({
 			url,
-			fetch: () => stream.response,
+			fetch: server(() => stream.response).fetch,
 		});
 		const ticks = client.subscribe(TickSubscription);
 		const seen: unknown[] = [];
@@ -258,6 +358,36 @@ describe('closing', () => {
 		expect(api.sent).toHaveLength(0);
 	});
 
+	test('close() while next() is pending resolves it done, and cancels the stream', async () => {
+		const stream = eventStream([next({ data: { tick: 1 } })], { open: true });
+		const client = createGraphQLClient({
+			url,
+			fetch: server(() => stream.response).fetch,
+		});
+		const ticks = client.subscribe(TickSubscription);
+		const iterator = ticks[Symbol.asyncIterator]();
+		expect(await iterator.next()).toEqual({ done: false, value: { tick: 1 } });
+		const pending = iterator.next();
+		await Bun.sleep(1);
+		ticks.close();
+		expect(await pending).toEqual({ done: true, value: undefined });
+		expect(stream.cancelled()).toBe(true);
+	});
+
+	test('a throw inside the loop rejects with it and cancels the stream', async () => {
+		const stream = eventStream([next({ data: { tick: 1 } })], { open: true });
+		const client = createGraphQLClient({
+			url,
+			fetch: server(() => stream.response).fetch,
+		});
+		const mine = new Error('render failed');
+		const loop = (async () => {
+			for await (const _ of client.subscribe(TickSubscription)) throw mine;
+		})();
+		await expect(loop).rejects.toBe(mine);
+		expect(stream.cancelled()).toBe(true);
+	});
+
 	test('break cancels the stream', async () => {
 		const stream = eventStream(
 			[next({ data: { tick: 1 } }), next({ data: { tick: 2 } })],
@@ -265,7 +395,7 @@ describe('closing', () => {
 		);
 		const client = createGraphQLClient({
 			url,
-			fetch: () => stream.response,
+			fetch: server(() => stream.response).fetch,
 		});
 		for await (const tick of client.subscribe(TickSubscription)) {
 			expect(tick).toEqual({ tick: 1 });
@@ -278,7 +408,7 @@ describe('closing', () => {
 		const stream = eventStream([next({ data: { tick: 1 } })], { open: true });
 		const client = createGraphQLClient({
 			url,
-			fetch: () => stream.response,
+			fetch: server(() => stream.response).fetch,
 		});
 		const controller = new AbortController();
 		const reason = new Error('left the page');
@@ -316,11 +446,12 @@ describe('connect failures', () => {
 	test('a non-2xx with GraphQL errors throws an ApiError', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () =>
+			fetch: server(() =>
 				json(
 					{ errors: [{ message: 'Bad', extensions: { code: 'BAD' } }] },
 					400,
 				),
+			).fetch,
 		});
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
@@ -333,7 +464,7 @@ describe('connect failures', () => {
 	test('a non-2xx with a text body throws ApiStatusError, its body the text', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () => new Response('Bad gateway', { status: 502 }),
+			fetch: server(() => new Response('Bad gateway', { status: 502 })).fetch,
 		});
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
@@ -348,7 +479,7 @@ describe('connect failures', () => {
 		const redirect = new Response(null, { status: 302 });
 		const client = createGraphQLClient({
 			url,
-			fetch: () => new Response(null, { status: 401 }),
+			fetch: server(() => new Response(null, { status: 401 })).fetch,
 			onUnauthenticated: async (error) => {
 				await Bun.sleep(1);
 				order.push(`hook ${error.status}`);
@@ -368,7 +499,7 @@ describe('connect failures', () => {
 	test('a 401 without a hook throws ApiStatusError(401)', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () => new Response(null, { status: 401 }),
+			fetch: server(() => new Response(null, { status: 401 })).fetch,
 		});
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
@@ -469,8 +600,11 @@ describe('persisted subscriptions', () => {
 		expect(second?.body['extensions']).toEqual(first?.body['extensions']);
 	});
 
-	test('apq mode: a refused connection not found is sent once more, exactly once', async () => {
-		const api = server(() => json(notFound, 404));
+	test('apq mode against graphql-yoga with forceStatusCodeOk: a 200 stream not found is sent once more, exactly once', async () => {
+		// What useAPQ({ responseConfig: { forceStatusCodeOk: true } }) sends.
+		const api = server(
+			() => eventStream([':\n\n', next(notFound), complete]).response,
+		);
 		const client = createGraphQLClient({
 			url,
 			fetch: api.fetch,
@@ -479,8 +613,52 @@ describe('persisted subscriptions', () => {
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
 		);
+		expect(error).toBeInstanceOf(ApiError);
 		expect((error as ApiError).message).toBe('PersistedQueryNotFound');
 		expect(api.sent).toHaveLength(2);
+		expect(api.sent[1]?.body['query']).toBe('subscription Tick {\n  tick\n}');
+	});
+
+	test("apq mode against graphql-yoga's default 404 event stream: ApiStatusError(404), its raw text, no resend", async () => {
+		const text = `:\n\n${next(notFound)}${complete}`;
+		const api = server(
+			() =>
+				new Response(text, {
+					status: 404,
+					headers: { 'content-type': 'text/event-stream' },
+				}),
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		const error = await collect(client.subscribe(TickSubscription)).catch(
+			(caught: unknown) => caught,
+		);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(404);
+		expect((error as ApiStatusError).body).toBe(text);
+		expect(api.sent).toHaveLength(1);
+	});
+
+	test('apq mode: not found after data was yielded is never sent again', async () => {
+		const api = server(
+			() => eventStream([next({ data: { tick: 1 } }), next(notFound)]).response,
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		const seen: unknown[] = [];
+		const error = await (async () => {
+			for await (const tick of client.subscribe(TickSubscription))
+				seen.push(tick);
+		})().catch((caught: unknown) => caught);
+		expect(seen).toEqual([{ tick: 1 }]);
+		expect((error as ApiError).message).toBe('PersistedQueryNotFound');
+		expect(api.sent).toHaveLength(1);
 	});
 });
 
@@ -488,11 +666,17 @@ describe('types', () => {
 	test('variables are checked, and each result is typed', async () => {
 		const client = createGraphQLClient({
 			url,
-			fetch: () =>
-				eventStream([next({ data: { message: 'hi' } }), complete]).response,
+			fetch: server(
+				() =>
+					eventStream([next({ data: { message: 'hi' } }), complete]).response,
+			).fetch,
 		});
 		// @ts-expect-error: `room` is required
 		client.subscribe(RoomSubscription);
+		// @ts-expect-error: a subscription is never retried
+		client.subscribe(TickSubscription, {}, { retry: 2 });
+		// @ts-expect-error: a subscription's options take no timeout
+		client.subscribe(TickSubscription, {}, { timeout: 1000 });
 		// @ts-expect-error: `extra` is not a variable of the operation
 		client.subscribe(RoomSubscription, { room: 'a', extra: 1 });
 		for await (const result of client.subscribe(RoomSubscription, {

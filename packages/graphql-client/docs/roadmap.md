@@ -29,7 +29,9 @@ Candidates, not commitments.
   rejects with `ApiUnavailableError('unreachable')` and subscribing again is
   the application's to do; the client would reconnect and resume instead.
 - **A GraphQL error carried by an error status's event stream read as an
-  `ApiError`**, rather than an `ApiStatusError` holding the stream's text.
+  `ApiError`**, rather than an `ApiStatusError` holding the stream's raw text.
+  APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
+  `forceStatusCodeOk`, which they need today.
 - **A normalized cache.**
 - **React bindings.**
 

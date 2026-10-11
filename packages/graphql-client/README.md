@@ -92,6 +92,8 @@ See [Errors](docs/guide/errors.md).
 ### Subscribe over server-sent events
 
 ```ts
+import { graphql } from './gql';
+
 const OnMessage = graphql(`
   subscription OnMessage($room: ID!) {
     message(room: $room) { id text }
@@ -107,6 +109,12 @@ for await (const { message } of client.subscribe(
   console.log(message.text);
 }
 ```
+
+`subscribe(document, variables?, options?)` returns a `Subscription<TResult>`:
+an `AsyncIterable` read once with `for await`, with a `close()` method. Its
+`SubscribeOptions` are `signal` (ends it: the loop rejects with the signal's
+reason) and `headers` (over the client's, for this subscription); it takes no
+`retry` nor `timeout`.
 
 The server must speak the GraphQL over SSE protocol's distinct connections
 mode: graphql-yoga does out of the box; elsewhere, mount
@@ -157,6 +165,12 @@ See [Persisted queries](docs/guide/client.md#persisted-queries) and
   `ApiUnavailableError('unreachable')`; subscribe again to resume. `subscribe()`
   refuses a query or a mutation with a `TypeError`, and a subscription is read
   once.
+- **APQ subscriptions on graphql-yoga need
+  `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`.** By default the
+  plugin answers `PersistedQueryNotFound` with a 404 event stream, which the
+  client does not read yet: the loop rejects with `ApiStatusError(404)` (the
+  stream's raw text as `body`) and the text is never sent. Queries and
+  mutations are not affected.
 - **`documentId` mode needs the client preset's `persistedDocuments`**: a
   document without its hash throws a `TypeError` before anything is sent.
 - **Identical in-flight queries share one request.** Pass `dedupe: false` to

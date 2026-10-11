@@ -62,10 +62,8 @@ export class EventSubscription implements Subscription<unknown> {
 			try {
 				yield* this.#results(this.#open(body));
 				return;
-			} catch (error) {
-				// The caller's own abort wins over what it caused.
-				if (signal?.aborted) throw signal.reason;
-				const failure = await failureOf(error);
+			} catch (failure) {
+				if (signal?.aborted) throw failure; // the signal's reason, as is
 				const notFound = isPersistedQueryNotFound(persisted, failure);
 				if (registering || this.#delivered || !notFound) {
 					await this.onFailure(failure);
@@ -76,10 +74,15 @@ export class EventSubscription implements Subscription<unknown> {
 		}
 	}
 
-	/** Each `next` event's `data`, until `complete`, the stream's end or `close()`. */
+	/**
+	 * Each `next` event's `data`, until `complete`, the stream's end or
+	 * `close()`. A failure is mapped before the stream closes: closing aborts
+	 * the request, and a refused connection's body must be read first.
+	 */
 	async *#results(
 		stream: EventStream<ServerEvent>,
 	): AsyncGenerator<unknown, void, undefined> {
+		const { signal } = this.options;
 		try {
 			for await (const event of stream) {
 				if (event.event === 'complete') return;
@@ -88,21 +91,28 @@ export class EventSubscription implements Subscription<unknown> {
 				yield data;
 				if (this.#closed) return;
 			}
+		} catch (error) {
+			// The caller's own abort wins over what it caused.
+			if (signal?.aborted) throw signal.reason;
+			throw await failureOf(error);
 		} finally {
 			stream.close();
 		}
 	}
 
 	#open(body: OperationBody): EventStream<ServerEvent> {
-		const { signal, headers } = this.options;
+		const { signal } = this.options;
 		const { operationName } = this.operation;
+		// Over the client's own headers: a client-level `accept` would ask for JSON.
+		const headers = new Headers(this.options.headers);
+		if (!headers.has('accept')) headers.set('accept', 'text/event-stream');
 		this.#stream = this.transport.http.events(this.transport.path, {
 			method: 'post',
 			json: body,
 			events,
 			reconnect: false,
 			retry: false,
-			...(headers && { headers }),
+			headers,
 			...(signal && { signal }),
 			...(operationName !== undefined && { operationId: operationName }),
 		}) as EventStream<ServerEvent>;

@@ -593,8 +593,22 @@ packages/graphql-client/src/
 - **A subscription is never retried, reconnected, deduplicated or batched**:
   `retry: false` and `reconnect: false` on httpyz's `events()`, whatever the
   client's `retry`. Its one second connection is APQ's register resend, after
-  `PersistedQueryNotFound` on connect or as the first event (nothing ran).
-  Exactly once.
+  `PersistedQueryNotFound` in a refused connection's JSON body or as the first
+  event (nothing ran). Exactly once.
+- **An error status's event stream is an `ApiStatusError(status)` whose `body`
+  is the stream's raw text**, never parsed (httpyz exports no SSE parser; the
+  gap is with nxgt-http). Do not hand-parse SSE here. So graphql-yoga's default
+  APQ answer, a 404 event stream, is not resent: APQ subscriptions on yoga
+  need `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`, and the docs
+  say so until the roadmap's Next entry lands.
+- **A failure is mapped before the stream closes**: `#results` catches and
+  throws `failureOf(error)` before its `finally` closes the stream, since
+  closing aborts the request and a refused connection's body is read after.
+  The fetch doubles in `subscribe.spec.ts` error their body on abort as real
+  fetch does, and `subscribe.server.spec.ts` runs the same paths over
+  `Bun.serve`.
+- **A subscription always asks for `accept: text/event-stream`**, over a
+  client-level `accept`; only its own `headers` can change it.
 - **A subscription's connection is closed on every exit path**: `complete`,
   the stream's end, `close()`, `break`/`return`, an error (a `next` carrying
   errors throws its `ApiError` and ends it, as a query does), and an abort,

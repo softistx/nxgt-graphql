@@ -202,12 +202,23 @@ createGraphQLClient({ url, batch: { max: 20 } }); // client
 not parse (a gateway's HTML page, a cut body). An `ApiStatusError`, with
 `status` and `body` (undefined when the body did not parse).
 On `subscribe`, it is also what a server answering an error status with an
-event stream gives: graphql-yoga does it for an error carrying
-`extensions.http.status` thrown before the subscription starts; `body` is then
-the stream's raw text, the GraphQL errors inside it.
-**Why:** a proxy, a gateway or an auth layer answered before GraphQL ran.
+event stream gives, never an `ApiError`: the client does not parse an error
+status's event stream yet, so `body` is the stream's raw text, the GraphQL
+errors inside it unread. graphql-yoga does it for an error carrying
+`extensions.http.status` thrown before the subscription starts, and for APQ's
+`PersistedQueryNotFound` (a 404), which the client then does not resend.
+**Why:** a proxy, a gateway or an auth layer answered before GraphQL ran; or,
+on `subscribe`, the server put a GraphQL error in an error status's event
+stream.
 **Fix:** read `error.status` and `error.body`; for a 401, set
-`onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)).
+`onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)). For an
+APQ subscription answered 404 by graphql-yoga, have the plugin answer 200, so
+the error comes as the stream's first event and the client resends the text
+(see [Persisted subscriptions](guide/subscriptions.md#persisted-subscriptions)):
+
+```ts
+useAPQ({ responseConfig: { forceStatusCodeOk: true } });
+```
 
 ```ts
 if (error instanceof ApiStatusError) console.log(error.status, error.body);

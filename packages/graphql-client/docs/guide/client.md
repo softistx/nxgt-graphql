@@ -270,7 +270,9 @@ const client = createGraphQLClient({
   operation, so nothing is done twice. It is the only case where a mutation is
   posted twice.
 - No codegen setup is needed. On the server, enable an APQ plugin, such as
-  graphql-yoga's `useAPQ` from `@graphql-yoga/plugin-apq`.
+  graphql-yoga's `useAPQ` from `@graphql-yoga/plugin-apq`. For subscriptions,
+  graphql-yoga needs `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`
+  (see [Persisted subscriptions](subscriptions.md#persisted-subscriptions)).
 - **The hash needs `crypto.subtle`**, which browsers expose only in secure
   contexts (https or localhost). Without it the call throws a `TypeError` before
   anything is sent
