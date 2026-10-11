@@ -209,7 +209,7 @@ See [Normalized cache](docs/guide/cache.md).
 
 ### React
 
-```ts
+```tsx
 import { createGraphQLClient, normalizedCache } from '@nxgt/graphql-client';
 import {
   GraphQLProvider,
@@ -228,13 +228,14 @@ function Book({ id }: { id: string }) {
   const { data: live } = useSubscription(OnBookChanged, { id });
   const card = useFragment(BookCard, { __typename: 'Book', id });
   if (loading) return <Spinner />;
-  if (error) return <Failure error={error} retry={refetch} />;
+  if (error) return <Failure error={error} retry={() => refetch().catch(() => {})} />;
   return <Title book={data!.book} onRename={(title) => rename({ id, title })} />;
 }
 ```
 
 Every hook sends from an effect, never during a render, so a server render
-sends nothing. `useQuery` compares its variables by value (a new object
+sends nothing; it shows nothing from the cache either (`loading`), and the
+browser renders the cache right after hydration. `useQuery` compares its variables by value (a new object
 literal each render sends nothing again), aborts its request on unmount and
 when the variables change (an abort is never an `error`), and, with a cache,
 renders again when another write changes its result. `refetch()` asks the

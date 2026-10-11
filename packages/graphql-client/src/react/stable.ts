@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo } from 'react';
 import { stableJson } from '../cache/field-key';
 
 /**
@@ -7,9 +7,8 @@ import { stableJson } from '../cache/field-key';
  * does not run again.
  */
 export function useStable<T>(value: T, key: string): T {
-	const ref = useRef({ key, value });
-	if (ref.current.key !== key) ref.current = { key, value };
-	return ref.current.value;
+	// The key stands for the value: the memo changes only when the key does.
+	return useMemo(() => value, [key]);
 }
 
 /** Variables by value: their JSON, object keys sorted. */

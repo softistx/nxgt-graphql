@@ -14,11 +14,18 @@ interface Store<T> {
 
 const nothing = () => undefined;
 const noSubscription = () => () => {};
+/**
+ * A server render, and hydration, show nothing from the cache: the server's
+ * cache is not the browser's, so what the server read could not match what
+ * hydration reads. React renders again with `get` right after hydration.
+ */
+const serverSnapshot = () => undefined;
 
 /**
  * What a cache read holds now, the component rendered again whenever its
  * watch calls back. The snapshot is the object the watch last delivered, so
  * it keeps its identity between renders, as `useSyncExternalStore` needs.
+ * The server snapshot is `undefined`.
  * `source` must be memoized by its caller: a new one reads afresh.
  */
 export function useWatched<T>(
@@ -26,7 +33,11 @@ export function useWatched<T>(
 ): T | undefined {
 	const store = useMemo(() => source && storeOf(source), [source]);
 	const get = store?.get ?? nothing;
-	return useSyncExternalStore(store?.subscribe ?? noSubscription, get, get);
+	return useSyncExternalStore(
+		store?.subscribe ?? noSubscription,
+		get,
+		serverSnapshot,
+	);
 }
 
 function storeOf<T>(source: WatchedRead<T>): Store<T> {

@@ -32,7 +32,12 @@ export interface QueryResult<TResult> {
 	readonly error: unknown;
 	/** A request for these variables is in flight and no cached result answers it. */
 	readonly loading: boolean;
-	/** The query again from the network; resolves with its data, rejects as `client.query` does. */
+	/**
+	 * The query again from the network; resolves with its data, rejects as
+	 * `client.query` does. Rejects at once, sending nothing, while `skip` is
+	 * true (an `Error`) and once kept past its variables or its component (an
+	 * `AbortError`).
+	 */
 	readonly refetch: () => Promise<TResult>;
 }
 
@@ -65,6 +70,7 @@ export function useQuery<TResult, TVariables>(
 			fetchPolicy,
 			headers,
 			refetches: new Set(),
+			live: false,
 		}),
 		[client, document, variables, skip, fetchPolicy, headers],
 	);

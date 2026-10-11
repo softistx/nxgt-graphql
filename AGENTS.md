@@ -611,11 +611,13 @@ packages/graphql-client/src/
   react/                the `./react` subpath (entry point `react/index.ts`, in `nxgt.entrypoints`)
     index.ts            its barrel
     context.ts          GraphQLProvider, useClient (throws `noProvider` outside one)
-    stable.ts           useStable (a value kept while its key is the same), variablesKey, headersKey
+    stable.ts           useStable (useMemo on the key: no ref written in a render), variablesKey,
+                        headersKey
     watched.ts          useWatched: a cache read and its watch through useSyncExternalStore,
                         the snapshot the object the watch last delivered
-    query-run.ts        startQuery (the effect: run, then abort in the cleanup), refetchQuery,
-                        stateFor: plain functions over one QueryRequest
+    query-run.ts        startQuery (the effect: mark the request live, run; the cleanup clears
+                        the mark and aborts), refetchQuery, stateFor: plain functions over one
+                        QueryRequest
     use-query.ts        useQuery: the QueryRequest memoized by value, the cache read, the state
     use-mutation.ts     useMutation: the last call recorded, nothing after unmount or reset
     use-subscription.ts useSubscription: one connection per effect, closed in its cleanup
@@ -756,18 +758,42 @@ packages/graphql-client/test/
   types).
 - **A hook never sends during a render.** `useQuery` and `useSubscription`
   start in `useEffect`, so a server render sends nothing; the cache is read
-  during a render through `useSyncExternalStore` (its server snapshot too),
-  which sends nothing. `server-render.spec.ts` renders with `renderToString`
-  and counts zero requests.
+  during a render through `useSyncExternalStore`, which sends nothing.
+  `server-render.spec.ts` renders with `renderToString` and counts zero
+  requests.
+- **The server snapshot is `undefined`** (`useWatched`): a server render and
+  hydration show nothing from the cache (`useQuery` `loading` with no data,
+  `useFragment` `undefined`), since the server's cache is not the browser's
+  and hydration must match the server's HTML; React renders again with
+  `getSnapshot` right after hydrating. Never return the cache's read there.
+  `server-render.spec.ts` pins it.
 - **A hook aborts what it started.** Each effect's cleanup aborts its
   `AbortController` (a query, its refetches) or closes its subscription: an
   unmount, new variables, and StrictMode's second effect leave no request
   behind; the specs assert on the signal `fetch` received. An abort is never
   recorded as `error`, and nothing is recorded after a cleanup.
+- **A stale `refetch` changes nothing.** Each `QueryRequest` carries `live`,
+  set by its effect (again on the same object under StrictMode) and cleared
+  by the cleanup. `refetchQuery` on a request that is not live rejects at once
+  with a `DOMException` `AbortError`, sends nothing and sets nothing; `settle`
+  records only while its request is live. So a `refetch` kept past new
+  variables or an unmount cannot overwrite what the current request shows.
+- **`refetch()` while `skip` is true rejects at once** with an `Error`
+  (`skipRefetch`, a troubleshooting entry headed by it) and sends nothing:
+  `skip` means no request.
+- **`useMutation` tracks unmount only**: a `disposed` flag set in its effect's
+  cleanup and cleared when the effect runs (StrictMode), never a "mounted"
+  flag, so a `mutate` from a child's mount effect, which runs before the
+  parent's, records `loading`.
 - **Variables and headers are compared by value** (`stableJson`, the
   cache's own field-key JSON, and the headers' entries): a new object
   literal each render sends nothing again. A document is compared by
   identity, as the client preset's module constants allow.
+- **`stableJson` keys what goes on the wire**: it honours `toJSON` as
+  `JSON.stringify` does (a `Date` is its ISO string, a value JSON drops is
+  dropped), keys sorted. Two `Date` variables are two requests in `useQuery`
+  and two field keys in the cache; reading a `Date` as a plain object would
+  key every one as `{}`.
 - **Source imports carry no extension.**
 - **Temporary, until nxgt-http wraps body reads**: `response.ts` checks for the
   `DOMException` named `TimeoutError`, which is what a deadline firing while the

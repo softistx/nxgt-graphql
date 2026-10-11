@@ -13,7 +13,18 @@ export interface QueryRequest {
 	readonly headers: HeadersInit | undefined;
 	/** Each refetch in flight, aborted with the request. */
 	readonly refetches: Set<AbortController>;
+	/**
+	 * Set by the effect, cleared by its cleanup (StrictMode sets it again on
+	 * the same object): a request that is not live sends and records nothing.
+	 */
+	live: boolean;
 }
+
+export const skipRefetch =
+	'refetch() was called while skip is true: set skip to false to send the query';
+
+const notLive =
+	'refetch() was called for a query no longer shown: its component unmounted or its variables changed';
 
 /** What the network answered for a request. */
 export interface QueryState {
@@ -35,6 +46,7 @@ export function startQuery(
 	request: QueryRequest,
 	setState: SetQueryState,
 ): () => void {
+	request.live = true;
 	const controller = new AbortController();
 	if (!request.skip) {
 		const { signal } = controller;
@@ -42,6 +54,7 @@ export function startQuery(
 		settle(request, call, signal, setState).catch(() => {});
 	}
 	return () => {
+		request.live = false;
 		controller.abort();
 		for (const refetch of request.refetches) refetch.abort();
 		request.refetches.clear();
@@ -50,12 +63,18 @@ export function startQuery(
 
 /**
  * The request again, from the network: `no-cache` stays `no-cache`, any
- * other policy is `network-only`. It rejects as `client.query` does.
+ * other policy is `network-only`. It rejects as `client.query` does. On a
+ * request that is not live (a `refetch` kept from an earlier render), it
+ * rejects at once with an `AbortError`; while `skip` is true, with an `Error`:
+ * both send and set nothing.
  */
 export function refetchQuery(
 	request: QueryRequest,
 	setState: SetQueryState,
 ): Promise<unknown> {
+	if (!request.live)
+		return Promise.reject(new DOMException(notLive, 'AbortError'));
+	if (request.skip) return Promise.reject(new Error(skipRefetch));
 	const controller = new AbortController();
 	request.refetches.add(controller);
 	setState((state) => ({ ...stateFor(state, request), loading: true }));
@@ -89,7 +108,10 @@ function queryOnce(
 	});
 }
 
-/** The answer recorded, unless the call was aborted; the promise settles as the call did. */
+/**
+ * The answer recorded, unless the call was aborted or the request is no longer
+ * live; the promise settles as the call did.
+ */
 async function settle(
 	request: QueryRequest,
 	call: Promise<unknown>,
@@ -98,11 +120,11 @@ async function settle(
 ): Promise<unknown> {
 	try {
 		const data = await call;
-		if (!signal.aborted)
+		if (!signal.aborted && request.live)
 			setState({ request, data, error: undefined, loading: false });
 		return data;
 	} catch (error) {
-		if (!signal.aborted)
+		if (!signal.aborted && request.live)
 			setState((state) => ({
 				...stateFor(state, request),
 				error,

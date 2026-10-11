@@ -45,4 +45,24 @@ describe('fieldKey', () => {
 			'[1,null,{"b":1}]',
 		);
 	});
+
+	test('stableJson writes what JSON.stringify writes: toJSON honoured, a Date its ISO string', () => {
+		const at = new Date('2026-01-01T00:00:00.000Z');
+		expect(stableJson({ b: at, a: [at] })).toBe(
+			'{"a":["2026-01-01T00:00:00.000Z"],"b":"2026-01-01T00:00:00.000Z"}',
+		);
+		expect(stableJson({ a: { toJSON: (key: string) => key } })).toBe(
+			'{"a":"a"}',
+		);
+		expect(stableJson({ a: () => 1, b: { toJSON: () => undefined } })).toBe(
+			'{}',
+		);
+	});
+
+	test('two Date variables are two field keys', () => {
+		const field = firstField('query ($at: DateTime) { events(at: $at) }');
+		expect(fieldKey(field, { at: new Date(0) })).toBe(
+			'events({"at":"1970-01-01T00:00:00.000Z"})',
+		);
+	});
 });

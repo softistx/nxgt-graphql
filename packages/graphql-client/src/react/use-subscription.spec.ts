@@ -143,4 +143,27 @@ describe('useSubscription', () => {
 			'subscribe() was given a query',
 		);
 	});
+
+	test('an onData that throws ends it, and what it threw is the error', async () => {
+		const { api, client } = setup();
+		const thrown = new Error('onData failed');
+		const { result } = renderHook(
+			() =>
+				useSubscription(
+					TickSubscription,
+					{ room: 'a' },
+					{
+						onData: () => {
+							throw thrown;
+						},
+					},
+				),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(api.streams).toHaveLength(1));
+		await act(async () => api.streams[0]?.next({ data: { tick: 1 } }));
+		await waitFor(() => expect(result.current.active).toBe(false));
+		expect(result.current.error).toBe(thrown);
+		expect(api.streams[0]?.signal.aborted).toBe(true);
+	});
 });

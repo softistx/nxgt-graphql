@@ -51,7 +51,7 @@ describe('a server render', () => {
 		expect(requests()).toBe(0);
 	});
 
-	test('renders what the cache holds', () => {
+	test('shows nothing from the cache: the server snapshot is undefined', () => {
 		const { client, requests } = counting(true);
 		client.cache?.write(BookQuery, { id: '1' }, { book: book('Dune') });
 		const html = render(client, () => {
@@ -59,7 +59,7 @@ describe('a server render', () => {
 			const card = useFragment(BookCard, 'Book:1');
 			return `${data?.book.title} ${loading} ${card?.title}`;
 		});
-		expect(html).toBe('Dune false Dune');
+		expect(html).toBe('undefined true undefined');
 		expect(requests()).toBe(0);
 	});
 });

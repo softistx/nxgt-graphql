@@ -93,11 +93,13 @@ What it returns:
 ### When it sends
 
 - **From an effect, never during a render.** A server render (SSR) sends
-  nothing: it renders `loading`, or what the cache holds. The browser sends
-  once the component mounts.
-- **Again when the variables change, by value.** They are compared as JSON
-  with sorted keys, so a new object literal on every render (`{ id }`) sends
-  nothing again; `{ id: '2' }` after `{ id: '1' }` does.
+  nothing: it renders `loading` (see [Server rendering](#server-rendering)).
+  The browser sends once the component mounts.
+- **Again when the variables change, by value.** They are compared as the
+  JSON sent, keys sorted, so a new object literal on every render (`{ id }`)
+  sends nothing again; `{ id: '2' }` after `{ id: '1' }` does. A value with a
+  `toJSON` is compared by what it writes: two `Date`s are the same variables
+  when their ISO strings are.
 - **The request in flight is aborted** on unmount and when the variables,
   `skip`, `fetchPolicy` or `headers` change. The abort reaches `fetch` (its
   signal), and its rejection is never shown as `error`, nor recorded after
@@ -132,8 +134,26 @@ does, and records the error too: catch it, or the rejection is unhandled.
 <button onClick={() => refetch().catch(() => {})}>Reload</button>
 ```
 
-A refetch in flight is aborted on unmount, like the hook's own request; it
-then rejects with the signal's reason.
+- **A refetch in flight is aborted** on unmount and when the variables (or
+  `skip`, `fetchPolicy`, `headers`) change, like the hook's own request; it
+  then rejects with the signal's reason, and records nothing.
+- **A `refetch` kept from an earlier render does nothing.** Each `refetch`
+  belongs to one set of variables. Once they changed, or the component
+  unmounted, calling it rejects at once with a `DOMException` named
+  `AbortError`, sends nothing and changes nothing shown: an old callback
+  (a timer, a closure) cannot overwrite the current variables' data.
+- **While `skip` is `true`, `refetch()` rejects at once** with
+  [`refetch() was called while skip is true: set skip to false to send the query`](../troubleshooting.md#refetch-was-called-while-skip-is-true-set-skip-to-false-to-send-the-query)
+  and sends nothing: `skip` means no request. Set `skip` to `false` instead.
+
+```tsx
+const { refetch } = useQuery(BookQuery, { id }, { skip: !id });
+const reload = () =>
+  refetch().catch((error) => {
+    if (error instanceof DOMException && error.name === 'AbortError') return; // stale
+    throw error;
+  });
+```
 
 ## `useMutation`
 
@@ -158,6 +178,7 @@ function RenameForm({ id }: { id: string }) {
   `client.mutate`'s (`signal`, `headers`, `timeout`). It is never retried.
 - The state records the **last** call: `loading` while it is in flight, then
   its `data` or `error`. An earlier call that settles later records nothing.
+  A call made as the tree mounts (from a child's mount effect) is recorded.
 - `reset()` returns to the state before any call; a call still in flight then
   records nothing.
 - After an unmount, nothing is recorded; the promise still settles.
@@ -228,11 +249,28 @@ function Card({ id }: { id: string }) {
 ## Server rendering
 
 No hook sends during a render: queries and subscriptions start in effects,
-which a server render does not run. A server render shows `loading` for each
-`useQuery`, and with a cache, what the cache holds (`useQuery` and
-`useFragment` read it through `useSyncExternalStore`'s server snapshot).
-On a server, create one client per request and leave its cache off (see the
-[Client guide](client.md)).
+which a server render does not run.
+
+**A server render and hydration show nothing from the cache.** The cache is
+read through `useSyncExternalStore`, whose server snapshot is `undefined`:
+`useQuery` renders `loading` with no `data`, and `useFragment` renders
+`undefined`, on the server and in the browser's hydration pass alike. The
+server's cache is not the browser's, so anything else could not match on
+hydration. Right after hydrating, React renders again with what the
+browser's cache holds: a `cache-first` hit then shows its data, with no
+request and no `loading`; a miss sends from the effect.
+
+```tsx
+function Book({ id }: { id: string }) {
+  const { data, loading } = useQuery(BookQuery, { id });
+  // server and hydration: loading, data undefined; then the browser's cache or network
+  return loading ? <Spinner /> : <h1>{data?.book?.title}</h1>;
+}
+```
+
+To render data on the server, load it in your framework's loader with
+`client.query` and pass it as props. On a server, create one client per
+request and leave its cache off (see the [Client guide](client.md)).
 
 ## Not yet
 

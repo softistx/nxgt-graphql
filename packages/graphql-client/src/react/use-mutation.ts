@@ -34,18 +34,20 @@ export function useMutation<TResult, TVariables>(
 	const client = useClient();
 	const [recorded, setRecorded] = useState(idle);
 	const calls = useRef(0);
-	const mounted = useRef(false);
+	// Unmount only: a call from a child's mount effect, before this effect
+	// runs, records. Reset when the effect runs again (StrictMode).
+	const disposed = useRef(false);
 	useEffect(() => {
-		mounted.current = true;
+		disposed.current = false;
 		return () => {
-			mounted.current = false;
+			disposed.current = true;
 		};
 	}, []);
 	const mutate = useCallback(
 		async (variables?: unknown, options?: CallOptions) => {
 			const call = ++calls.current;
 			const record = (next: Recorded) => {
-				if (mounted.current && call === calls.current) setRecorded(next);
+				if (!disposed.current && call === calls.current) setRecorded(next);
 			};
 			record({ data: undefined, error: undefined, loading: true });
 			try {

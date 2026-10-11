@@ -28,6 +28,7 @@ One entry per error you can hit, headed by the message you will search for.
 - [`No GraphQL client: render this component inside <GraphQLProvider client={client}>`](#no-graphql-client-render-this-component-inside-graphqlprovider-clientclient)
 - [`useFragment() reads the cache: pass cache: normalizedCache() to createGraphQLClient`](#usefragment-reads-the-cache-pass-cache-normalizedcache-to-creategraphqlclient)
 - [A `useQuery` that sends its query again on every render](#a-usequery-that-sends-its-query-again-on-every-render)
+- [`refetch() was called while skip is true: set skip to false to send the query`](#refetch-was-called-while-skip-is-true-set-skip-to-false-to-send-the-query)
 
 ## `query() was given a mutation`
 
@@ -475,4 +476,20 @@ const BookQuery = graphql(`query Book($id: ID!) { book(id: $id) { id title } }`)
 function Book({ id }: { id: string }) {
   const { data } = useQuery(BookQuery, { id }); // one request per id
 }
+```
+
+## `refetch() was called while skip is true: set skip to false to send the query`
+
+**When:** `refetch()` from `useQuery` is called while the hook's `skip`
+option is `true`. Its promise rejects at once with an `Error`; nothing is
+sent and the hook's state does not change.
+**Why:** `skip` means the query sends nothing and holds no data; a refetch
+would send it anyway, behind the option's back.
+**Fix:** drive the request with `skip` itself; setting it to `false` sends
+the query. Call `refetch()` only once it is `false`:
+
+```tsx
+const { data, refetch } = useQuery(BookQuery, { id }, { skip: !id });
+
+<button disabled={!id} onClick={() => refetch().catch(() => {})}>Reload</button>
 ```

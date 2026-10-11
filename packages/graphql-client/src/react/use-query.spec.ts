@@ -1,6 +1,8 @@
 import '../../test/dom';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react/pure';
+import { parse } from 'graphql';
 import { useDom } from '../../test/dom';
 import {
 	BookQuery,
@@ -12,11 +14,16 @@ import {
 } from '../../test/react';
 import { normalizedCache } from '../cache/normalized-cache';
 import { createGraphQLClient } from '../client';
-import { ApiError } from '../errors';
+import { ApiError, CacheMissError } from '../errors';
 import type { FetchPolicy } from '../fetch-policy';
+import { skipRefetch } from './query-run';
 import { useQuery } from './use-query';
 
 useDom(cleanup);
+
+const EventsQuery = parse(
+	'query Events($at: DateTime!) { events(at: $at) }',
+) as TypedDocumentNode<{ events: string[] }, { at: Date }>;
 
 let consoleError: ReturnType<typeof spyOn>;
 beforeEach(() => {
@@ -184,10 +191,10 @@ describe('useQuery without a cache', () => {
 			url,
 			fetch: async () => Response.json({ errors: [{ message: 'Down' }] }),
 		});
-		const { result } = renderHook(
-			() => useQuery(BookQuery, { id: '1' }, { skip: true }),
-			{ wrapper: withClient(client) },
-		);
+		const { result } = renderHook(() => useQuery(BookQuery, { id: '1' }), {
+			wrapper: withClient(client),
+		});
+		await waitFor(() => expect(result.current.loading).toBe(false));
 		let rejected: unknown;
 		await act(async () => {
 			await result.current.refetch().catch((error) => {
@@ -196,6 +203,113 @@ describe('useQuery without a cache', () => {
 		});
 		expect(rejected).toBeInstanceOf(ApiError);
 		expect(result.current).toMatchObject({ error: rejected, loading: false });
+	});
+	test('refetch while skip is true rejects at once, sends nothing, sets nothing', async () => {
+		const { api, client } = setup();
+		const { result } = renderHook(
+			() => useQuery(BookQuery, { id: '1' }, { skip: true }),
+			{ wrapper: withClient(client) },
+		);
+		const before = result.current;
+		let rejected: unknown;
+		await act(async () => {
+			await result.current.refetch().catch((error) => {
+				rejected = error;
+			});
+		});
+		expect(rejected).toBeInstanceOf(Error);
+		expect((rejected as Error).message).toBe(skipRefetch);
+		expect(api.received).toHaveLength(0);
+		expect(result.current).toMatchObject({
+			data: undefined,
+			error: undefined,
+			loading: false,
+		});
+		expect(result.current.refetch).toBe(before.refetch);
+	});
+
+	test('a refetch kept past new variables rejects with an AbortError, sends and changes nothing', async () => {
+		const { api, client } = setup();
+		const { result, rerender } = renderHook(
+			({ id }) => useQuery(BookQuery, { id }),
+			{ wrapper: withClient(client), initialProps: { id: '1' } },
+		);
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		const stale = result.current.refetch;
+		rerender({ id: '2' });
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		const shown = result.current;
+		let rejected: unknown;
+		await act(async () => {
+			await stale().catch((error) => {
+				rejected = error;
+			});
+			await flush();
+		});
+		expect(rejected).toBeInstanceOf(DOMException);
+		expect((rejected as DOMException).name).toBe('AbortError');
+		expect(api.received).toHaveLength(2);
+		expect(result.current.data).toBe(shown.data);
+		expect(result.current).toMatchObject({
+			data: { book: book('Dune 2', '2') },
+			error: undefined,
+			loading: false,
+		});
+	});
+
+	test('a refetch in flight is aborted on unmount, and nothing is recorded after', async () => {
+		const { api, client } = setup({ hold: true });
+		const { result, unmount } = renderHook(
+			() => useQuery(BookQuery, { id: '1' }),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(api.received).toHaveLength(1));
+		await act(async () => {
+			api.received[0]?.answer({ data: { book: book('Dune') } });
+			await flush();
+		});
+		let refetched!: Promise<unknown>;
+		act(() => {
+			refetched = result.current.refetch();
+		});
+		const settled = refetched.then(
+			() => 'resolved',
+			(error: unknown) => error,
+		);
+		await waitFor(() => expect(api.received).toHaveLength(2));
+		const shown = result.current;
+		unmount();
+		expect(api.received[1]?.signal.aborted).toBe(true);
+		api.received[1]?.answer({ data: { book: book('Late') } });
+		expect(((await settled) as DOMException).name).toBe('AbortError');
+		await act(flush);
+		expect(result.current).toBe(shown);
+		expect(shown).toMatchObject({
+			data: { book: book('Dune') },
+			loading: true,
+		});
+	});
+
+	test('two Date variables are two requests: they are compared by their JSON', async () => {
+		const api = server(() => ({ events: [] }));
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		const { result, rerender } = renderHook(
+			({ at }) => useQuery(EventsQuery, { at }),
+			{
+				wrapper: withClient(client),
+				initialProps: { at: new Date('2026-01-01T00:00:00.000Z') },
+			},
+		);
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		rerender({ at: new Date('2026-01-01T00:00:00.000Z') });
+		await act(flush);
+		expect(api.received).toHaveLength(1);
+		rerender({ at: new Date('2026-06-01T00:00:00.000Z') });
+		await waitFor(() => expect(api.received).toHaveLength(2));
+		expect(api.received.map((r) => r.body.variables['at'])).toEqual([
+			'2026-01-01T00:00:00.000Z',
+			'2026-06-01T00:00:00.000Z',
+		]);
 	});
 });
 
@@ -257,4 +371,37 @@ describe('useQuery with a cache', () => {
 			expect(kept).toBe(fetchPolicy === 'no-cache' ? 'Cached' : 'Dune 1');
 		},
 	);
+
+	test('an evicted entity falls back to the network’s last answer', async () => {
+		const { api, client } = setup({ cache: true });
+		const { result } = renderHook(() => useQuery(BookQuery, { id: '1' }), {
+			wrapper: withClient(client),
+		});
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		act(() => {
+			client.cache?.modify('Book:1', { title: () => 'Renamed' });
+		});
+		expect(result.current.data).toEqual({ book: book('Renamed') });
+		act(() => {
+			client.cache?.evict('Book:1');
+		});
+		expect(result.current).toMatchObject({
+			data: { book: book('Dune 1') },
+			error: undefined,
+			loading: false,
+		});
+		expect(api.received).toHaveLength(1);
+	});
+
+	test('a cache-only miss is recorded as a CacheMissError, with no request', async () => {
+		const { api, client } = setup({ cache: true });
+		const { result } = renderHook(
+			() => useQuery(BookQuery, { id: '1' }, { fetchPolicy: 'cache-only' }),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(result.current.error).toBeInstanceOf(CacheMissError);
+		expect(result.current.data).toBeUndefined();
+		expect(api.received).toHaveLength(0);
+	});
 });
