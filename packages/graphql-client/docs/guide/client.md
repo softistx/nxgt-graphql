@@ -101,6 +101,11 @@ not GraphQL. `url`-only options (`headers`, `timeout`, `auth`…) belong to the
 client you pass; `retry`, `dedupe`, `persisted`, `batch`, `cache` and
 `onUnauthenticated` stay available.
 
+Your httpyz client may come from another copy of `@nxgt/httpyz` than the one
+this package installs (another version in `node_modules`): its errors are
+recognised by name, never by class, so a timeout or a network failure is
+still an `ApiUnavailableError`.
+
 ```ts
 import type { GraphQLClient, GraphQLClientOptions } from '@nxgt/graphql-client';
 ```

@@ -1,9 +1,4 @@
-import {
-	type AnyReply,
-	NetworkError,
-	TimeoutError,
-	ValidationError,
-} from '@nxgt/httpyz';
+import type { AnyReply } from '@nxgt/httpyz';
 import {
 	ApiError,
 	type ApiErrorEntry,
@@ -45,6 +40,8 @@ export function replyError(reply: AnyReply): unknown {
 	return new ApiUnavailableError('invalid-response');
 }
 
+// Temporary, until nxgt-http#131: httpyz exports no SSE parser, so an error
+// status's event stream is kept here as its raw text, never parsed.
 /**
  * What a reply refusing a stream stands for, its body read by its media type:
  * its GraphQL errors as an `ApiError`, else an `ApiStatusError`.
@@ -72,26 +69,64 @@ async function bodyOfReply(response: Response): Promise<unknown> {
 	return /[/+]json\b/i.test(type) ? JSON.parse(text) : text;
 }
 
-/** What the transport threw, as this package's errors; anything else as it is. */
+/**
+ * What the transport threw, as this package's errors; anything else as it is.
+ * httpyz's errors are recognised by `name`, never `instanceof`: an
+ * application may pass its own httpyz copy as `http`, whose classes are not
+ * this package's.
+ */
 export function transportError(error: unknown): unknown {
-	if (error instanceof TimeoutError || isBodyTimeout(error))
+	if (isBodyTimeout(error) || isHttpyzError(error, 'TimeoutError'))
 		return new ApiUnavailableError('timeout', { cause: error });
-	if (error instanceof NetworkError)
+	if (isHttpyzError(error, 'NetworkError'))
 		return new ApiUnavailableError('unreachable', { cause: error });
 	// A reply labelled JSON that does not parse: a gateway's HTML page, a cut body.
-	if (error instanceof ValidationError && error.failure.kind === 'response') {
-		const { status } = error.failure;
-		if (status !== undefined && !isSuccess(status))
-			return new ApiStatusError(status, undefined, { cause: error });
-		return new ApiUnavailableError('invalid-response', { cause: error });
+	if (isHttpyzError(error, 'ValidationError')) {
+		const failure = error['failure'];
+		if (isRecord(failure) && failure['kind'] === 'response') {
+			const status = failure['status'];
+			if (typeof status === 'number' && !isSuccess(status))
+				return new ApiStatusError(status, undefined, { cause: error });
+			return new ApiUnavailableError('invalid-response', { cause: error });
+		}
 	}
 	return error;
 }
 
 /**
+ * One of httpyz's errors, from whichever copy of httpyz threw it: an `Error`
+ * of that `name` that carries the fields httpyz's `ClientError` always has
+ * (`method`, `path`, and `timeout` for a `TimeoutError`). The caller checks
+ * the rest of the fields it reads.
+ */
+export function isHttpyzError(
+	error: unknown,
+	name:
+		| 'TimeoutError'
+		| 'NetworkError'
+		| 'ValidationError'
+		| 'UndeclaredStatusError',
+): error is Error & Record<string, unknown> {
+	if (
+		!(error instanceof Error) ||
+		error.name !== name ||
+		error instanceof DOMException
+	) {
+		return false;
+	}
+	const fields = error as Error & Record<string, unknown>;
+	return (
+		typeof fields['method'] === 'string' &&
+		typeof fields['path'] === 'string' &&
+		(name !== 'TimeoutError' || typeof fields['timeout'] === 'number')
+	);
+}
+
+/**
  * The deadline firing while the body is read: httpyz rejects with the
  * signal's own `DOMException`, not its `TimeoutError`.
- * Temporary, until nxgt-http wraps body reads (issue requested).
+ * Temporary, until nxgt-http#130: httpyz rejects a body-read deadline with
+ * the signal's DOMException.
  */
 function isBodyTimeout(error: unknown): boolean {
 	return error instanceof DOMException && error.name === 'TimeoutError';

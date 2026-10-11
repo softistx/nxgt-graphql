@@ -6,8 +6,6 @@ writes (`TypedDocumentNode`, or `TypedDocumentString`), built on
 pass and the data you get back are typed from the document, and every failure
 is a typed error.
 
-> Not published yet.
-
 ## Install
 
 ```sh
@@ -41,7 +39,14 @@ client alone installs neither.
 
 ## Setup
 
-The client takes the documents the client preset writes. Either mode works:
+The client takes the documents graphql-codegen's client preset writes:
+install `@graphql-codegen/cli` and `@graphql-codegen/client-preset`.
+
+```sh
+bun add -d @graphql-codegen/cli @graphql-codegen/client-preset
+```
+
+Either document mode works:
 
 ```ts
 // codegen.ts
@@ -57,6 +62,11 @@ const config = {
 
 `documentMode: 'documentNode'` (the default) writes `TypedDocumentNode`s;
 `documentMode: 'string'` writes `TypedDocumentString`s, sent as written.
+`persistedDocuments` (in `presetConfig`, for
+[persisted queries](docs/guide/client.md#persisted-queries)) and
+`documentTransforms` (with its `addTypenameSelectionDocumentTransform`, for a
+[cache with `documentId`](docs/guide/cache.md#__typename)) are the client
+preset's options, set in this same `codegen.ts`.
 
 ## Subpaths
 
@@ -90,6 +100,18 @@ const { user } = await client.query(UserQuery, { id: '42' });
 
 `mutate` is the same for a mutation. Variables are optional when the operation
 requires none. See [Client](docs/guide/client.md).
+
+Already have an `@nxgt/httpyz` client (its auth, middleware, base URL)? Pass
+it instead of `url`:
+
+```ts
+import { createHttpClient } from '@nxgt/httpyz';
+
+const http = createHttpClient({ baseUrl: 'https://api.example.com' });
+const client = createGraphQLClient({ http, path: '/graphql' }); // path defaults to /graphql
+```
+
+See [Over an existing httpyz client](docs/guide/client.md#over-an-existing-httpyz-client).
 
 ### Handle the errors
 
@@ -194,18 +216,8 @@ const card = client.cache!.readFragment(BookCard, 'Book:1');            // one e
 client.cache!.evict({ __typename: 'Book', id: '1' });
 ```
 
-Off by default. Each object with a `__typename` and an `id` (or `_id`, or its
-`keys` identity) is stored once; the client adds `__typename` to the selection
-sets it sends, leaving your documents as they are. `fetchPolicy` is
-`cache-first` (default), `network-only`, `cache-only` (throws
-`CacheMissError` on a miss) or `no-cache`. `client.cache` offers `read`,
-`write`, `watch` (the hook for UI bindings, called only when the result
-changed), `readFragment` and `watchFragment` (one entity through a fragment
-document), `evict`, `modify` and `reset`. The cache holds JSON as the network
-sends it (a custom scalar stays a string; a `Date` written throws a
-`TypeError`). A watch callback or a `keys` function that throws goes to
-`onError`, never into the call, and never ends the process.
-See [Normalized cache](docs/guide/cache.md).
+Off by default: entities stored once by `__typename` and `id`, `fetchPolicy`
+per query, and `client.cache` to read, write and watch them. See [Normalized cache](docs/guide/cache.md).
 
 ### React
 
@@ -234,14 +246,7 @@ function Book({ id }: { id: string }) {
 ```
 
 Every hook sends from an effect, never during a render, so a server render
-sends nothing; it shows nothing from the cache either (`loading`), and the
-browser renders the cache right after hydration. `useQuery` compares its variables by value (a new object
-literal each render sends nothing again), aborts its request on unmount and
-when the variables change (an abort is never an `error`), and, with a cache,
-renders again when another write changes its result. `refetch()` asks the
-network and returns the data. `mutate` returns the call's promise and records
-its state. `useSubscription` closes the connection on unmount. `useFragment`
-reads one entity from the cache, kept current. See [React](docs/guide/react.md).
+sends nothing, and each aborts or closes what it started on unmount. See [React](docs/guide/react.md).
 
 ## Traps
 

@@ -1,3 +1,4 @@
+import { stableJson } from './cache/field-key';
 import type { Operation } from './document';
 import type { QueryOptions, QueryRetry } from './options';
 
@@ -15,7 +16,11 @@ export function callKey(
 	return JSON.stringify([[...new Headers(call.headers)], call.timeout, retry]);
 }
 
-/** Queries alike in all a request carries share one flight. */
+/**
+ * Queries alike in all a request carries share one flight. Variables are
+ * keyed as the JSON sent, their keys sorted, so `{ a, b }` and `{ b, a }`
+ * are one flight.
+ */
 export function dedupeKey(
 	operation: Operation,
 	variables: unknown,
@@ -24,7 +29,7 @@ export function dedupeKey(
 ): string {
 	return JSON.stringify([
 		operation.query,
-		variables ?? {},
+		stableJson(variables ?? {}),
 		callKey(call, retry),
 	]);
 }
