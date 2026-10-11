@@ -218,8 +218,10 @@ written, and not needed for a `cache-first` hit.
 
 ## The cache API
 
-`client.cache` is the cache passed as `cache` (or `undefined`). Every method
-takes the client preset's documents and is typed from them.
+`client.cache` is the cache passed as `cache`. A client created with one has
+it typed `GraphQLCache`, read without a `!`; one created without has it
+`undefined` (see [The client's type follows `cache`](client.md#the-clients-type-follows-cache)).
+Every method takes the client preset's documents and is typed from them.
 
 `GraphQLCache` is the type `normalizedCache()` returns, not an interface to
 implement yourself: it may gain methods in a minor version.
@@ -256,7 +258,7 @@ all or nothing: it is worked out in full, then applied, so one that throws
 halfway (a `keys` function) leaves the cache and its watches as they were.
 
 ```ts
-const cache = client.cache!;
+const cache = client.cache; // a client created with `cache`: no `!`
 cache.write(BookQuery, { id: '1' }, {
   book: { __typename: 'Book', id: '1', title: 'Dune' },
 });

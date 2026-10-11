@@ -99,7 +99,14 @@ const { user } = await client.query(UserQuery, { id: '42' });
 ```
 
 `mutate` is the same for a mutation. Variables are optional when the operation
-requires none. See [Client](docs/guide/client.md).
+requires none. Forwarding documents you do not choose? `execute` runs a query
+or a mutation, whichever the document holds:
+
+```ts
+const data = await client.execute(document, variables); // query() or mutate(), same errors
+```
+
+See [Client](docs/guide/client.md) and [Execute](docs/guide/client.md#execute).
 
 Already have an `@nxgt/httpyz` client (its auth, middleware, base URL)? Pass
 it instead of `url`:
@@ -116,14 +123,28 @@ See [Over an existing httpyz client](docs/guide/client.md#over-an-existing-httpy
 ### Handle the errors
 
 ```ts
-import { ApiUnavailableError, isApiError } from '@nxgt/graphql-client';
+import { ApiStatusError, ApiUnavailableError, isApiError } from '@nxgt/graphql-client';
 
 try {
   await client.query(UserQuery, { id: '42' });
 } catch (error) {
-  if (isApiError(error)) console.log(error.code, error.fields);
+  if (isApiError(error)) console.log(error.code, error.status, error.fields);
+  else if (error instanceof ApiStatusError) console.log(error.status, error.statusText);
   else if (error instanceof ApiUnavailableError) console.log(error.reason);
   else throw error;
+}
+```
+
+An `ApiError`'s `status` is always a failure status: `extensions.http.status`,
+else the HTTP status when it is 400 or above, else 400; `httpStatus` keeps
+the HTTP status as it came. Type the extensions your API sends by declaration
+merging:
+
+```ts
+declare module '@nxgt/graphql-client' {
+  interface ApiErrorExtensions {
+    field?: string; // error.extensions.field: string | undefined
+  }
 }
 ```
 
@@ -211,13 +232,15 @@ await client.query(BookQuery, { id: '1' });                                // ca
 await client.query(BookQuery, { id: '1' }, { fetchPolicy: 'network-only' }); // network, written
 await client.mutate(RenameBook, { id: '1', title: 'Dune' });              // updates Book:1
 
-const stop = client.cache!.watch(BookQuery, { id: '1' }, (data) => render(data));
-const card = client.cache!.readFragment(BookCard, 'Book:1');            // one entity, by a fragment
-client.cache!.evict({ __typename: 'Book', id: '1' });
+// Created with a cache, client.cache is a GraphQLCache: no `!`.
+const stop = client.cache.watch(BookQuery, { id: '1' }, (data) => render(data));
+const card = client.cache.readFragment(BookCard, 'Book:1');             // one entity, by a fragment
+client.cache.evict({ __typename: 'Book', id: '1' });
 ```
 
 Off by default: entities stored once by `__typename` and `id`, `fetchPolicy`
-per query, and `client.cache` to read, write and watch them. See [Normalized cache](docs/guide/cache.md).
+per query, and `client.cache` to read, write and watch them. A client created
+without `cache` has `client.cache` typed `undefined`. See [Normalized cache](docs/guide/cache.md).
 
 ### React
 
@@ -264,7 +287,8 @@ sends nothing, and each aborts or closes what it started on unmount. See [React]
   effects idempotent; a GraphQL-level 401 on an HTTP 200 gets no refresh (see
   [Errors](docs/guide/errors.md#onunauthenticated)).
 - **A mutation is never retried**, and `query()` refuses a mutation document
-  (and `mutate()` a query) with a `TypeError`. The one second post of a
+  (and `mutate()` a query) with a `TypeError`; `execute()` takes either and
+  refuses a subscription. The one second post of a
   mutation is APQ's registration, after the server answered
   `PersistedQueryNotFound` without running it.
 - **A subscription is never retried, reconnected, deduplicated or batched.**
@@ -272,6 +296,8 @@ sends nothing, and each aborts or closes what it started on unmount. See [React]
   `ApiUnavailableError('unreachable')`; subscribe again to resume. `subscribe()`
   refuses a query or a mutation with a `TypeError`, and a subscription is read
   once.
+- **An `ApiError` on HTTP 200 reads `status` 400** when no
+  `extensions.http.status` names one (since 0.2.0); `httpStatus` is the 200.
 - **APQ subscriptions on graphql-yoga need
   `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`.** By default the
   plugin answers `PersistedQueryNotFound` with a 404 event stream, which the

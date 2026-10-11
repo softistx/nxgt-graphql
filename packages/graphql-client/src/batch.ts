@@ -2,7 +2,7 @@ import type { AnyReply } from '@nxgt/httpyz';
 import type { Operation } from './document';
 import { callKey } from './keys';
 import { bodyOf, isPersistedQueryNotFound } from './persisted';
-import { dataOf, replyError } from './response';
+import { dataOf, replyError, statusTextOf } from './response';
 import { post, register, type Sending, send, type Transport } from './send';
 import { Party } from './share';
 
@@ -120,13 +120,18 @@ export class Batcher {
 			return;
 		}
 		entries.forEach((entry, index) => {
-			this.#settle(entry, items[index], reply.status, sending);
+			this.#settle(entry, items[index], reply, sending);
 		});
 	}
 
-	#settle(entry: Entry, item: unknown, status: number, sending: Sending): void {
+	#settle(
+		entry: Entry,
+		item: unknown,
+		reply: AnyReply,
+		sending: Sending,
+	): void {
 		try {
-			entry.resolve(dataOf(item, status));
+			entry.resolve(dataOf(item, reply.status, statusTextOf(reply)));
 		} catch (error) {
 			if (isPersistedQueryNotFound(this.transport.persisted, error)) {
 				// Registered alone, with its text, aborted by its own signal only.

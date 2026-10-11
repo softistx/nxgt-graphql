@@ -53,6 +53,30 @@ describe('ApiError', () => {
 		expect(error.httpStatus).toBe(422);
 	});
 
+	test.each([
+		[200, 400],
+		[204, 400],
+		[302, 400],
+		[399, 400],
+		[400, 400],
+		[401, 401],
+		[502, 502],
+	])('with no status named, HTTP %d reads %d', (httpStatus, status) => {
+		const error = new ApiError([{ message: 'x' }], undefined, httpStatus);
+		expect(error.status).toBe(status);
+		expect(error.httpStatus).toBe(httpStatus);
+	});
+
+	test('an extension status wins over any HTTP status, a success too', () => {
+		const at = (http: number) =>
+			new ApiError(
+				[{ message: 'x', extensions: { http: { status: 409 } } }],
+				undefined,
+				http,
+			).status;
+		expect([at(200), at(400), at(502)]).toEqual([409, 409, 409]);
+	});
+
 	test('fields from extensions.fields keep their paths as strings', () => {
 		const fields = [
 			{ path: 'ids.3', code: 'archived', message: 'Archived' },
@@ -169,6 +193,19 @@ describe('ApiStatusError', () => {
 		expect(error.status).toBe(503);
 		expect(error.body).toBe('down');
 		expect(error.message).toBe('The API answered 503 with no GraphQL response');
+		expect(error.statusText).toBe('');
+		expect('cause' in error).toBe(false);
+	});
+
+	test('takes a statusText beside its cause', () => {
+		const cause = new Error('why');
+		const error = new ApiStatusError(404, undefined, {
+			statusText: 'Not Found',
+			cause,
+		});
+		expect(error.statusText).toBe('Not Found');
+		expect(error.cause).toBe(cause);
+		expect('statusText' in (error.cause as object)).toBe(false);
 	});
 });
 

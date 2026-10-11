@@ -2,6 +2,23 @@
 
 What `@nxgt/graphql-client` is heading for, phrased as what you get.
 
+## Now
+
+On its way in 0.2.0.
+
+- **A failure status on every `ApiError`.** `status` is
+  `extensions.http.status`, else the HTTP status when it fails, else 400: a
+  refusal sent on HTTP 200 reads 400, and `httpStatus` keeps the 200.
+  `ApiStatusError` keeps the response's `statusText`.
+- **Error extensions typed by the application.** `ApiErrorExtensions` is an
+  interface: declare the keys your API sends once, and
+  `error.extensions.field` is typed.
+- **`execute`.** One call for a query or a mutation, chosen from the
+  document, with `query`'s and `mutate`'s errors: for code that forwards any
+  document.
+- **`client.cache` typed from the options.** A client created with a cache
+  reads `client.cache` without a `!`; one created without has it `undefined`.
+
 ## Next
 
 Candidates, not commitments.

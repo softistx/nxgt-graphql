@@ -1,6 +1,6 @@
 # Errors
 
-A failure of `query` and `mutate` from the API is one of three classes: an
+A failure of `query`, `mutate` and `execute` from the API is one of three classes: an
 `ApiError`, an `ApiStatusError` or an `ApiUnavailableError`. The call can also
 reject with the signal's own reason, with a `CacheMissError` (a `cache-only`
 query the cache cannot answer), or with a `TypeError` for a mistake in the
@@ -55,12 +55,27 @@ class ApiError extends Error {
 | --- | --- |
 | `errors` | every entry of the response's `errors` |
 | `data` | the response's `data`, when the API resolved part of it |
-| `httpStatus` | the HTTP status the response came with |
+| `httpStatus` | the HTTP status the response came with, as it is: `200` for a refusal sent on a success |
 | `extensions` | the first error's `extensions`, every key of them |
 | `code` | `extensions.code` |
-| `status` | `extensions.http.status`, else the HTTP status |
+| `status` | a failure status, never a success: `extensions.http.status`, else the HTTP status when it is 400 or above, else `400` |
 | `params` | `extensions.params`: values a message interpolates, `{ retryAfter: 30 }` |
 | `fields` | the refused fields, below |
+
+`status` is meant to be answered with. A server that refuses on HTTP 200
+without naming a status (graphql-yoga does, for an error thrown in a
+resolver) gives `status` 400 and `httpStatus` 200; one that refuses on a
+502 gives 502; an `extensions.http.status` always wins.
+
+| The response | `status` | `httpStatus` |
+| --- | --- | --- |
+| `200 {"errors":[{"message":"x"}]}` | `400` | `200` |
+| `502 {"errors":[{"message":"x"}]}` | `502` | `502` |
+| `200 {"errors":[{"extensions":{"http":{"status":403}}}]}` | `403` | `200` |
+
+Before 0.2.0, `status` read the HTTP status itself, `200` in the first row.
+Code that told a refusal on HTTP 200 apart by `status === 200` reads
+`httpStatus` now.
 
 `fields` is `extensions.fields` as the API sends it. When there are none, it
 reads `@nxgt/graphql-validation`'s `extensions.issues`, joining each `path`
@@ -79,6 +94,38 @@ try {
 }
 ```
 
+### Typing your own extensions
+
+`ApiErrorExtensions` is an interface: the keys your API puts in
+`extensions` are typed by declaring them, once, in a `.d.ts` of the
+application (or any module it compiles). They are typed on
+`error.extensions` and on each `error.errors[i].extensions`.
+
+```ts
+// src/graphql-errors.d.ts
+import '@nxgt/graphql-client';
+
+declare module '@nxgt/graphql-client' {
+  interface ApiErrorExtensions {
+    field?: string;
+  }
+}
+```
+
+```ts
+if (isApiError(error)) {
+  const field = error.extensions.field; // string | undefined
+  const same = error.errors[0]?.extensions?.field; // string | undefined
+  if (field) form.setError(field, error.message);
+}
+```
+
+The declaration says what the API sends; nothing checks it at runtime. Keep
+each key optional: a key one error carries, another may not. A key of the
+package's own (`code`, `http`, `params`, `fields`) keeps its type; declaring
+it again with another type is a compile error. Every key not declared stays
+`unknown`, read with `extensions['key']`.
+
 ### isApiError
 
 `isApiError(error)` narrows to `ApiError`, and also recognises one from another
@@ -94,11 +141,24 @@ under a JSON header, a cut body) is the same error with `body` undefined and
 
 ```ts
 class ApiStatusError extends Error {
+  constructor(status: number, body: unknown, options?: ApiStatusErrorOptions);
   readonly status: number;
+  readonly statusText: string; // the reason phrase, 'Not Found'; '' when there was none
   readonly body: unknown; // read by its media type, when there was one
   // cause: the transport's parse error, for a non-2xx labelled JSON that does not parse
 }
+
+interface ApiStatusErrorOptions extends ErrorOptions {
+  statusText?: string; // default ''
+}
 ```
+
+`statusText` is the response's `statusText`, so a server passing the
+failure on keeps the reason phrase. It is `''` when the response had none
+(HTTP/2 sends none) and for a reply labelled JSON that did not parse (the
+transport keeps its status only). Build one yourself, in a test or a mock,
+with `new ApiStatusError(404, undefined, { statusText: 'Not Found' })`; the
+two-argument form is unchanged.
 
 ```ts
 if (error instanceof ApiStatusError && error.body === undefined) {
@@ -229,11 +289,14 @@ export function toResponse(error: unknown): Response {
   if (isApiError(error)) {
     return Response.json(
       { code: error.code, message: error.message, params: error.params, fields: error.fields },
-      { status: error.status },
+      { status: error.status }, // a failure status: a refusal sent on 200 answers 400
     );
   }
   if (error instanceof ApiStatusError) {
-    return Response.json({ message: error.message }, { status: error.status });
+    return Response.json(
+      { message: error.message },
+      { status: error.status, statusText: error.statusText },
+    );
   }
   if (error instanceof ApiUnavailableError) {
     const status = error.reason === 'timeout' ? 504 : 502;

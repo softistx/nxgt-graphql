@@ -8,9 +8,13 @@ import {
 
 /**
  * A response's `data`, or the error it stands for: `body` is the reply's,
- * or one entry of a batch's reply, and `status` the reply's HTTP status.
+ * or one entry of a batch's reply, and `status` and `statusText` the reply's.
  */
-export function dataOf(body: unknown, status: number): unknown {
+export function dataOf(
+	body: unknown,
+	status: number,
+	statusText = '',
+): unknown {
 	const record = isRecord(body) ? body : undefined;
 	const errors = record?.['errors'];
 	if (Array.isArray(errors) && errors.length > 0) {
@@ -20,7 +24,8 @@ export function dataOf(body: unknown, status: number): unknown {
 			status,
 		);
 	}
-	if (!isSuccess(status)) throw new ApiStatusError(status, body);
+	if (!isSuccess(status))
+		throw new ApiStatusError(status, body, { statusText });
 	const data = record?.['data'];
 	if (data == null) throw new ApiUnavailableError('invalid-response');
 	return data;
@@ -33,11 +38,23 @@ export function dataOf(body: unknown, status: number): unknown {
  */
 export function replyError(reply: AnyReply): unknown {
 	try {
-		dataOf(reply.data, reply.status);
+		dataOf(reply.data, reply.status, statusTextOf(reply));
 	} catch (error) {
 		return error;
 	}
 	return new ApiUnavailableError('invalid-response');
+}
+
+/**
+ * The reason phrase of the `Response` an httpyz reply was read from; `''`
+ * when it has none. Read by shape: an application's own httpyz copy, passed
+ * as `http`, may be another version.
+ */
+export function statusTextOf(reply: AnyReply): string {
+	const response: unknown = (reply as { response?: unknown }).response;
+	if (typeof response !== 'object' || response === null) return '';
+	const { statusText } = response as { statusText?: unknown };
+	return typeof statusText === 'string' ? statusText : '';
 }
 
 // Temporary, until nxgt-http#131: httpyz exports no SSE parser, so an error
@@ -51,14 +68,19 @@ export async function refusedError(response: Response): Promise<unknown> {
 	try {
 		body = await bodyOfReply(response);
 	} catch (error) {
-		return new ApiStatusError(response.status, undefined, { cause: error });
+		return new ApiStatusError(response.status, undefined, {
+			cause: error,
+			statusText: response.statusText,
+		});
 	}
 	try {
-		dataOf(body, response.status);
+		dataOf(body, response.status, response.statusText);
 	} catch (error) {
 		return error;
 	}
-	return new ApiStatusError(response.status, body);
+	return new ApiStatusError(response.status, body, {
+		statusText: response.statusText,
+	});
 }
 
 /** JSON when labelled so, else text; nothing for an empty body. */
