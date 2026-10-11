@@ -31,6 +31,7 @@ const NAME = /^[a-z][a-z0-9-]*$/;
  */
 export class FormatRegistry {
 	readonly #formats = new Map<string, Format>();
+	#async: string | undefined;
 
 	/**
 	 * Fails, naming the format, on a bad name, a built-in's name, a schema
@@ -60,7 +61,9 @@ export class FormatRegistry {
 					`The format "${name}" rewrites the value (.trim(), .toLowerCase(), .toUpperCase(), .normalize(), .slugify(), .overwrite(), z.url(), z.httpUrl() or z.coerce.string()): refuse what is not canonical with .regex() or .refine() instead, so the server and the client check the value as it was sent.`,
 				);
 			}
-			const own = marked(name, schema);
+			const own = marked(name, schema, () => {
+				this.#async = name;
+			});
 			this.#formats.set(name, { name, toZod: () => own });
 		}
 	}
@@ -73,6 +76,33 @@ export class FormatRegistry {
 			`Unknown @constraint format "${name}". Known formats: ${[...this.#formats.keys()].join(', ')}.`,
 		);
 	}
+
+	/**
+	 * The format of the application that last went async, then forgotten: read
+	 * right after a synchronous parse threw `isAsyncParseError`, it names the
+	 * format that made it throw (zod stops at the first check that returns a
+	 * promise, and only an application's format can).
+	 */
+	takeAsync(): string | undefined {
+		const name = this.#async;
+		this.#async = undefined;
+		return name;
+	}
+}
+
+const ASYNC_MESSAGE = new z.core.$ZodAsyncError().message;
+
+/**
+ * Whether a synchronous parse threw because a check went async: this zod's
+ * `$ZodAsyncError`, or another copy's, whose class is not this one but whose
+ * message is the same in every zod 4 (an application's format may come from
+ * another copy, and so may its parse).
+ */
+export function isAsyncParseError(error: unknown): boolean {
+	return (
+		error instanceof z.core.$ZodAsyncError ||
+		(error instanceof Error && error.message === ASYNC_MESSAGE)
+	);
 }
 
 /**
@@ -127,9 +157,15 @@ function definition(value: unknown): Definition | undefined {
  * value (a custom `.check()` setting `payload.value`, which `rewrites`
  * cannot see) throws, naming the format, as a resolver's bug would. An
  * async check stays async: a synchronous parse throws as the schema itself
- * would.
+ * would, and the promise it started is given a handler, so a rejection
+ * (the rewrite above) nobody awaits never surfaces as an unhandled one.
+ * `onAsync` is told before the promise is returned.
  */
-function marked(name: string, schema: StringSchema): StringSchema {
+function marked(
+	name: string,
+	schema: StringSchema,
+	onAsync: () => void,
+): StringSchema {
 	return z.string().superRefine((value, ctx) => {
 		const raise = (result: z.ZodSafeParseResult<string>) => {
 			if (result.success && result.data !== value) {
@@ -149,8 +185,12 @@ function marked(name: string, schema: StringSchema): StringSchema {
 		try {
 			result = schema.safeParse(value);
 		} catch (error) {
-			if (!(error instanceof z.core.$ZodAsyncError)) throw error;
-			return schema.safeParseAsync(value).then(raise);
+			if (!isAsyncParseError(error)) throw error;
+			const pending = schema.safeParseAsync(value).then(raise);
+			// A synchronous parse drops the promise: its rejection is handled here.
+			pending.catch(() => {});
+			onAsync();
+			return pending;
 		}
 		raise(result);
 		return undefined;

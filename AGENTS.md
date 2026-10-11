@@ -349,10 +349,21 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
   `marked`) that re-raises each issue unchanged but for
   `params.nxgtConstraint: 'format'` (`RULE_PARAM`), and `constraintOf` reads
   that mark before any `owns`: a `.regex()` or `.refine()` inside the format
-  is not `pattern`'s or `notContains`'. An async check stays async.
+  is not `pattern`'s or `notContains`'. An async check stays async, from any
+  zod copy: `isAsyncParseError` knows another copy's `$ZodAsyncError` by zod
+  4's message, since `instanceof` sees only this copy's class. The promise
+  `marked` starts gets a handler, so a synchronous parse that drops it (a
+  default value's check) leaves no unhandled rejection; `checkDefaults` then
+  throws naming the field and the format (`FormatRegistry.takeAsync`).
 - **`uri` is http, https or ftp, scheme required; `date-time` is canonical RFC
   3339 with `Z` or an offset.** Both stricter than graphql-constraint-directive,
   on purpose, each pinned by a spec.
+- **`uri` is the one documented exception to "the resolver receives what was
+  sent"** (owner): `z.url()` trims surrounding white space, so for
+  `" https://a.com "` the resolver receives `"https://a.com"` and a `maxLength`
+  after it counts the trimmed value. The generated client runs the same
+  schema, so server and client agree. An application's format may not do this
+  (`rewrites` refuses it).
 - **The bin exits 0 done, 1 the file could not be written, 2 a usage error**,
   nxgt-mongo-backup's convention, and runs under Node and Bun. Its flags read
   as `nxgt-graphql-scalars typedefs`' do (owner): `--out` alone writes

@@ -223,6 +223,41 @@ describe('withValidation with formats of the application', () => {
 		);
 		expect(result.errors?.[0]?.extensions['code']).toBeUndefined();
 	});
+
+	describe('an async format on a field with a default value', () => {
+		const sdl = `${constraintTypeDefs}
+			type Query { a(s: String = " x " @constraint(format: "free")): Int }`;
+		const message =
+			'The default value of Query.a(s:) cannot be checked at startup: the format "free" checks asynchronously, and a default value is checked synchronously. Drop the default, or move the async check out of the format into validated().';
+
+		test('fails at startup, naming the field and the format', () => {
+			const free = z.string().refine(async () => true);
+			expect(() =>
+				withValidation(buildSchema(sdl), { formats: { free } }),
+			).toThrow(message);
+		});
+
+		test('leaves no unhandled rejection when the format also rewrites the value', async () => {
+			const rejections: unknown[] = [];
+			const record = (reason: unknown) => rejections.push(reason);
+			process.on('unhandledRejection', record);
+			try {
+				const free = z
+					.string()
+					.check((ctx) => {
+						ctx.value = ctx.value.trim();
+					})
+					.refine(async () => true);
+				expect(() =>
+					withValidation(buildSchema(sdl), { formats: { free } }),
+				).toThrow(message);
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			} finally {
+				process.off('unhandledRejection', record);
+			}
+			expect(rejections).toEqual([]);
+		});
+	});
 });
 
 // Never called: what tsc says about each line is the test.

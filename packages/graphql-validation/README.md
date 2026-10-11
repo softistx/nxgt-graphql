@@ -124,7 +124,9 @@ export const schema = withValidation(
 A format is `z.string()` or a string format (`z.email()`, …), narrowed as you
 like (`.regex()`, `.refine()`) but never transformed nor rewritten (no
 `.transform()`, `.trim()`, `.toLowerCase()`, `z.url()`, which trims,
-`z.coerce.string()`, …): the resolver receives what the client sent. The
+`z.coerce.string()`, …): the resolver receives what the client sent. (The
+one exception is the built-in `uri`, `z.url()`, which trims surrounding white
+space: see [Formats](docs/guide/constraints.md#formats).) The
 other rules narrow it as they narrow a built-in format. Its messages are yours: a refusal reads as your schema writes it,
 and its issue carries `constraint: "format"`. A name is lowercase letters,
 digits and hyphens; a built-in name (`email`, …) is a type error and refused
