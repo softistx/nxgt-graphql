@@ -20,7 +20,7 @@ the Zod schemas' `z.input` and `z.output`, inferred by the compiler):
 | --- | --- |
 | `graphql` | `^16.11.0 \|\| ^17.0.0` |
 | `zod` | `>=4.6.5 <5` |
-| `typescript` | `^6.0.3` |
+| `typescript` | `^6.0.3 || ^7.0.0` |
 
 Its one dependency is [`@nxgt/zod`](https://www.npmjs.com/package/@nxgt/zod),
 which holds the schemas; it peers the same `zod`, so your tree keeps one.
