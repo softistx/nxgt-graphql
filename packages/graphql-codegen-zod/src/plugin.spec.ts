@@ -496,6 +496,34 @@ describe('the generated file', () => {
 		}
 	});
 
+	test('refuses a wrong-typed item, or a single value, at its own path, as the server does', async () => {
+		// The list's own schema parses the items: a wrong-typed one is
+		// `invalid_type` at its index, a single value at `[0]`, never
+		// `Invalid input` at the list's path.
+		const served = server();
+		const cases: [unknown, (string | number)[]][] = [
+			[5, ['input', 'tags', 0]],
+			[
+				['a', 5],
+				['input', 'tags', 1],
+			],
+		];
+		for (const [tags, path] of cases) {
+			const input = { email: 'a@b.co', name: 'Al', tags };
+			const answer = await graphql({
+				schema: served,
+				source,
+				operationName: 'SignUp',
+				variableValues: { input },
+			});
+			expect(answer.errors?.length).toBeGreaterThan(0);
+			const client = schemas['zSignUpMutationVariables']?.safeParse({ input });
+			expect(
+				client?.error?.issues.map(({ code, path }) => [code, path]),
+			).toEqual([['invalid_type', path]]);
+		}
+	});
+
 	test('types the arguments a resolver receives: the server parses them through the same rules', () => {
 		expect(schemas['zQueryUsersArgs']?.parse({})).toEqual({ first: 10 });
 		expect(

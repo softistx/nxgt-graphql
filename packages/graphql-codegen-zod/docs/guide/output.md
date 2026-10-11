@@ -397,8 +397,9 @@ option that fails it is aborted from zod 4.6.6, and the union would report
 `invalid_union` instead of the list too long.
 
 A custom scalar's schema may decode (`DateTime`, a string to a `Date`), and
-an input object's holds such scalars. For both, the single value reaches the
-list's schema as it was sent, and is parsed once:
+an input object's holds such scalars. Whatever the item type, the single value
+reaches the list's schema as it was sent, wrapped in a list and not parsed
+before, so it is parsed once, by that schema:
 
 ```ts
 dates: z.union([z.array(z.custom<z.input<typeof scalarSchemas.DateTime>>()), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(scalarSchemas.DateTime)).nullish(),

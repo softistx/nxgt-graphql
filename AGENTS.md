@@ -1004,7 +1004,10 @@ packages/graphql-codegen-msw/test/
   requests) answered 74 identically. The known differences, the same list as
   the changeset and the handlers guide's Known differences: an `ID` given an
   integer (the probe's one difference), a custom scalar not built with
-  `zodScalar`, an application format's code, and an API on graphql 16.
+  `zodScalar`, an application format's code, a list of a custom scalar longer
+  than `maxItems` (from zod 4.6.6 answered `too-many` even when an item is one
+  the scalar refuses, where graphql-yoga answers the scalar's coercion
+  error), and an API on graphql 16.
 - **The default refusal is `invalidInputError`'s shape, status 400**, one
   field per Zod issue in Zod's order, each through `@nxgt/graphql-validation`'s
   `fieldIssueOf`: the codes are that package's invariant, never written here

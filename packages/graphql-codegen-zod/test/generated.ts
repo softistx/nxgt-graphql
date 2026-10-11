@@ -39,6 +39,7 @@ export const zPrefs = z.strictObject({
 	owner: z.string().prefault("7").nullable(),
 	ids: z.union([z.array(z.custom<string>()), z.custom<string>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(z.string())).prefault(["1"]).nullable(),
 	dates: z.union([z.array(z.custom<z.input<typeof scalarSchemas.DateTime>>()), z.custom<z.input<typeof scalarSchemas.DateTime>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(scalarSchemas.DateTime)).nullish(),
+	roles: z.union([z.array(z.custom<z.input<typeof zRole> | null | undefined>()), z.custom<z.input<typeof zRole>>((value) => value != null && !Array.isArray(value)).transform((value): unknown[] => [value])]).pipe(z.array(zRole.nullish())).nullish(),
 });
 export type Prefs = z.output<typeof zPrefs>;
 
