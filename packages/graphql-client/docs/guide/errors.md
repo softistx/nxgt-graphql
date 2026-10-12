@@ -137,7 +137,7 @@ fails. Prefer it to `instanceof ApiError`.
 
 A status that is not a success, with no GraphQL body: a 401, 403, 404, a
 gateway's 503. A reply labelled JSON that does not parse (a gateway's HTML page
-under a JSON header, a cut body) is the same error with `body` undefined and
+under a JSON header, a body that arrived whole but is not valid JSON) is the same error with `body` undefined and
 `cause` set to the transport's parse error.
 
 ```ts

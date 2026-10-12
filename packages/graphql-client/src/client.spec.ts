@@ -742,7 +742,7 @@ describe('transport failures', () => {
 		expect((error as ApiStatusError).cause).toBeInstanceOf(Error);
 	});
 
-	test('a 200 labelled JSON with a cut body is an invalid response', async () => {
+	test('a 200 labelled JSON with a truncated payload is an invalid response', async () => {
 		const client = createGraphQLClient({
 			url,
 			fetch: () =>

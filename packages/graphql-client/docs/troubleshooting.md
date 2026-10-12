@@ -230,7 +230,8 @@ createGraphQLClient({ url, batch: { max: 20 } }); // client
 
 **When:** the API answers a non-2xx status whose body has no GraphQL `errors`
 (a 401, 403, 404, or a gateway's 503), or whose reply is labelled JSON but does
-not parse (a gateway's HTML page, a cut body). An `ApiStatusError`, with
+not parse (a gateway's HTML page, a body that arrived whole but is not
+valid JSON; a body cut off mid-read is `ApiUnavailableError('unreachable')`). An `ApiStatusError`, with
 `status` and `body` (undefined when the body did not parse).
 On `subscribe`, it is also what a server answering an error status with an
 event stream gives, never an `ApiError`: the client does not parse an error
