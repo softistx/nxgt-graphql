@@ -1,5 +1,11 @@
 # @nxgt/graphql-client
 
+## 0.3.1
+
+### Patch Changes
+
+- [#101](https://github.com/softistx/nxgt-graphql/pull/101) [`10ed7e7`](https://github.com/softistx/nxgt-graphql/commit/10ed7e7296c6508502d8b61859941bf2d3ec8f6e) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Requires `@nxgt/httpyz` ^0.4.1, so an install cannot pick 0.4.0. A reply whose body is cut off mid-read (the connection drops after the headers) is now `ApiUnavailableError('unreachable')`, its `cause` httpyz's `NetworkError` (message ending `reply body cut off`). Before, the runtime's raw `TypeError` escaped. It is not retried, since the reply came. A refused subscription is unchanged: when its body cannot be read it stays an `ApiStatusError` with its status, `body` undefined and the read error as `cause`.
+
 ## 0.3.0
 
 ### Minor Changes
