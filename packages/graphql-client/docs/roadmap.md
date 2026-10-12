@@ -45,6 +45,14 @@ Released in 0.4.0.
   holding the stream's raw text. APQ subscriptions on graphql-yoga work with
   `useAPQ()`'s defaults, without `forceStatusCodeOk`.
 
+Released in 0.3.x.
+
+- **Timeouts and dropped connections named by `@nxgt/httpyz` 0.4.** A timeout
+  while the reply body is read carries httpyz's `TimeoutError` as its
+  `cause`, and a body cut off mid-read is `ApiUnavailableError('unreachable')`
+  instead of the runtime's raw `TypeError`. The client's options are typed
+  under `moduleResolution: nodenext` too.
+
 Released in 0.2.0.
 
 - **A failure status on every `ApiError`.** `status` is
