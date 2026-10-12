@@ -114,7 +114,10 @@ Every failure is one of the errors queries throw (see [Errors](errors.md)):
   gives an `ApiStatusError` with that status, never an `ApiError`: the client
   does not parse an error status's event stream yet, so `body` is the stream's
   raw text (`event: next\ndata: {"errors":[…]}…`), the GraphQL errors inside it
-  unread. Reading them is on the [roadmap](../roadmap.md).
+  unread. Reading them is on the [roadmap](../roadmap.md). A refused
+  connection whose body cannot be read (cut off mid-read) is still an
+  `ApiStatusError` with its status, `body` undefined and the read error as
+  `cause`.
 - **A connection that fails or drops**: `ApiUnavailableError('unreachable')`;
   the client's `timeout` passing before the server answers:
   `ApiUnavailableError('timeout')`. The timeout bounds the connection until its
