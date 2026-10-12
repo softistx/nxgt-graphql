@@ -105,19 +105,21 @@ Every failure is one of the errors queries throw (see [Errors](errors.md)):
 - **A `next` carrying `errors`** throws an `ApiError`, with the event's `data`
   on `error.data`, and ends the subscription. Partial data is never yielded
   silently, as for a query.
-- **A refused connection** (a non-2xx) throws the `ApiError` its JSON body
+- **A refused connection** (a non-2xx) throws the `ApiError` its body
   carries, else an `ApiStatusError` with its `status` and its body (text, or
-  JSON when labelled so). A server that answers an error status with an event
-  stream (graphql-yoga does for a variable missing or of the wrong type, a 400;
-  for an error carrying `extensions.http.status` thrown before the
-  subscription starts; and for APQ's `PersistedQueryNotFound`, a 404)
-  gives an `ApiStatusError` with that status, never an `ApiError`: the client
-  does not parse an error status's event stream yet, so `body` is the stream's
-  raw text (`event: next\ndata: {"errors":[…]}…`), the GraphQL errors inside it
-  unread. Reading them is on the [roadmap](../roadmap.md). A refused
-  connection whose body cannot be read (cut off mid-read) is still an
-  `ApiStatusError` with its status, `body` undefined and the read error as
-  `cause`.
+  JSON when labelled so). The body is read by its media type: a JSON body's
+  `errors`, or, for a body labelled `text/event-stream`, the first `next`
+  event whose data carries GraphQL `errors` (since 0.4.0). graphql-yoga
+  answers that way for a variable missing or of the wrong type (a 400), for an
+  error carrying `extensions.http.status` thrown before the subscription
+  starts (that status), and for APQ's `PersistedQueryNotFound` (a 404). The
+  `ApiError`'s `status` follows the usual rule (`extensions.http.status`, else
+  the HTTP status), and `httpStatus` is the response's. An error status's
+  event stream with no GraphQL errors in it (no `next`, a `next` without
+  `errors`, data that is not JSON) stays an `ApiStatusError` whose `body` is
+  the stream's raw text. A refused connection whose body cannot be read (cut
+  off mid-read) is still an `ApiStatusError` with its status, `body` undefined
+  and the read error as `cause`.
 - **A connection that fails or drops**: `ApiUnavailableError('unreachable')`;
   the client's `timeout` passing before the server answers:
   `ApiUnavailableError('timeout')`. The timeout bounds the connection until its
@@ -162,17 +164,16 @@ declare function render(message: { id: string; text: string }): void;
 - **`documentId`** posts the document's hash instead of its text; a document
   with no hash throws a `TypeError` from `subscribe`, before anything is sent.
 - **`apq`** posts the text's SHA-256. When the server answers
-  `PersistedQueryNotFound`, as a refused connection's JSON body or as the
-  first event, nothing ran: the client connects once more with the text,
-  exactly once. After a result was yielded, it is never sent again.
+  `PersistedQueryNotFound`, in a refused connection's body (JSON, or an event
+  stream) or as the first event, nothing ran: the client connects once more
+  with the text, exactly once. After a result was yielded, it is never sent
+  again.
 
-**On graphql-yoga, APQ subscriptions need `forceStatusCodeOk`.** By default
+**graphql-yoga's `useAPQ()` works as it is** (since 0.4.0). By default
 `@graphql-yoga/plugin-apq` answers `PersistedQueryNotFound` with HTTP 404, and
-graphql-yoga sends it as a 404 event stream, which the client does not read
-yet (it is on the [roadmap](../roadmap.md)):
-the loop rejects with `ApiStatusError(404)`, its `body` the stream's raw text,
-and the text is never sent. Have the plugin answer 200, where the error is the
-stream's first `next` event and the client resends:
+graphql-yoga sends it as a 404 event stream; the client reads its `next`
+event and resends the text. `forceStatusCodeOk`, which 0.3 needed, is no
+longer required, and works too:
 
 ```ts
 import { useAPQ } from '@graphql-yoga/plugin-apq';
@@ -180,9 +181,6 @@ import { createYoga } from 'graphql-yoga';
 
 const yoga = createYoga({
   schema, // your executable schema
-  plugins: [useAPQ({ responseConfig: { forceStatusCodeOk: true } })],
+  plugins: [useAPQ()],
 });
 ```
-
-Queries and mutations work either way: their 404 is a JSON body the client
-reads.

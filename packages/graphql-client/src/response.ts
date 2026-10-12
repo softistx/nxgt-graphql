@@ -1,4 +1,5 @@
 import type { AnyReply } from '@nxgt/httpyz';
+import { createSseParser } from '@nxgt/httpyz/integration';
 import {
 	ApiError,
 	type ApiErrorEntry,
@@ -59,9 +60,10 @@ export function statusTextOf(reply: AnyReply): string {
 
 /**
  * What a reply refusing a stream stands for, its body read by its media type:
- * its GraphQL errors as an `ApiError`, else an `ApiStatusError`. An error
- * status's event stream is kept as its raw text: reading its events as
- * GraphQL errors is a change of contract, on the roadmap.
+ * its GraphQL errors as an `ApiError`, else an `ApiStatusError`. An event
+ * stream, as graphql-yoga refuses a subscription, is read through httpyz's
+ * `createSseParser`: its first `next` event carrying GraphQL errors is the
+ * `ApiError`; a stream with none stays an `ApiStatusError` holding its raw text.
  */
 export async function refusedError(response: Response): Promise<unknown> {
 	let body: unknown;
@@ -73,14 +75,53 @@ export async function refusedError(response: Response): Promise<unknown> {
 			statusText: response.statusText,
 		});
 	}
-	try {
-		dataOf(body, response.status, response.statusText);
-	} catch (error) {
-		return error;
+	const result =
+		typeof body === 'string' && isEventStream(response)
+			? refusalOfStream(body)
+			: body;
+	// A stream with no GraphQL errors keeps its raw text, below.
+	if (result !== undefined) {
+		try {
+			dataOf(result, response.status, response.statusText);
+		} catch (error) {
+			return error;
+		}
 	}
 	return new ApiStatusError(response.status, body, {
 		statusText: response.statusText,
 	});
+}
+
+/** Whether a reply is labelled `text/event-stream`, parameters aside. */
+function isEventStream(response: Response): boolean {
+	const type = response.headers.get('content-type') ?? '';
+	return /^\s*text\/event-stream\s*(;|$)/i.test(type);
+}
+
+/**
+ * The first `next` event of a refused event stream whose data is an
+ * execution result carrying GraphQL errors; `undefined` when none does (no
+ * `next`, data that is not JSON, a result without errors). The body is whole,
+ * so `end()` dispatches a last event the server did not end with a blank line.
+ */
+function refusalOfStream(text: string): unknown {
+	const parser = createSseParser();
+	for (const event of [...parser.push(text), ...parser.end()]) {
+		if (event.event !== 'next') continue;
+		const result = jsonOf(event.data);
+		if (!isRecord(result)) continue;
+		const errors = result['errors'];
+		if (Array.isArray(errors) && errors.length > 0) return result;
+	}
+	return undefined;
+}
+
+function jsonOf(text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return undefined;
+	}
 }
 
 /** JSON when labelled so, else text; nothing for an empty body. */

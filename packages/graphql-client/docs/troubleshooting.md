@@ -191,6 +191,9 @@ const client = createGraphQLClient({
 **When:** an `ApiError` (`code` `PERSISTED_QUERY_NOT_FOUND`) reaches the caller
 although the client resends the text once on `persisted: { mode: 'apq' }`.
 Or, in `documentId` mode, the same error for a hash the server does not know.
+On `subscribe` it comes the same way when graphql-yoga answers with its
+default 404 event stream (since 0.4.0; before, that was an
+`ApiStatusError(404)` and the text was never resent).
 **Why:** in `apq` mode the resend was answered `PersistedQueryNotFound` again:
 the server has no APQ plugin, so it never registers the text. In `documentId`
 mode the server's `persisted-documents.json` lacks the hash, or it does not read
@@ -236,26 +239,16 @@ did not parse). On a query or a mutation, a body cut off mid-read is
 `ApiUnavailableError('unreachable')` instead, whatever the status; a refused
 subscription stays an `ApiStatusError` even when its body cannot be read
 (`body` undefined, the read error as `cause`).
-On `subscribe`, it is also what a server answering an error status with an
-event stream gives, never an `ApiError`: the client does not parse an error
-status's event stream yet, so `body` is the stream's raw text, the GraphQL
-errors inside it unread. graphql-yoga does it for a variable missing or of the
-wrong type (a 400), for an error carrying `extensions.http.status` thrown
-before the subscription starts, and for APQ's
-`PersistedQueryNotFound` (a 404), which the client then does not resend.
-**Why:** a proxy, a gateway or an auth layer answered before GraphQL ran; or,
-on `subscribe`, the server put a GraphQL error in an error status's event
-stream.
+On `subscribe`, a server answering an error status with an event stream gives
+it only when no `next` event in the stream carries GraphQL `errors`; `body` is
+then the stream's raw text. Since 0.4.0, a stream that carries them (as
+graphql-yoga sends for a missing variable, an error with
+`extensions.http.status`, or APQ's `PersistedQueryNotFound`) is an `ApiError`
+instead, and APQ resends the text.
+**Why:** a proxy, a gateway or an auth layer answered before GraphQL ran.
 **Fix:** read `error.status`, `error.statusText` (the reason phrase, `''`
 when the response had none) and `error.body`; for a 401, set
-`onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)). For an
-APQ subscription answered 404 by graphql-yoga, have the plugin answer 200, so
-the error comes as the stream's first event and the client resends the text
-(see [Persisted subscriptions](guide/subscriptions.md#persisted-subscriptions)):
-
-```ts
-useAPQ({ responseConfig: { forceStatusCodeOk: true } });
-```
+`onUnauthenticated` (see [Errors](guide/errors.md#onunauthenticated)).
 
 ```ts
 if (error instanceof ApiStatusError) console.log(error.status, error.body);

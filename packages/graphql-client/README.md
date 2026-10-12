@@ -298,12 +298,13 @@ sends nothing, and each aborts or closes what it started on unmount. See [React]
   once.
 - **An `ApiError` on HTTP 200 reads `status` 400** when no
   `extensions.http.status` names one (since 0.2.0); `httpStatus` is the 200.
-- **APQ subscriptions on graphql-yoga need
-  `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`.** By default the
-  plugin answers `PersistedQueryNotFound` with a 404 event stream, which the
-  client does not read yet: the loop rejects with `ApiStatusError(404)` (the
-  stream's raw text as `body`) and the text is never sent. Queries and
-  mutations are not affected.
+- **A subscription refused with an error status's event stream rejects with
+  the `ApiError` its `next` event carries** (since 0.4.0), as a refused JSON
+  body does: graphql-yoga answers so for a missing or mistyped variable (400),
+  an error with `extensions.http.status` thrown before the subscription starts,
+  and APQ's `PersistedQueryNotFound` (404), which the client then resends with
+  the text, so `useAPQ()` needs no `forceStatusCodeOk`. A stream with no GraphQL
+  errors stays an `ApiStatusError`, its raw text as `body`.
 - **`documentId` mode needs the client preset's `persistedDocuments`**: a
   document without its hash throws a `TypeError` before anything is sent.
 - **Identical in-flight queries share one request.** Pass `dedupe: false` to

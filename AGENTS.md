@@ -596,7 +596,8 @@ packages/graphql-client/src/
                  body or a batch's array, its headers, signal, timeout, retry; errors mapped
   response.ts    dataOf (errors, status, data), replyError (a whole reply), statusTextOf (a
                  reply's reason phrase, read by shape), refusedError (a
-                 non-2xx stream reply, its body read), transportError (timeout, network,
+                 non-2xx stream reply, its body read: JSON, or an event stream through
+                 httpyz's createSseParser), transportError (timeout, network,
                  unparsable body) and isHttpyzError (httpyz's errors by name, any copy)
   persisted.ts   the body for each persisted mode, the documentId check, the APQ hash (SHA-256,
                  cached per Operation) and the PersistedQueryNotFound test
@@ -694,17 +695,24 @@ packages/graphql-client/test/
 - **A subscription is never retried, reconnected, deduplicated or batched**:
   `retry: false` and `reconnect: false` on httpyz's `events()`, whatever the
   client's `retry`. Its one second connection is APQ's register resend, after
-  `PersistedQueryNotFound` in a refused connection's JSON body or as the first
-  event (nothing ran). Exactly once.
-- **An error status's event stream is an `ApiStatusError(status)` whose `body`
-  is the stream's raw text**, never parsed. Reading its events as GraphQL
-  errors changes the error a subscription rejects with (`ApiError` instead of
-  `ApiStatusError`): the roadmap's Next entry, a minor of its own, through
+  `PersistedQueryNotFound` in a refused connection's body (JSON or an event
+  stream) or as the first event (nothing ran). Exactly once.
+- **An error status's event stream is read for its GraphQL errors** (since
+  0.4.0): `refusedError` parses a body labelled `text/event-stream` with
   `createSseParser` from `@nxgt/httpyz/integration` (`push` the text, then
-  `end()`). Never hand-parse SSE here. So graphql-yoga's default
-  APQ answer, a 404 event stream, is not resent: APQ subscriptions on yoga
-  need `useAPQ({ responseConfig: { forceStatusCodeOk: true } })`, and the docs
-  say so until the roadmap's Next entry lands.
+  `end()`, which flushes a last event with no blank line after it). Never
+  hand-parse SSE here. The first `next` event whose data is a result with
+  non-empty `errors` goes through `dataOf`, so it is the same `ApiError` a
+  refused JSON body gives (`status` by the usual rule, `httpStatus` the raw
+  status), and `isPersistedQueryNotFound` sees it: graphql-yoga's default APQ
+  answer, a 404 event stream, is resent with the text, no
+  `forceStatusCodeOk` needed. A stream with no such event (no `next`, a
+  result without errors, data that is not JSON) stays
+  `ApiStatusError(status)` with the raw text as `body`; only a body labelled
+  `text/event-stream` is parsed. The parser comes from this package's own
+  httpyz dependency: it reads text and never touches the caller's `http`
+  copy. `subscribe.spec.ts`'s `yoga` bodies are graphql-yoga 5's exact output,
+  captured from a probe server.
 - **A failure is mapped before the stream closes**: `#results` catches and
   throws `failureOf(error)` before its `finally` closes the stream, since
   closing aborts the request and a refused connection's body is read after.
