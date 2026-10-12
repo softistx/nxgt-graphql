@@ -323,9 +323,11 @@ createGraphQLClient({ url, retry: 2 }); // fixed
 ## `The API could not be reached`
 
 **When:** the request never got an answer: DNS, refused connection, offline;
-or a subscription's connection dropped while it was read. An
+a subscription's connection dropped while it was read; or a reply's body was
+cut off mid-read (`error.cause.message` ends `reply body cut off`). An
 `ApiUnavailableError`, `reason: 'unreachable'`.
-**Why:** the network failed; `error.cause` holds the transport's error.
+**Why:** the network failed; `error.cause` holds the transport's error. A cut
+body is not retried, since the reply came: query again yourself.
 **Fix:** check the `url` (and `baseUrl` of an httpyz client), then retry the
 query; set `retry` to do it for you. A subscription is never retried nor
 reconnected: subscribe again.

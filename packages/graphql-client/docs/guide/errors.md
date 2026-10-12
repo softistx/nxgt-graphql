@@ -182,7 +182,7 @@ class ApiUnavailableError extends Error {
 
 | `reason` | Message | When |
 | --- | --- | --- |
-| `unreachable` | `The API could not be reached` | the network failed |
+| `unreachable` | `The API could not be reached` | the network failed, or a reply's body was cut off mid-read (the cause's message ends `reply body cut off`; not retried) |
 | `timeout` | `The API did not answer in time` | the `timeout` passed, before the answer or while its body was read |
 | `invalid-response` | `The API answered with neither data nor errors` | a 2xx with no `data` and no `errors`, or labelled JSON that does not parse |
 
