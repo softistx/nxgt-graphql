@@ -102,7 +102,9 @@ export function transportError(error: unknown): unknown {
 		return new ApiUnavailableError('timeout', { cause: error });
 	if (isHttpyzError(error, 'NetworkError'))
 		return new ApiUnavailableError('unreachable', { cause: error });
-	// A reply labelled JSON that does not parse: a gateway's HTML page, a cut body.
+	// A reply labelled JSON that does not parse: a gateway's HTML page. A body
+	// cut off mid-read is a NetworkError, raised at httpyz's body stage, above:
+	// only a body that arrived whole but is not JSON reaches ValidationError.
 	if (isHttpyzError(error, 'ValidationError')) {
 		const failure = error['failure'];
 		if (isRecord(failure) && failure['kind'] === 'response') {

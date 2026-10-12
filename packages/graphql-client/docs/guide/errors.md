@@ -137,8 +137,11 @@ fails. Prefer it to `instanceof ApiError`.
 
 A status that is not a success, with no GraphQL body: a 401, 403, 404, a
 gateway's 503. A reply labelled JSON that does not parse (a gateway's HTML page
-under a JSON header, a cut body) is the same error with `body` undefined and
-`cause` set to the transport's parse error.
+under a JSON header, a body that arrived whole but is not valid JSON) is the
+same error with `body` undefined and `cause` set to the transport's parse
+error. A body cut off mid-read is `ApiUnavailableError('unreachable')`, except
+on a refused subscription: its status is known, so it stays this error, with
+`body` undefined and the read error as `cause`.
 
 ```ts
 class ApiStatusError extends Error {
@@ -182,7 +185,7 @@ class ApiUnavailableError extends Error {
 
 | `reason` | Message | When |
 | --- | --- | --- |
-| `unreachable` | `The API could not be reached` | the network failed |
+| `unreachable` | `The API could not be reached` | the network failed, or a reply's body was cut off mid-read (the cause's message ends `reply body cut off`; not retried) |
 | `timeout` | `The API did not answer in time` | the `timeout` passed, before the answer or while its body was read |
 | `invalid-response` | `The API answered with neither data nor errors` | a 2xx with no `data` and no `errors`, or labelled JSON that does not parse |
 

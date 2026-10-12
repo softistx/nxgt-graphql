@@ -188,6 +188,49 @@ describe('a deadline firing while the body is read', () => {
 	});
 });
 
+describe('a connection that drops while the body is read', () => {
+	/** Headers and a first chunk, then the connection drops: the stream errors, as Bun's does. */
+	function cutOff() {
+		const sent: Request[] = [];
+		const fetch = (request: Request) => {
+			sent.push(request);
+			const body = new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(new TextEncoder().encode('{"data":'));
+					queueMicrotask(() =>
+						controller.error(
+							new TypeError('The socket connection was closed unexpectedly'),
+						),
+					);
+				},
+			});
+			return Promise.resolve(
+				new Response(body, {
+					headers: { 'content-type': 'application/json' },
+				}),
+			);
+		};
+		return { sent, fetch };
+	}
+
+	test("is ApiUnavailableError('unreachable'), caused by httpyz's NetworkError, and not retried", async () => {
+		const { sent, fetch } = cutOff();
+		const client = createGraphQLClient({
+			url: 'https://api.test/graphql',
+			fetch,
+		});
+		const error = await rejection(client.query(ViewerQuery, {}, { retry: 2 }));
+		expect(error).toBeInstanceOf(ApiUnavailableError);
+		expect((error as ApiUnavailableError).reason).toBe('unreachable');
+		const cause = (error as ApiUnavailableError).cause as Error &
+			Record<string, unknown>;
+		expect(cause.name).toBe('NetworkError');
+		expect(cause.message).toEndWith('reply body cut off');
+		expect(cause.cause).toBeInstanceOf(TypeError);
+		expect(sent).toHaveLength(1);
+	});
+});
+
 describe("a caller's own deadline", () => {
 	/** A fetch that never answers: it rejects when its request is aborted. */
 	const hanging = (request: Request) =>

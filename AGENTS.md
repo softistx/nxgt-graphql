@@ -900,6 +900,15 @@ packages/graphql-client/test/
   and the client guide promises another copy's timeout is an
   `ApiUnavailableError`. A caller's own deadline never reaches it: `post` and
   `#results` rethrow an aborted `signal`'s reason first.
+- **A reply body cut off mid-read is httpyz's `NetworkError`** (from 0.4.1:
+  its message ends `reply body cut off`, httpyz's body stage, which is not a
+  field; the runtime's `TypeError` is its `cause`), so
+  `ApiUnavailableError('unreachable')`; it is not retried. `transport.spec.ts`
+  checks it over a stream that errors mid-read.
+  Only a body that arrived whole but is not JSON is `invalid-response`. A
+  refused subscription is the exception: `refusedError` keeps an
+  `ApiStatusError` (its status is known), `body` undefined and the read error
+  as `cause`.
 - **httpyz's errors are matched by `name`, never `instanceof`**
   (`isHttpyzError` in `response.ts`: `TimeoutError`, `NetworkError`,
   `ValidationError`, `UndeclaredStatusError`), each field they need checked

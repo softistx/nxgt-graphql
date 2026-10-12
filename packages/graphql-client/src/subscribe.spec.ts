@@ -713,6 +713,34 @@ describe('races and transport', () => {
 				{ status, headers: { 'content-type': 'application/json' } },
 			);
 
+	test('a refused body cut off mid-read is still an ApiStatusError with its status', async () => {
+		const drop = new TypeError('The socket connection was closed unexpectedly');
+		const client = createGraphQLClient({
+			url,
+			fetch: server(
+				() =>
+					new Response(
+						new ReadableStream<Uint8Array>({
+							start(controller) {
+								controller.enqueue(
+									new TextEncoder().encode('{"errors":[{"message":'),
+								);
+								controller.error(drop);
+							},
+						}),
+						{ status: 503, headers: { 'content-type': 'application/json' } },
+					),
+			).fetch,
+		});
+		const error = await collect(client.subscribe(TickSubscription, {})).catch(
+			(e: unknown) => e,
+		);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(503);
+		expect((error as ApiStatusError).body).toBeUndefined();
+		expect((error as ApiStatusError).cause).toBeDefined();
+	});
+
 	test("an abort while a refused body is read rejects with the signal's reason", async () => {
 		const client = createGraphQLClient({
 			url,

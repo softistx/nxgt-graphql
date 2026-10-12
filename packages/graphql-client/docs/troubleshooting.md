@@ -230,8 +230,12 @@ createGraphQLClient({ url, batch: { max: 20 } }); // client
 
 **When:** the API answers a non-2xx status whose body has no GraphQL `errors`
 (a 401, 403, 404, or a gateway's 503), or whose reply is labelled JSON but does
-not parse (a gateway's HTML page, a cut body). An `ApiStatusError`, with
-`status` and `body` (undefined when the body did not parse).
+not parse (a gateway's HTML page, a body that arrived whole but is not valid
+JSON). An `ApiStatusError`, with `status` and `body` (undefined when the body
+did not parse). On a query or a mutation, a body cut off mid-read is
+`ApiUnavailableError('unreachable')` instead, whatever the status; a refused
+subscription stays an `ApiStatusError` even when its body cannot be read
+(`body` undefined, the read error as `cause`).
 On `subscribe`, it is also what a server answering an error status with an
 event stream gives, never an `ApiError`: the client does not parse an error
 status's event stream yet, so `body` is the stream's raw text, the GraphQL
@@ -323,9 +327,11 @@ createGraphQLClient({ url, retry: 2 }); // fixed
 ## `The API could not be reached`
 
 **When:** the request never got an answer: DNS, refused connection, offline;
-or a subscription's connection dropped while it was read. An
+a subscription's connection dropped while it was read; or a reply's body was
+cut off mid-read (`error.cause.message` ends `reply body cut off`). An
 `ApiUnavailableError`, `reason: 'unreachable'`.
-**Why:** the network failed; `error.cause` holds the transport's error.
+**Why:** the network failed; `error.cause` holds the transport's error. A cut
+body is not retried, since the reply came: query again yourself.
 **Fix:** check the `url` (and `baseUrl` of an httpyz client), then retry the
 query; set `retry` to do it for you. A subscription is never retried nor
 reconnected: subscribe again.
