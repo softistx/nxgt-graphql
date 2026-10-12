@@ -26,7 +26,7 @@ try {
 
 | Class | When | Message |
 | --- | --- | --- |
-| `ApiError` | the response carries `errors` | the first error's message |
+| `ApiError` | the response carries `errors` (for a refused subscription, its JSON body or its event stream's `next` event) | the first error's message |
 | `ApiStatusError` | a non-2xx status with no GraphQL `errors`, or whose reply is labelled JSON but does not parse | `The API answered <status> with no GraphQL response` |
 | `ApiUnavailableError` | no GraphQL answer to read | by `reason`, below |
 | the signal's reason | the call's `signal` aborted | whatever the signal holds |
@@ -141,7 +141,10 @@ under a JSON header, a body that arrived whole but is not valid JSON) is the
 same error with `body` undefined and `cause` set to the transport's parse
 error. A body cut off mid-read is `ApiUnavailableError('unreachable')`, except
 on a refused subscription: its status is known, so it stays this error, with
-`body` undefined and the read error as `cause`.
+`body` undefined and the read error as `cause`. A subscription refused with an
+event stream is this error only when no `next` event in it carries GraphQL
+`errors`; `body` is then the stream's raw text. One that carries them is an
+`ApiError` (since 0.4.0).
 
 ```ts
 class ApiStatusError extends Error {
@@ -256,8 +259,9 @@ error surfaces unchanged. It may be async: the call waits for it.
   directly. `auth.refresh` only replays on an HTTP 401, so no refresh is tried.
   Have the server answer HTTP 401 for it, or refresh inside the hook so the
   next call carries a fresh token.
-- **On `subscribe`**: it runs for a refused connection's 401 and for a `next`
-  event's GraphQL 401, before the loop rejects.
+- **On `subscribe`**: it runs for a refused connection's 401 (its HTTP status,
+  or an `extensions.http.status` 401 in its JSON body or its event stream) and
+  for a `next` event's GraphQL 401, before the loop rejects.
 - **Once per caller.** Deduplicated callers share one request but each runs the
   hook, so a hook that throws a redirect reaches every caller. Keep its side
   effects idempotent.

@@ -100,6 +100,35 @@ function server(...answers: (() => Response | Promise<Response>)[]) {
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
+/** A refused connection answered as an event stream: `text`, whole, and `status`. */
+const refusedStream = (text: string, status: number, statusText = '') =>
+	new Response(text, {
+		status,
+		statusText,
+		headers: { 'content-type': 'text/event-stream' },
+	});
+
+/**
+ * graphql-yoga 5's exact bodies for a subscription it refuses before it
+ * starts, captured from a probe server (`useAPQ()` on): a first comment, the
+ * result as `next`, then `complete`. yoga drops `extensions.http` from what it
+ * writes; its status is the response's.
+ */
+const yoga = {
+	/** A missing variable: 400. */
+	missingVariable:
+		':\n\nevent: next\ndata: {"errors":[{"message":"Variable \\"$room\\" of required type \\"ID!\\" was not provided.","locations":[{"line":1,"column":19}],"extensions":{"code":"BAD_USER_INPUT"}}]}\n\nevent: complete\ndata:\n\n',
+	/** A variable of the wrong type: 400. */
+	wrongVariable:
+		':\n\nevent: next\ndata: {"errors":[{"message":"Variable \\"$n\\" got invalid value \\"x\\"; Int cannot represent non-integer value: \\"x\\"","locations":[{"line":1,"column":20}],"extensions":{"code":"BAD_USER_INPUT"}}]}\n\nevent: complete\ndata:\n\n',
+	/** A `GraphQLError` with `extensions.http.status` 401, thrown by `subscribe`: 401. */
+	unauthenticated:
+		':\n\nevent: next\ndata: {"errors":[{"message":"Sign in","locations":[{"line":1,"column":16}],"path":["guarded"],"extensions":{"code":"UNAUTHENTICATED"}}]}\n\nevent: complete\ndata:\n\n',
+	/** APQ's unknown hash: 404. */
+	notFound:
+		':\n\nevent: next\ndata: {"errors":[{"message":"PersistedQueryNotFound","extensions":{"code":"PERSISTED_QUERY_NOT_FOUND"}}]}\n\nevent: complete\ndata:\n\n',
+};
+
 async function collect<T>(results: AsyncIterable<T>): Promise<T[]> {
 	const values: T[] = [];
 	for await (const value of results) values.push(value);
@@ -546,6 +575,215 @@ describe('connect failures', () => {
 	});
 });
 
+describe('a refused event stream', () => {
+	const refusal = async (answer: () => Response) => {
+		const api = server(answer);
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		const error = await collect(client.subscribe(TickSubscription)).catch(
+			(caught: unknown) => caught,
+		);
+		return { error, sent: api.sent };
+	};
+
+	test("graphql-yoga's missing variable (400) is an ApiError", async () => {
+		const { error } = await refusal(() =>
+			refusedStream(yoga.missingVariable, 400, 'Bad Request'),
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).message).toBe(
+			'Variable "$room" of required type "ID!" was not provided.',
+		);
+		expect((error as ApiError).code).toBe('BAD_USER_INPUT');
+		expect((error as ApiError).status).toBe(400);
+		expect((error as ApiError).httpStatus).toBe(400);
+		expect((error as ApiError).data).toBeUndefined();
+	});
+
+	test("graphql-yoga's variable of the wrong type (400) is an ApiError", async () => {
+		const { error } = await refusal(() =>
+			refusedStream(yoga.wrongVariable, 400),
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).message).toBe(
+			'Variable "$n" got invalid value "x"; Int cannot represent non-integer value: "x"',
+		);
+		expect((error as ApiError).errors).toHaveLength(1);
+		expect((error as ApiError).status).toBe(400);
+	});
+
+	test("graphql-yoga's error thrown before the subscription starts (its HTTP status 401) is an ApiError(401)", async () => {
+		const { error } = await refusal(() =>
+			refusedStream(yoga.unauthenticated, 401),
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).code).toBe('UNAUTHENTICATED');
+		expect((error as ApiError).status).toBe(401);
+		expect((error as ApiError).httpStatus).toBe(401);
+	});
+
+	test("extensions.http.status sets the status, httpStatus keeps the response's", async () => {
+		const { error } = await refusal(() =>
+			refusedStream(
+				next({
+					errors: [{ message: 'Taken', extensions: { http: { status: 409 } } }],
+				}),
+				400,
+			),
+		);
+		expect((error as ApiError).status).toBe(409);
+		expect((error as ApiError).httpStatus).toBe(400);
+	});
+
+	test('the first next carrying errors among several events is the ApiError', async () => {
+		const { error } = await refusal(() =>
+			refusedStream(
+				[
+					': ping\n\n',
+					'event: ping\ndata: {}\n\n',
+					next({ data: null }),
+					'event: next\nid: 1\ndata: {"errors":\ndata: [{"message":"First"}]}\n\n',
+					next({ errors: [{ message: 'Second' }] }),
+					complete,
+				].join(''),
+				400,
+			),
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).message).toBe('First');
+		expect((error as ApiError).errors).toEqual([{ message: 'First' }]);
+	});
+
+	test('a last event with no blank line after it is still read', async () => {
+		const { error } = await refusal(() =>
+			refusedStream(
+				`:\n\nevent: next\ndata: ${JSON.stringify({ errors: [{ message: 'Bad' }] })}`,
+				400,
+			),
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).message).toBe('Bad');
+	});
+
+	test('a stream labelled with parameters is read too', async () => {
+		const { error } = await refusal(
+			() =>
+				new Response(yoga.missingVariable, {
+					status: 400,
+					headers: { 'content-type': 'Text/Event-Stream; charset=utf-8' },
+				}),
+		);
+		expect(error).toBeInstanceOf(ApiError);
+	});
+
+	test.each([
+		['no next', ':\n\nevent: complete\ndata:\n\n'],
+		['a next without errors', `${next({ data: null })}${complete}`],
+		['a next with an empty errors list', `${next({ errors: [] })}${complete}`],
+		['a data line that is not JSON', 'event: next\ndata: Bad request\n\n'],
+		['only comments', ':\n\n: still here\n\n'],
+	])('%s stays an ApiStatusError holding the raw text', async (_, text) => {
+		const { error } = await refusal(() =>
+			refusedStream(text, 400, 'Bad Request'),
+		);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(400);
+		expect((error as ApiStatusError).statusText).toBe('Bad Request');
+		expect((error as ApiStatusError).body).toBe(text);
+	});
+
+	test('an empty stream stays an ApiStatusError, its body undefined', async () => {
+		const { error } = await refusal(() => refusedStream('', 503));
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(503);
+		expect((error as ApiStatusError).body).toBeUndefined();
+	});
+
+	test('the same text labelled text/plain is never read as events', async () => {
+		const { error } = await refusal(
+			() =>
+				new Response(yoga.missingVariable, {
+					status: 400,
+					headers: { 'content-type': 'text/plain' },
+				}),
+		);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).body).toBe(yoga.missingVariable);
+	});
+
+	test('a stream cut off mid-read stays an ApiStatusError, its body undefined and the read error its cause', async () => {
+		const drop = new TypeError('The socket connection was closed unexpectedly');
+		const { error } = await refusal(
+			() =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(
+								new TextEncoder().encode(':\n\nevent: next\n'),
+							);
+							controller.error(drop);
+						},
+					}),
+					{ status: 400, headers: { 'content-type': 'text/event-stream' } },
+				),
+		);
+		expect(error).toBeInstanceOf(ApiStatusError);
+		expect((error as ApiStatusError).status).toBe(400);
+		expect((error as ApiStatusError).body).toBeUndefined();
+		expect((error as ApiStatusError).cause).toBeDefined();
+	});
+
+	test("a stream's 401 runs the hook with the ApiError, as a JSON body's does", async () => {
+		const seen: unknown[] = [];
+		const client = createGraphQLClient({
+			url,
+			fetch: server(() => refusedStream(yoga.unauthenticated, 401)).fetch,
+			onUnauthenticated: (error) => {
+				seen.push(error);
+			},
+		});
+		const error = await collect(client.subscribe(TickSubscription)).catch(
+			(caught: unknown) => caught,
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect(seen).toEqual([error]);
+	});
+
+	test('extensions.http.status 401 in a stream runs the hook, whatever the HTTP status', async () => {
+		const seen: unknown[] = [];
+		const client = createGraphQLClient({
+			url,
+			fetch: server(() =>
+				refusedStream(
+					next({
+						errors: [
+							{
+								message: 'Sign in',
+								extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } },
+							},
+						],
+					}),
+					400,
+				),
+			).fetch,
+			onUnauthenticated: (error) => {
+				seen.push(error);
+			},
+		});
+		const error = await collect(client.subscribe(TickSubscription)).catch(
+			(caught: unknown) => caught,
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).status).toBe(401);
+		expect((error as ApiError).httpStatus).toBe(400);
+		expect(seen).toEqual([error]);
+	});
+
+	test('a refused stream is never sent again outside apq mode', async () => {
+		const { sent } = await refusal(() => refusedStream(yoga.notFound, 404));
+		expect(sent).toHaveLength(1);
+	});
+});
+
 describe('persisted subscriptions', () => {
 	const hashed = Object.assign(parse('subscription Tick { tick }'), {
 		__meta__: { hash: 'tick-hash' },
@@ -626,15 +864,28 @@ describe('persisted subscriptions', () => {
 		expect(api.sent[1]?.body['query']).toBe('subscription Tick {\n  tick\n}');
 	});
 
-	test("apq mode against graphql-yoga's default 404 event stream: ApiStatusError(404), its raw text, no resend", async () => {
-		const text = `:\n\n${next(notFound)}${complete}`;
+	test("apq mode against graphql-yoga's default 404 event stream: sent once more with the text, exactly once", async () => {
+		// What useAPQ() sends by default: graphql-yoga's exact body, status 404.
 		const api = server(
+			() => refusedStream(yoga.notFound, 404),
 			() =>
-				new Response(text, {
-					status: 404,
-					headers: { 'content-type': 'text/event-stream' },
-				}),
+				eventStream([':\n\n', next({ data: { tick: 1 } }), complete]).response,
 		);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		expect(await collect(client.subscribe(TickSubscription))).toEqual([
+			{ tick: 1 },
+		]);
+		expect(api.sent).toHaveLength(2);
+		expect(api.sent[0]?.body['query']).toBeUndefined();
+		expect(api.sent[1]?.body['query']).toBe('subscription Tick {\n  tick\n}');
+	});
+
+	test('apq mode: a 404 event stream not found again after the resend is an ApiError(404), never sent a third time', async () => {
+		const api = server(() => refusedStream(yoga.notFound, 404));
 		const client = createGraphQLClient({
 			url,
 			fetch: api.fetch,
@@ -643,9 +894,25 @@ describe('persisted subscriptions', () => {
 		const error = await collect(client.subscribe(TickSubscription)).catch(
 			(caught: unknown) => caught,
 		);
-		expect(error).toBeInstanceOf(ApiStatusError);
-		expect((error as ApiStatusError).status).toBe(404);
-		expect((error as ApiStatusError).body).toBe(text);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).code).toBe('PERSISTED_QUERY_NOT_FOUND');
+		expect((error as ApiError).status).toBe(404);
+		expect((error as ApiError).httpStatus).toBe(404);
+		expect(api.sent).toHaveLength(2);
+	});
+
+	test('documentId mode: a 404 event stream not found is an ApiError, never resent', async () => {
+		const api = server(() => refusedStream(yoga.notFound, 404));
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'documentId' },
+		});
+		const error = await collect(client.subscribe(hashed)).catch(
+			(caught: unknown) => caught,
+		);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).message).toBe('PersistedQueryNotFound');
 		expect(api.sent).toHaveLength(1);
 	});
 

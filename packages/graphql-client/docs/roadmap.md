@@ -16,12 +16,6 @@ Candidates, not commitments.
 - **A subscription resumed after a dropped connection.** Today the loop
   rejects with `ApiUnavailableError('unreachable')` and subscribing again is
   the application's to do; the client would reconnect and resume instead.
-- **A GraphQL error carried by an error status's event stream read as an
-  `ApiError`**, rather than an `ApiStatusError` holding the stream's raw text.
-  APQ subscriptions on graphql-yoga would then work without `useAPQ`'s
-  `forceStatusCodeOk`, which they need today. `@nxgt/httpyz` 0.4 exports the
-  event-stream parser it needs (`createSseParser`); the error a subscription
-  rejects with would change, so it waits for a minor of its own.
 - **Suspense for `useQuery`.** A query that suspends the component until its
   first answer, for a `<Suspense>` boundary and streaming server rendering,
   instead of returning `loading`.
@@ -40,6 +34,24 @@ Candidates, not commitments.
 - **Subscriptions over WebSocket.**
 
 ## Shipped
+
+Released in 0.4.0.
+
+- **A GraphQL error carried by an error status's event stream read as an
+  `ApiError`.** A subscription graphql-yoga refuses before it starts (a
+  missing or mistyped variable, an error with `extensions.http.status`, APQ's
+  `PersistedQueryNotFound`) rejects with the `ApiError` of the stream's
+  `next` event, as a refused JSON body does, instead of an `ApiStatusError`
+  holding the stream's raw text. APQ subscriptions on graphql-yoga work with
+  `useAPQ()`'s defaults, without `forceStatusCodeOk`.
+
+Released in 0.3.x.
+
+- **Timeouts and dropped connections named by `@nxgt/httpyz` 0.4.** A timeout
+  while the reply body is read carries httpyz's `TimeoutError` as its
+  `cause`, and a body cut off mid-read is `ApiUnavailableError('unreachable')`
+  instead of the runtime's raw `TypeError`. The client's options are typed
+  under `moduleResolution: nodenext` too.
 
 Released in 0.2.0.
 

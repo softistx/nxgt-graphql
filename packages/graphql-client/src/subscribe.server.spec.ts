@@ -26,6 +26,15 @@ const notFound = {
 		},
 	],
 };
+const missingVariable = {
+	errors: [
+		{
+			message: 'Variable "$room" of required type "ID!" was not provided.',
+			locations: [{ line: 1, column: 19 }],
+			extensions: { code: 'BAD_USER_INPUT' },
+		},
+	],
+};
 /** graphql-yoga's SSE body for a result: a first comment, the result, complete. */
 const yogaStream = (result: unknown) => `:\n\n${next(result)}${complete}`;
 
@@ -84,9 +93,17 @@ describe('subscribe against a real server', () => {
 			),
 		'/bad-gateway': () => new Response('Bad gateway', { status: 502 }),
 		// graphql-yoga's useAPQ() default: the error as a 404 event stream.
-		'/apq-default': () =>
-			new Response(yogaStream(notFound), {
-				status: 404,
+		'/apq-default': (body) =>
+			body['query'] === undefined
+				? new Response(yogaStream(notFound), {
+						status: 404,
+						headers: { 'content-type': 'text/event-stream' },
+					})
+				: eventStream([yogaStream({ data: { tick: 7 } })]),
+		// graphql-yoga's refusal of a missing variable: a 400 event stream.
+		'/missing-variable': () =>
+			new Response(yogaStream(missingVariable), {
+				status: 400,
 				headers: { 'content-type': 'text/event-stream' },
 			}),
 		// useAPQ({ responseConfig: { forceStatusCodeOk: true } }).
@@ -153,15 +170,26 @@ describe('subscribe against a real server', () => {
 		expect((error as ApiStatusError).body).toBe('Bad gateway');
 	});
 
-	test('a 404 event stream throws ApiStatusError(404), its body the raw text; apq does not resend', async () => {
-		const before = received.length;
+	test('a 400 event stream carrying GraphQL errors throws an ApiError, its body read before the request closes', async () => {
 		const error = await caught(
-			collect(clientOf('/apq-default', true).subscribe(TickSubscription)),
+			collect(clientOf('/missing-variable').subscribe(TickSubscription)),
 		);
-		expect(error).toBeInstanceOf(ApiStatusError);
-		expect((error as ApiStatusError).status).toBe(404);
-		expect((error as ApiStatusError).body).toBe(yogaStream(notFound));
-		expect(received.length - before).toBe(1);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).code).toBe('BAD_USER_INPUT');
+		expect((error as ApiError).status).toBe(400);
+		expect((error as ApiError).httpStatus).toBe(400);
+	});
+
+	test("apq: graphql-yoga's default 404 event stream is resent once, with the text", async () => {
+		const before = received.length;
+		const results = await collect(
+			clientOf('/apq-default', true).subscribe(TickSubscription),
+		);
+		expect(results).toEqual([{ tick: 7 }]);
+		const [first, second, ...rest] = received.slice(before);
+		expect(rest).toEqual([]);
+		expect(first?.body['query']).toBeUndefined();
+		expect(second?.body['query']).toBe('subscription Tick {\n  tick\n}');
 	});
 
 	test('apq: PersistedQueryNotFound as the first event of a 200 stream is resent once, with the text', async () => {
