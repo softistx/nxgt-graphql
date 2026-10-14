@@ -113,6 +113,25 @@ export function validated<
 	TContext,
 	z.input<SchemaOf<S>>,
 	Promise<Awaited<TResult>>
+>;
+export function validated<
+	S extends ArgsSchema,
+	TSource = unknown,
+	TContext = unknown,
+	TResult = unknown,
+>(
+	schema: ArgsSchemaFor<S, TContext>,
+	resolve: (
+		source: TSource,
+		args: z.output<SchemaOf<S>>,
+		context: TContext,
+		info: GraphQLResolveInfo,
+	) => TResult,
+): GraphQLFieldResolver<
+	TSource,
+	TContext,
+	z.input<SchemaOf<S>>,
+	Promise<Awaited<TResult>>
 > {
 	const fixed = typeof schema === 'function' ? undefined : zodOf(schema);
 	return async (source, args, context, info): Promise<Awaited<TResult>> => {

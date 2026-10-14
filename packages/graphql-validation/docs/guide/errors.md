@@ -175,7 +175,12 @@ import { z } from 'zod';
 
 type Context = {
   viewer: { id: string; role: 'member' | 'admin' };
-  db: { users: { exists(filter: { name: string }): Promise<boolean> } };
+  db: {
+    users: {
+      exists(filter: { name: string }): Promise<boolean>;
+      rename(id: string, name: string): Promise<unknown>;
+    };
+  };
 };
 
 // type Mutation { rename(name: String!, reason: String): User }
@@ -198,28 +203,39 @@ const rename = validated(
   `BAD_USER_INPUT` error.
 - What the function **throws** reaches the client as it is, not as
   `BAD_USER_INPUT`: throw your own error for a missing session, say.
+- On a field with both `@constraint` and a `validated` function, the directives
+  run first (`withValidation` wraps the field's resolver, which is the
+  `validated` one); then the function is called and its schema checks the
+  arguments.
 - Annotate the function's `ctx` parameter: that is where the resolver's context
   type comes from, and the arguments' types come from what the function returns.
 
-The declared signature, `ArgsSchemaFor<S, TContext>` being the schema or that
-function:
+The declared signature (the third overload takes `ArgsSchemaFor<S, TContext>`,
+the schema or that function, for a helper that forwards either):
 
 ```ts
 import type { GraphQLFieldResolver, GraphQLResolveInfo } from 'graphql';
 import type { z } from 'zod';
 
 type ArgsSchema = z.ZodType<Record<string, unknown>> | z.ZodRawShape;
-type SchemaOf<S extends ArgsSchema> = S extends z.ZodType ? S : z.ZodObject<{ [K in keyof S]: S[K] }>;
-type ArgsSchemaFor<S extends ArgsSchema, TContext = unknown> =
-  | S
-  | ((context: TContext, info: GraphQLResolveInfo) => S | Promise<S>);
+type SchemaOf<S extends ArgsSchema> = S extends z.ZodType
+  ? S
+  : S extends z.ZodRawShape
+    ? z.ZodObject<{ [K in keyof S]: S[K] }>
+    : never;
+type SchemaFactory<S extends ArgsSchema, TContext> = (context: TContext, info: GraphQLResolveInfo) => S | Promise<S>;
+type ArgsSchemaFor<S extends ArgsSchema, TContext = unknown> = S | SchemaFactory<S, TContext>;
 
 declare function validated<S extends ArgsSchema, TSource = unknown, TContext = unknown, TResult = unknown>(
-  schema: (context: TContext, info: GraphQLResolveInfo) => S | Promise<S>,
+  schema: SchemaFactory<S, TContext>,
   resolve: (source: TSource, args: z.output<SchemaOf<S>>, context: TContext, info: GraphQLResolveInfo) => TResult,
 ): GraphQLFieldResolver<TSource, TContext, z.input<SchemaOf<S>>, Promise<Awaited<TResult>>>;
 declare function validated<S extends ArgsSchema, TSource = unknown, TContext = unknown, TResult = unknown>(
   schema: S,
+  resolve: (source: TSource, args: z.output<SchemaOf<S>>, context: TContext, info: GraphQLResolveInfo) => TResult,
+): GraphQLFieldResolver<TSource, TContext, z.input<SchemaOf<S>>, Promise<Awaited<TResult>>>;
+declare function validated<S extends ArgsSchema, TSource = unknown, TContext = unknown, TResult = unknown>(
+  schema: ArgsSchemaFor<S, TContext>,
   resolve: (source: TSource, args: z.output<SchemaOf<S>>, context: TContext, info: GraphQLResolveInfo) => TResult,
 ): GraphQLFieldResolver<TSource, TContext, z.input<SchemaOf<S>>, Promise<Awaited<TResult>>>;
 ```

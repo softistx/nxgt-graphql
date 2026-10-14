@@ -2,6 +2,7 @@
 // are inferred: a declaration build must be able to name each one through
 // `@nxgt/graphql-validation` and its peers alone (TS2883 otherwise).
 import {
+	type ArgsSchema,
 	type ArgsSchemaFor,
 	badUserInput,
 	constraintTypeDefs,
@@ -101,6 +102,17 @@ export const factory: ArgsSchemaFor<
 	z.ZodObject<{ a: z.ZodString }>,
 	Context
 > = () => z.object({ a: z.string() });
+
+// A generic helper forwarding an `ArgsSchemaFor` (the schema or the function).
+export function helper<S extends ArgsSchema>(s: ArgsSchemaFor<S, Context>) {
+	return validated(s, (_source, args) => args);
+}
+export const helped = helper(factory);
+
+// A function returning a non-object schema is refused.
+const notAnObject = () => z.string();
+// @ts-expect-error -- not an object schema
+validated(notAnObject, (_source, args) => args);
 
 export const refused = badUserInput('Query.a', new z.ZodError([]));
 

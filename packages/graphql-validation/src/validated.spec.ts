@@ -123,7 +123,7 @@ describe('validated', () => {
 			expect(seen.field).toBe('claim');
 		});
 
-		test('calls it on each call, while a fixed schema is built once', async () => {
+		test('calls it on each call', async () => {
 			let calls = 0;
 			const schema = schemaWith(
 				validated(
@@ -206,6 +206,25 @@ describe('validated', () => {
 			const result = await run(schema);
 			expect(result.errors?.[0]?.message).toBe('not signed in');
 			expect(result.errors?.[0]?.extensions?.['code']).toBeUndefined();
+			expect(ran).toBe(false);
+		});
+
+		test('lets what an async one rejects with reach the client, without running the resolver', async () => {
+			let ran = false;
+			const schema = schemaWith(
+				validated(
+					async () => {
+						throw new Error('session expired');
+					},
+					() => {
+						ran = true;
+						return 'x';
+					},
+				),
+				claimSdl,
+			);
+			const result = await run(schema);
+			expect(result.errors?.[0]?.message).toBe('session expired');
 			expect(ran).toBe(false);
 		});
 	});

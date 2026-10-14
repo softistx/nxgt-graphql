@@ -23,8 +23,8 @@ Nothing planned yet.
   and the field's `info`, for checks that need the request (a uniqueness query
   in the request's database, a rule depending on the viewer). Its result is
   parsed like a fixed schema; what it throws reaches the client as it is. The
-  arguments are already what the schema checks, so the function takes the
-  context and `info`. A shape's arguments are now typed in the resolver (they
+  function does not receive the arguments: the schema it returns checks them,
+  and a `refine` sees them. A shape's arguments are now typed in the resolver (they
   were `unknown`).
 - **Answering invalid input as one error** — 0.4.0.
   `invalidInputError(issues, { translate })` builds one 400 error whose
