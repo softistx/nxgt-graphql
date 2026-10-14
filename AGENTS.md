@@ -1182,8 +1182,8 @@ typecheck, test and `verify:artifacts`, and restore with `git checkout -- .
   It emits nothing either (`--emitDeclarationOnly` is accepted and writes no
   file), so `build.ts` and `verify:artifacts` need tsc anyway. And `bun
   check` at the root, or in `scripts/`, runs the root's `check` script
-  (Biome), not the type checker. There is no `bun tsc`: it runs
-  `node_modules/.bin/tsc`, the same tsc as `bun run typecheck`.
+  (Biome), not the type checker. `bun tsc` is no built-in either: it only
+  runs `node_modules/.bin/tsc`, the same tsc as `bun run typecheck`.
 
 ## Deliberate duplication: do not "clean this up"
 
