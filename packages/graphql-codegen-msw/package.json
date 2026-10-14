@@ -1,6 +1,6 @@
 {
 	"name": "@nxgt/graphql-codegen-msw",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "A graphql-codegen plugin that writes one typed msw 3 handler per named query and mutation, its variables checked by the Zod schemas of @nxgt/graphql-codegen-zod and an invalid input answered as your API answers it",
 	"license": "MIT",
 	"type": "module",
