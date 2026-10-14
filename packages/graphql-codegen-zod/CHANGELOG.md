@@ -1,5 +1,12 @@
 # @nxgt/graphql-codegen-zod
 
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`4f8b990`](https://github.com/softistx/nxgt-graphql/commit/4f8b9906c9f519c37f89ed2d03a90515127a7508)]:
+  - @nxgt/graphql-validation@0.5.0
+
 ## 0.3.2
 
 ### Patch Changes
