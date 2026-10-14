@@ -1174,6 +1174,16 @@ typecheck, test and `verify:artifacts`, and restore with `git checkout -- .
   error. Do not name a source folder after them (`src/builder/`, not
   `src/build/`); the cure, dropping `**/build` from the base, starts in
   nxgt-data, whose file this is.
+- **`tsc`, not `bun check`, typechecks and emits** (measured on Bun 1.4.3).
+  `bun check` reports the same errors at the same positions (TS2578 and the
+  strict options included) about 20 times faster, but it checks with the
+  TypeScript bundled in Bun (6.0.3), not the one installed: the "Newest
+  peers" job would go on checking 6 while it means to check TypeScript 7.
+  It emits nothing either (`--emitDeclarationOnly` is accepted and writes no
+  file), so `build.ts` and `verify:artifacts` need tsc anyway. And `bun
+  check` at the root, or in `scripts/`, runs the root's `check` script
+  (Biome), not the type checker. There is no `bun tsc`: it runs
+  `node_modules/.bin/tsc`, the same tsc as `bun run typecheck`.
 
 ## Deliberate duplication: do not "clean this up"
 
