@@ -2,6 +2,8 @@
 // are inferred: a declaration build must be able to name each one through
 // `@nxgt/graphql-validation` and its peers alone (TS2883 otherwise).
 import {
+	type ArgsSchema,
+	type ArgsSchemaFor,
 	badUserInput,
 	constraintTypeDefs,
 	FIELD_CODES,
@@ -25,6 +27,37 @@ import { z } from 'zod';
 export const signUp = validated(
 	{ email: z.email(), age: z.int().min(18) },
 	(_source, { email, age }) => ({ email, age }),
+);
+
+// A shape types its arguments (they were `unknown`).
+export const typedShape = validated({ a: z.string() }, (_source, { a }) => {
+	const text: string = a;
+	// @ts-expect-error -- `a` is a string, not a number
+	const wrong: number = a;
+	return [text, wrong];
+});
+
+// A function in place of the schema: the arguments come from what it returns,
+// the context from its annotated parameter.
+type Context = { db: { exists(name: string): Promise<boolean> } };
+export const rename = validated(
+	(ctx: Context) => ({
+		name: z.string().refine(async (name) => !(await ctx.db.exists(name))),
+	}),
+	(_source, { name }, ctx) => {
+		const text: string = name;
+		// @ts-expect-error -- `name` is a string, not a number
+		const wrong: number = name;
+		const db: Context['db'] = ctx.db;
+		return [text, wrong, db];
+	},
+);
+export const renameAsync = validated(
+	async (_ctx: Context) => z.object({ age: z.coerce.number() }),
+	(_source, { age }) => {
+		const n: number = age;
+		return n;
+	},
 );
 
 export const range = validated(
@@ -64,6 +97,22 @@ export const withBuiltInName = () =>
 		// @ts-expect-error -- "email" is a built-in format
 		formats: { email: z.email() },
 	});
+
+export const factory: ArgsSchemaFor<
+	z.ZodObject<{ a: z.ZodString }>,
+	Context
+> = () => z.object({ a: z.string() });
+
+// A generic helper forwarding an `ArgsSchemaFor` (the schema or the function).
+export function helper<S extends ArgsSchema>(s: ArgsSchemaFor<S, Context>) {
+	return validated(s, (_source, args) => args);
+}
+export const helped = helper(factory);
+
+// A function returning a non-object schema is refused.
+const notAnObject = () => z.string();
+// @ts-expect-error -- not an object schema
+validated(notAnObject, (_source, args) => args);
 
 export const refused = badUserInput('Query.a', new z.ZodError([]));
 

@@ -168,6 +168,9 @@ in [Errors](docs/guide/errors.md).
 
 `validated(schema, resolver)` checks the arguments with a Zod schema you write,
 for rules across fields, refinements and async checks. It raises the same error.
+A check that needs the request (a uniqueness query, a rule depending on the viewer)
+takes a function in place of the schema, `(context, info) => schema`, called on each
+call; what it throws reaches the client as it is. See [Errors](docs/guide/errors.md#a-schema-that-reads-the-context).
 
 ```ts
 import { validated } from '@nxgt/graphql-validation';
@@ -272,7 +275,7 @@ the directive declared is this package's. Both at once throw
 | --- | --- |
 | `constraintTypeDefs` | the SDL of `@constraint`, to add to `typeDefs` |
 | `withValidation(schema, options?)` | checks every `@constraint` of a schema before its resolvers run; `options.formats` adds your own formats |
-| `validated(schema \| shape, resolver)` | a resolver whose arguments a Zod schema checks |
+| `validated(schema \| shape \| (context, info) => schema, resolver)` | a resolver whose arguments a Zod schema checks |
 | `badUserInput(where, zodError)` | builds the error above, for code that validates by hand |
 | `invalidInputError(issues, options?)` | one 400 error, `extensions: { code: 'validation.errors.invalid-input', http, fields }`; `options`: `translate` and `GraphQLError`'s own |
 | `fieldsError(code, issues, options?)` | a refusal of your own naming fields, `extensions: { code, params?, http?, fields }`; `options` adds `status` and `params` |
@@ -283,7 +286,7 @@ the directive declared is this package's. Both at once throw
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
-| `ArgsSchema`, `SchemaOf` | the types `validated` accepts |
+| `ArgsSchema`, `ArgsSchemaFor`, `SchemaOf` | the types `validated` accepts: the schema or shape, and that or the function building it from the context |
 | `WithValidationOptions`, `FormatSchemas`, `OwnFormats`, `StringSchema`, `FormatName` | the types of `withValidation`'s options: a record of string schemas, with no built-in format name (`FormatName`) |
 
 `@nxgt/graphql-validation/codegen` is for a code generator, such as

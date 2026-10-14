@@ -21,7 +21,12 @@ export {
 	type Translate,
 } from './invalid-input';
 export type { ConstraintArgument } from './rules';
-export { type ArgsSchema, type SchemaOf, validated } from './validated';
+export {
+	type ArgsSchema,
+	type ArgsSchemaFor,
+	type SchemaOf,
+	validated,
+} from './validated';
 export {
 	type WithValidationOptions,
 	withValidation,
