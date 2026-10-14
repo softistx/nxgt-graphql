@@ -162,13 +162,62 @@ const claim = validated(
 );
 ```
 
+### A schema that reads the context
+
+A check that needs the request (a uniqueness query in the request's database, a
+rule that depends on the viewer) takes a function in place of the schema. It
+receives the GraphQL context and the field's `info`, and returns the schema or
+its shape, or a promise of either.
+
+```ts
+import { validated } from '@nxgt/graphql-validation';
+import { z } from 'zod';
+
+type Context = {
+  viewer: { id: string; role: 'member' | 'admin' };
+  db: { users: { exists(filter: { name: string }): Promise<boolean> } };
+};
+
+// type Mutation { rename(name: String!, reason: String): User }
+const rename = validated(
+  (ctx: Context) => ({
+    name: z
+      .string()
+      .min(3)
+      .refine(async (name) => !(await ctx.db.users.exists({ name })), 'already taken'),
+    // a rule that depends on the viewer
+    reason: ctx.viewer.role === 'admin' ? z.string().min(1) : z.string().optional(),
+  }),
+  (_, { name }, ctx) => ctx.db.users.rename(ctx.viewer.id, name),
+);
+```
+
+- The function runs **on each call**, before the arguments are parsed; a fixed
+  schema is still built once, up front.
+- Its result is parsed exactly like a fixed schema, with the same
+  `BAD_USER_INPUT` error.
+- What the function **throws** reaches the client as it is, not as
+  `BAD_USER_INPUT`: throw your own error for a missing session, say.
+- Annotate the function's `ctx` parameter: that is where the resolver's context
+  type comes from, and the arguments' types come from what the function returns.
+
+The declared signature, `ArgsSchemaFor<S, TContext>` being the schema or that
+function:
+
 ```ts
 import type { GraphQLFieldResolver, GraphQLResolveInfo } from 'graphql';
 import type { z } from 'zod';
 
 type ArgsSchema = z.ZodType<Record<string, unknown>> | z.ZodRawShape;
-type SchemaOf<S extends ArgsSchema> = S extends z.ZodType ? S : z.ZodObject<S & z.ZodRawShape>;
+type SchemaOf<S extends ArgsSchema> = S extends z.ZodType ? S : z.ZodObject<{ [K in keyof S]: S[K] }>;
+type ArgsSchemaFor<S extends ArgsSchema, TContext = unknown> =
+  | S
+  | ((context: TContext, info: GraphQLResolveInfo) => S | Promise<S>);
 
+declare function validated<S extends ArgsSchema, TSource = unknown, TContext = unknown, TResult = unknown>(
+  schema: (context: TContext, info: GraphQLResolveInfo) => S | Promise<S>,
+  resolve: (source: TSource, args: z.output<SchemaOf<S>>, context: TContext, info: GraphQLResolveInfo) => TResult,
+): GraphQLFieldResolver<TSource, TContext, z.input<SchemaOf<S>>, Promise<Awaited<TResult>>>;
 declare function validated<S extends ArgsSchema, TSource = unknown, TContext = unknown, TResult = unknown>(
   schema: S,
   resolve: (source: TSource, args: z.output<SchemaOf<S>>, context: TContext, info: GraphQLResolveInfo) => TResult,
