@@ -1,5 +1,13 @@
 # @nxgt/graphql-validation
 
+## 0.7.0
+
+### Minor Changes
+
+- [#121](https://github.com/softistx/nxgt-graphql/pull/121) [`412dfa4`](https://github.com/softistx/nxgt-graphql/commit/412dfa45a9e0612b6b8bf58c2843a7b69eaf9469) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `maxListCost`: a non-list field that states a size (a size argument given, or declared with a default) now sizes the lists declaring no size argument directly on its return type, such as a Relay connection's `edges` and `nodes`, instead of `defaultFirst`; this can lower a cost that used `defaultFirst`. An argument named in `sizeArguments` that does not size those lists should be left out of `sizeArguments`.
+
+- [#119](https://github.com/softistx/nxgt-graphql/pull/119) [`f45b07a`](https://github.com/softistx/nxgt-graphql/commit/f45b07a6102465bcc1444826ac6b645f0649f7a3) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Add `maxFields({ limit, ignoreIntrospection? })`, a validation rule refusing an operation that selects too many fields (`QUERY_TOO_WIDE`).
+
 ## 0.6.0
 
 ### Minor Changes
