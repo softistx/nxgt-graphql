@@ -7,7 +7,7 @@ import {
 	type OperationDefinitionNode,
 } from 'graphql';
 import { CEILING } from './describe';
-import type { FragmentWalk } from './fragments';
+import { type FragmentWalk, NO_KEY } from './fragments';
 import { introspectionRoot, isIntrospectionRoot } from './introspection';
 import type { SizeContext } from './list-size';
 
@@ -49,8 +49,11 @@ export function rootType(
 /** Distinct pending sizes costed exactly per fragment; further ones are rounded up. */
 const EXACT_SIZES = 8;
 
-/** The key a fragment is memoized under: `-1` for no pending size. */
-export const NO_PENDING = -1;
+/**
+ * The key a fragment is memoized under when no size is pending: the walk's own
+ * "no key", which no real size can equal (a size is never negative).
+ */
+export const NO_PENDING = NO_KEY;
 
 /**
  * The pending size a fragment is costed under. A fragment spread under many
