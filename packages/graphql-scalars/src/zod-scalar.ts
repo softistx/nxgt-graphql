@@ -7,6 +7,34 @@ import {
 } from 'graphql';
 import { z } from 'zod';
 
+/**
+ * The `extensions` of every refusal of an input, for a server to map to its
+ * own error without parsing the message.
+ */
+export type InvalidScalarExtensions = {
+	readonly code: 'INVALID_SCALAR';
+	/** The GraphQL name of the scalar that refused. */
+	readonly scalar: string;
+	/**
+	 * Why: Zod's first issue `code` (`invalid_format`, `too_small`,
+	 * `invalid_type`, `custom`…), or `invalid_type` for a literal of a kind
+	 * the scalar does not read. Absent when the schema threw instead of
+	 * failing (a codec's own error, an async check).
+	 */
+	readonly reason?: string;
+};
+
+function refusalExtensions(
+	scalar: string,
+	reason?: string,
+): InvalidScalarExtensions {
+	return {
+		code: 'INVALID_SCALAR',
+		scalar,
+		...(reason === undefined ? {} : { reason }),
+	};
+}
+
 /** Which query literals a scalar reads: see {@link ZodScalarOptions.literals}. */
 type Literals = 'leaf' | 'integer' | 'any';
 
@@ -65,7 +93,11 @@ export type ZodScalar<
  * encode through one. A schema that only validates needs nothing more.
  *
  * A refusal is a `GraphQLError` naming the scalar and Zod's first issue,
- * not the value: for the built-in scalars no issue contains it, so a
+ * and an input refusal also carries {@link InvalidScalarExtensions} —
+ * `{ code: 'INVALID_SCALAR', scalar, reason }`, `reason` being the issue's
+ * `code` — in its `extensions`, which graphql keeps on a bad variable's
+ * wrapping error too. An output refusal is a server fault and has none. The
+ * message names no value: for the built-in scalars no issue contains it, so a
  * resolver's bad result does not reach the client in the error. A schema of
  * your own can still put input in its issue — a custom message, or a strict
  * object's `Unrecognized key`. graphql 16 also prefixes a bad *variable*'s
@@ -86,9 +118,12 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 	const run = <T>(
 		way: string,
 		attempt: () => z.ZodSafeParseResult<T>,
+		input: boolean,
 		node?: ValueNode,
 	): T => {
 		const where = node === undefined ? {} : { nodes: node };
+		const extensions = (reason?: string) =>
+			input ? { extensions: refusalExtensions(name, reason) } : {};
 		let result: z.ZodSafeParseResult<T>;
 		try {
 			result = attempt();
@@ -100,17 +135,25 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 					: '';
 			throw new GraphQLError(`${name} cannot ${way}${why}`, {
 				...where,
+				...extensions(),
 				...(cause === undefined ? {} : { originalError: cause }),
 			});
 		}
 		if (result.success) return result.data;
-		const issue = result.error.issues[0]?.message ?? 'invalid';
-		throw new GraphQLError(`${name} cannot ${way}: ${issue}`, where);
+		const first = result.error.issues[0];
+		throw new GraphQLError(
+			`${name} cannot ${way}: ${first?.message ?? 'invalid'}`,
+			{
+				...where,
+				...extensions(first?.code ?? 'custom'),
+			},
+		);
 	};
 	const decode = (value: unknown, node?: ValueNode): z.output<S> =>
 		run(
 			'represent this input',
 			() => z.safeDecode(schema, value as z.input<S>),
+			true,
 			node,
 		);
 	// A resolver may also return what already crosses the wire (an ISO
@@ -118,19 +161,23 @@ export function zodScalar<S extends z.ZodType, const N extends string>(
 	// encoded, so what goes out is the canonical form either way. A value
 	// neither way takes is refused with the encoding's issue.
 	const encode = (value: unknown): z.input<S> =>
-		run('serialize this value', () => {
-			const encoded = z.safeEncode(schema, value as z.output<S>);
-			if (encoded.success) return encoded;
-			// A decode that throws (a codec's own error, an async step) is no
-			// way in either: the encoding's issue stands.
-			let decoded: z.ZodSafeParseResult<z.output<S>>;
-			try {
-				decoded = z.safeDecode(schema, value as z.input<S>);
-			} catch {
-				return encoded;
-			}
-			return decoded.success ? z.safeEncode(schema, decoded.data) : encoded;
-		});
+		run(
+			'serialize this value',
+			() => {
+				const encoded = z.safeEncode(schema, value as z.output<S>);
+				if (encoded.success) return encoded;
+				// A decode that throws (a codec's own error, an async step) is no
+				// way in either: the encoding's issue stands.
+				let decoded: z.ZodSafeParseResult<z.output<S>>;
+				try {
+					decoded = z.safeDecode(schema, value as z.input<S>);
+				} catch {
+					return encoded;
+				}
+				return decoded.success ? z.safeEncode(schema, decoded.data) : encoded;
+			},
+			false,
+		);
 	const literals = options.literals ?? 'leaf';
 	// graphql 16 passes the operation's variables, for a variable inside an
 	// object or a list literal; graphql 17 substitutes them first.
@@ -230,5 +277,6 @@ function literalValue(
 	}
 	throw new GraphQLError(`${name} cannot represent a ${node.kind} literal`, {
 		nodes: node,
+		extensions: refusalExtensions(name, 'invalid_type'),
 	});
 }

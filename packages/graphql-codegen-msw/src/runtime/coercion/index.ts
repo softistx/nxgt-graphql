@@ -3,8 +3,9 @@
 // wrong type, an unknown enum value, an unknown input field, an Int beyond
 // 32 bits, a value a custom scalar refuses. Measured on graphql-yoga 5.24
 // (@graphql-tools/executor 2, graphql 17): one error per problem,
-// `{ message, locations }` and no extensions, status 400 whatever the
-// Accept header.
+// `{ message, locations }`, status 400 whatever the Accept header. Only a
+// custom scalar's refusal has `extensions`: the `INVALID_SCALAR` ones
+// `zodScalar` puts in its error, which graphql keeps on the variable's.
 //
 // How coercion is decided: the variables are walked as graphql walks them
 // (`validate.ts`), over the input types the generated file describes from
@@ -73,7 +74,7 @@ export function coercionErrors(
 			types: inputTypes,
 			issues: walked,
 			problems: [],
-		}).map((message) => located(message, definitions.get(name))),
+		}).map((refused) => located(refused, definitions.get(name))),
 	);
 }
 
@@ -83,27 +84,36 @@ function variableMessages(
 	source: string,
 	sent: Record<string, unknown>,
 	walk: Walk,
-): string[] {
+): Refused[] {
 	const { type, hasDefault } = declared(source);
 	if (!Object.hasOwn(sent, name))
 		return type.kind === 'non-null' && !hasDefault
-			? [variableRefusal.notProvided(name, printType(type))]
+			? [{ message: variableRefusal.notProvided(name, printType(type)) }]
 			: [];
 	const value = sent[name];
 	if (value === null && type.kind === 'non-null')
-		return [variableRefusal.isNull(name, printType(type))];
+		return [{ message: variableRefusal.isNull(name, printType(type)) }];
 	validateValue(walk, value, type, { path: [], zodPath: [name] });
-	return walk.problems.map(({ path, value: found, reason }: Problem) =>
-		variableRefusal.invalidValue(name, found, path, reason),
+	return walk.problems.map(
+		({ path, value: found, reason, extensions }: Problem) => ({
+			message: variableRefusal.invalidValue(name, found, path, reason),
+			...(extensions === undefined ? {} : { extensions }),
+		}),
 	);
 }
 
+/** One refusal: its message, and the `extensions` a custom scalar's error carries. */
+interface Refused {
+	readonly message: string;
+	readonly extensions?: Record<string, unknown>;
+}
+
 function located(
-	message: string,
+	{ message, extensions }: Refused,
 	definition: VariableDefinitionNode | undefined,
 ): GraphQLFormattedError {
-	return new GraphQLError(
-		message,
-		definition ? { nodes: definition } : {},
-	).toJSON();
+	return new GraphQLError(message, {
+		...(definition ? { nodes: definition } : {}),
+		...(extensions === undefined ? {} : { extensions }),
+	}).toJSON();
 }

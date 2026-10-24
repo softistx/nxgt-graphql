@@ -92,6 +92,23 @@ describe('coercionErrors', () => {
 		]);
 	});
 
+	test('a custom scalar refusal carries the INVALID_SCALAR extensions of zodScalar, a built-in none', () => {
+		const variables = z.object({ since: dateTime, first: z.int32() });
+		const errors = coercionErrors(
+			issuesOf(variables, { since: 'x', first: 'a' }),
+			{
+				query: 'not graphql',
+				operationName: 'Q',
+				variables: { since: 'x', first: 'a' },
+			},
+			{ variableTypes: { since: 'DateTime!', first: 'Int!' }, inputTypes },
+		);
+		expect(errors.map((error) => error.extensions)).toEqual([
+			{ code: 'INVALID_SCALAR', scalar: 'DateTime', reason: 'invalid_format' },
+			undefined,
+		]);
+	});
+
 	test('a list of custom scalars: an item, or a single value standing for the list', () => {
 		const variables = z.object({ person });
 		const at = (dates: unknown) =>

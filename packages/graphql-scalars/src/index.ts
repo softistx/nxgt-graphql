@@ -7,6 +7,7 @@ export {
 export { pickScalars } from './pick-scalars';
 export * from './scalars';
 export {
+	type InvalidScalarExtensions,
 	type ZodScalar,
 	type ZodScalarOptions,
 	zodScalar,

@@ -315,6 +315,25 @@ message, a strict object's `Unrecognized key`). graphql 16 prefixes a bad
 - graphql 16: `Variable "$n" got invalid value -3; PositiveInt cannot represent this input: Too small: expected number to be >0`
 - graphql 17: `Variable "$n" has invalid value: PositiveInt cannot represent this input: Too small: expected number to be >0`
 
+An input refusal also carries `extensions` a server can map without parsing
+the message: `code` is `INVALID_SCALAR`, `scalar` the GraphQL name, `reason`
+Zod's first issue `code` (`invalid_format`, `too_small`, `invalid_type`,
+`custom`…; `invalid_type` for a literal of a kind the scalar does not read).
+When the schema threw instead of failing (a codec's error, an async check) there
+is no `reason`. graphql keeps them on a bad variable's error too, a scalar
+nested in an input object included. A resolver's bad result (`serialize`) is a
+server fault and has none.
+
+```ts
+import type { InvalidScalarExtensions } from '@nxgt/graphql-scalars';
+
+// in a formatError / error plugin
+const extensions = error.extensions as Partial<InvalidScalarExtensions>;
+if (extensions.code === 'INVALID_SCALAR') {
+	return { field: extensions.scalar, rule: extensions.reason ?? 'unreadable' };
+}
+```
+
 Every message is in [Troubleshooting](docs/troubleshooting.md).
 
 ## Traps
