@@ -69,8 +69,19 @@ describe('the declared value on each issue', () => {
 		expect(issues?.[0]).toMatchObject({ constraint: 'format', value: 'email' });
 	});
 
-	test('a list rule and an item rule each carry their own value', async () => {
-		const issues = await issuesOf('{ name: "a", tags: ["t-1", "x", "t-3"] }');
+	test('a list rule carries its own value', async () => {
+		const issues = await issuesOf('{ name: "a", tags: ["t-1", "t-2", "t-3"] }');
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ['input', 'tags'],
+				constraint: 'maxItems',
+				value: 2,
+			}),
+		);
+	});
+
+	test('an item rule carries its own value', async () => {
+		const issues = await issuesOf('{ name: "a", tags: ["t-1", "x"] }');
 		expect(issues).toContainEqual(
 			expect.objectContaining({
 				path: ['input', 'tags', 1],
@@ -78,12 +89,6 @@ describe('the declared value on each issue', () => {
 				value: 't-',
 			}),
 		);
-		const list = await issuesOf('{ name: "a", tags: ["t-1", "t-2", "t-3"] }');
-		expect(list?.[0]).toMatchObject({
-			path: ['input', 'tags'],
-			constraint: 'maxItems',
-			value: 2,
-		});
 	});
 
 	test('a validated() issue has neither constraint nor value', async () => {
@@ -136,9 +141,9 @@ describe('the declared value, found at every depth', () => {
 		});
 	});
 
-	test('a list of input objects: the list rule, then a field inside an item', async () => {
+	test('a list of input objects: the list rule', async () => {
 		const issues = await ask(
-			'{ g(holder: { leaves: [{ name: "abc" }, { name: "a" }] }) }',
+			'{ g(holder: { leaves: [{ name: "a" }, { name: "b" }] }) }',
 		);
 		expect(issues).toContainEqual(
 			expect.objectContaining({
@@ -147,6 +152,10 @@ describe('the declared value, found at every depth', () => {
 				value: 1,
 			}),
 		);
+	});
+
+	test('a list of input objects: a field inside an item', async () => {
+		const issues = await ask('{ g(holder: { leaves: [{ name: "abc" }] }) }');
 		expect(issues).toContainEqual(
 			expect.objectContaining({
 				path: ['holder', 'leaves', 0, 'name'],
@@ -165,8 +174,8 @@ describe('the declared value, found at every depth', () => {
 		});
 	});
 
-	test('a nested list: maxItems on the outer list, maxLength on the items', async () => {
-		const issues = await ask('{ n(grid: [["ab"], ["c"]]) }');
+	test('a nested list: maxItems on the outer list', async () => {
+		const issues = await ask('{ n(grid: [["a"], ["b"]]) }');
 		expect(issues).toContainEqual(
 			expect.objectContaining({
 				path: ['grid'],
@@ -174,6 +183,13 @@ describe('the declared value, found at every depth', () => {
 				value: 1,
 			}),
 		);
+		expect(
+			issues?.filter((issue) => issue['constraint'] === 'maxLength'),
+		).toHaveLength(0);
+	});
+
+	test('a nested list: maxLength on the items', async () => {
+		const issues = await ask('{ n(grid: [["ab"]]) }');
 		expect(issues).toContainEqual(
 			expect.objectContaining({
 				path: ['grid', 0, 0],
@@ -183,6 +199,6 @@ describe('the declared value, found at every depth', () => {
 		);
 		expect(
 			issues?.filter((issue) => issue['constraint'] === 'maxItems'),
-		).toHaveLength(1);
+		).toHaveLength(0);
 	});
 });
