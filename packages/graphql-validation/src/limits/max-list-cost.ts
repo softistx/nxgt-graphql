@@ -1,5 +1,7 @@
 import {
+	type FieldNode,
 	GraphQLError,
+	type GraphQLField,
 	type GraphQLNamedType,
 	getNamedType,
 	getNullableType,
@@ -12,12 +14,14 @@ import {
 	add,
 	type CostContext,
 	fieldOf,
+	memoSize,
 	multiply,
+	NO_PENDING,
 	rootType,
 } from './cost-context';
 import { assertInteger, operationLabel } from './describe';
 import { introspectionSize, isIntrospectionRoot } from './introspection';
-import { listSize } from './list-size';
+import { statedSize } from './list-size';
 
 /** Options of {@link maxListCost}. */
 export interface MaxListCostOptions {
@@ -42,11 +46,42 @@ export interface MaxListCostOptions {
 
 const DEFAULT_SIZE_ARGUMENTS = ['first', 'last', 'limit'] as const;
 
-/** The cost of `selectionSet` selected on `parent`. */
+/**
+ * The cost of one selected field. `pending` is the size a connection above
+ * hands down: a list stating no size of its own takes it, and every list
+ * consumes it, so it never reaches a list further down.
+ */
+function fieldCost(
+	cost: CostContext,
+	parent: GraphQLNamedType | undefined,
+	selection: FieldNode,
+	definition: GraphQLField<unknown, unknown>,
+	pending: number | undefined,
+): number {
+	if (!selection.selectionSet) return 1;
+	const name = selection.name.value;
+	const type = getNamedType(definition.type);
+	if (!isListType(getNullableType(definition.type))) {
+		// An object field: its own size replaces the pending one, else it is passed on.
+		const stated = statedSize(cost, parent, definition, selection.arguments);
+		const inner = costOf(cost, selection.selectionSet, type, stated ?? pending);
+		return add(1, inner);
+	}
+	const inner = costOf(cost, selection.selectionSet, type, undefined);
+	const size = parent?.name.startsWith('__')
+		? introspectionSize(cost.schema, name)
+		: (statedSize(cost, parent, definition, selection.arguments) ??
+			pending ??
+			cost.defaultFirst);
+	return add(1, multiply(inner, size));
+}
+
+/** The cost of `selectionSet` selected on `parent`, under the `pending` size of the connection above. */
 function costOf(
 	cost: CostContext,
 	selectionSet: SelectionSetNode,
 	parent: GraphQLNamedType | undefined,
+	pending: number | undefined,
 ): number {
 	let total = 0;
 	for (const selection of selectionSet.selections) {
@@ -57,37 +92,40 @@ function costOf(
 			const definition = fieldOf(cost, parent, name);
 			// An unknown field is another rule's to report.
 			if (!definition) continue;
-			let inner = 0;
-			if (selection.selectionSet) {
-				inner = costOf(
-					cost,
-					selection.selectionSet,
-					getNamedType(definition.type),
-				);
-				if (isListType(getNullableType(definition.type))) {
-					const size = parent?.name.startsWith('__')
-						? introspectionSize(cost.schema, name)
-						: listSize(cost, parent, definition, selection.arguments);
-					inner = multiply(inner, size);
-				}
-			}
-			total = add(total, add(1, inner));
+			total = add(
+				total,
+				fieldCost(cost, parent, selection, definition, pending),
+			);
 		} else if (selection.kind === 'InlineFragment') {
 			const condition = selection.typeCondition
 				? cost.schema.getType(selection.typeCondition.name.value)
 				: parent;
-			total = add(total, costOf(cost, selection.selectionSet, condition));
+			total = add(
+				total,
+				costOf(cost, selection.selectionSet, condition, pending),
+			);
 		} else {
-			total = add(total, fragmentCost(cost, selection.name.value));
+			total = add(total, fragmentCost(cost, selection.name.value, pending));
 		}
 	}
 	return total;
 }
 
-/** The cost of the named fragment, computed once. */
-function fragmentCost(cost: CostContext, name: string): number {
-	const known = cost.fragmentCosts.get(name);
-	if (known !== undefined) return known;
+/** The cost of the named fragment spread under `pending`, computed once per size. */
+function fragmentCost(
+	cost: CostContext,
+	name: string,
+	pending: number | undefined,
+): number {
+	let known = cost.fragmentCosts.get(name);
+	if (!known) {
+		known = new Map();
+		cost.fragmentCosts.set(name, known);
+	}
+	const size = memoSize(known, pending);
+	const key = size ?? NO_PENDING;
+	const memo = known.get(key);
+	if (memo !== undefined) return memo;
 	const fragment = cost.getFragment(name);
 	// A cycle is NoFragmentCyclesRule's to report; here it adds nothing.
 	if (!fragment || cost.costing.has(name)) return 0;
@@ -96,9 +134,10 @@ function fragmentCost(cost: CostContext, name: string): number {
 		cost,
 		fragment.selectionSet,
 		cost.schema.getType(fragment.typeCondition.name.value),
+		size,
 	);
 	cost.costing.delete(name);
-	cost.fragmentCosts.set(name, result);
+	known.set(key, result);
 	return result;
 }
 
@@ -127,7 +166,19 @@ function fragmentCost(cost: CostContext, name: string): number {
  * its sibling. A field whose type (once unwrapped from non-null) is a list is
  * one list, nested `[[X]]` included.
  *
- * Named fragments are followed, each costed once. Inline fragments and
+ * A Relay connection puts the size on a field returning an object, with the
+ * list below it (`items(first: 100) { edges { node { id } } }`). A field that
+ * is not a list and states a size (by the same reading) hands it down as a
+ * pending size: the first list on each path below it that states none of its
+ * own (no size argument given, none declared with a default) takes it instead
+ * of `defaultFirst`, and every list consumes it, so lists further down do not
+ * see it. `edges` and `nodes` each take it; a field in between (`pageInfo`, a
+ * wrapper) passes it on, a nested sized field replaces it. A connection stating
+ * nothing hands down nothing: its lists are sized `defaultFirst`.
+ *
+ * Named fragments are followed, each costed once per pending size (past eight
+ * distinct sizes under one fragment a size is rounded up to a power of two, so
+ * the work stays linear in the document and a cost only over-counts). Inline fragments and
  * fragments on an abstract type are summed branch by branch, so the cost of a
  * query on an interface or a union is overestimated, never underestimated.
  *
@@ -168,6 +219,7 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 					cost,
 					operation.selectionSet,
 					rootType(schema, operation),
+					undefined,
 				);
 				if (total > budget) {
 					context.reportError(

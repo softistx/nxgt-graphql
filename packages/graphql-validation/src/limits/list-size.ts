@@ -156,17 +156,19 @@ function argumentSize(
 }
 
 /**
- * The size of the list `definition` returns on `parent`, as selected by
- * `args`: the largest its size arguments say, and `defaultFirst` when none
- * says anything. The schema's part is memoized, so a selection costs
- * `sizeArguments.length` steps whatever the number of possible types.
+ * The size `definition` states on `parent`, as selected by `args`: the largest
+ * its size arguments say, `undefined` when none says anything (none given, and
+ * none declared with a default). The schema's part is memoized, so a selection
+ * costs `sizeArguments.length` steps whatever the number of possible types.
+ * A list uses it, and a field returning an object (a Relay connection) hands it
+ * to the lists below it.
  */
-export function listSize(
+export function statedSize(
 	cost: SizeContext,
 	parent: GraphQLNamedType | undefined,
 	definition: GraphQLField<unknown, unknown>,
 	args: readonly ArgumentNode[] | undefined,
-): number {
+): number | undefined {
 	const profile = profileOf(cost, parent, definition);
 	let size: number | undefined;
 	let given = false;
@@ -177,6 +179,8 @@ export function listSize(
 		if (said !== undefined) size = Math.max(size ?? 0, said);
 	});
 	// Nothing given: a definition without any default is sized defaultFirst.
-	if (!given && profile.someBare) size = Math.max(size ?? 0, cost.defaultFirst);
-	return size ?? cost.defaultFirst;
+	if (size !== undefined && !given && profile.someBare) {
+		return Math.max(size, cost.defaultFirst);
+	}
+	return size;
 }

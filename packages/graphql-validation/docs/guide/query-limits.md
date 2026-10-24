@@ -168,9 +168,48 @@ Pick `defaultFirst` knowing a variable counts for it: a client using
 `first: $n` is charged the default whatever it sends. If your server caps a size
 argument, set `defaultFirst` (or the SDL default) at that cap.
 
+### Relay connections
+
+On a Relay connection the size is on a field that returns an **object**, and the
+list is below it:
+
+```graphql
+type Query { items(first: Int): ItemConnection! }
+type ItemConnection { edges: [ItemEdge!]! nodes: [Item!]! pageInfo: PageInfo! }
+```
+
+```graphql
+{ items(first: 100) { edges { node { id } } nodes { id } } }
+```
+
+A field that is not a list and states a size, read as for a list above (a size
+argument given, or declared with a default; on an abstract parent the largest
+over its possible types), hands it down as a **pending size**:
+
+- The first list on each path below it that states **no size of its own** (no
+  size argument given and none declared with a default) takes the pending size
+  instead of `defaultFirst`. Siblings take it independently: `edges` and
+  `nodes` above are both 100.
+- A list consumes the pending size, whether it uses it or states its own: the
+  lists further down do not see it. In `items(first: 100) { edges { node {
+  children { edges { node { id } } } } } }` the inner `edges` is sized
+  `defaultFirst`, since `children` states nothing.
+- A field in between that is not a list (`pageInfo`, a wrapper object) passes the
+  pending size through; a nested field that states a size replaces it.
+- A connection field that states nothing (no size argument given, none declared
+  with a default) hands down nothing: its lists are sized `defaultFirst`, as
+  before. A variable, a negative number or an unusable value on it counts as for
+  a list: its SDL default, else `defaultFirst`.
+- Inline fragments pass the pending size through. A named fragment is costed
+  once for each distinct pending size it is spread under (`...C` under
+  `first: 2` and `first: 5` costs differently). Under more than eight distinct
+  sizes in one document a fragment's further sizes are rounded up to the next
+  power of two, so the work stays linear in the document and the cost only
+  over-counts.
+
 ### Fragments and abstract types
 
-Named fragments are followed, each costed once (a fragment's type condition fixes
+Named fragments are followed, each costed once per pending size (see above; a fragment's type condition fixes
 its parent type). A fragment spread twice counts twice. Inline fragments and
 fragments on an interface or a union are **summed branch by branch**: a
 selection `... on A { ... } ... on B { ... }` costs A's plus B's, although an

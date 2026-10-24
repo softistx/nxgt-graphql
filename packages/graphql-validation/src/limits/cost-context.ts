@@ -20,7 +20,7 @@ export const multiply = (a: number, b: number) => Math.min(CEILING, a * b);
 export interface CostContext extends SizeContext {
 	ignoreIntrospection: boolean;
 	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
-	fragmentCosts: Map<string, number>;
+	fragmentCosts: Map<string, Map<number, number>>;
 	costing: Set<string>;
 }
 
@@ -50,4 +50,27 @@ export function rootType(
 				? schema.getMutationType()
 				: schema.getSubscriptionType();
 	return type ?? undefined;
+}
+
+/** Distinct pending sizes costed exactly per fragment; further ones are rounded up. */
+const EXACT_SIZES = 8;
+
+/** The key a fragment is memoized under: `-1` for no pending size. */
+export const NO_PENDING = -1;
+
+/**
+ * The pending size a fragment is costed under. A fragment spread under many
+ * distinct sizes would be costed once per size, quadratic in a hostile
+ * document; past `EXACT_SIZES` of them a new size is rounded up to a power of
+ * two (a cost never lowers as a size grows, so it only over-counts, by less
+ * than twice), which leaves at most `EXACT_SIZES` + 53 costings per fragment.
+ */
+export function memoSize(
+	known: ReadonlyMap<number, number>,
+	pending: number | undefined,
+): number | undefined {
+	if (pending === undefined || known.has(pending) || known.size < EXACT_SIZES) {
+		return pending;
+	}
+	return Math.min(CEILING, 2 ** Math.ceil(Math.log2(Math.max(pending, 1))));
 }
