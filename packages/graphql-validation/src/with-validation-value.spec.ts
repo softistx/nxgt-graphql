@@ -103,3 +103,86 @@ describe('the declared value on each issue', () => {
 		expect(issue).not.toHaveProperty('value');
 	});
 });
+
+describe('the declared value, found at every depth', () => {
+	const walk = `${constraintTypeDefs}
+		input Leaf { name: String! @constraint(maxLength: 2) }
+		input Node { kids: [Node!] @constraint(maxItems: 1) }
+		input Holder { leaves: [Leaf!] @constraint(maxItems: 1) }
+		type Query {
+			f(s: String @constraint(minLength: 4)): Boolean
+			g(holder: Holder): Boolean
+			h(node: Node): Boolean
+			n(grid: [[String!]!] @constraint(maxItems: 1, maxLength: 1)): Boolean
+		}
+	`;
+
+	async function ask(source: string) {
+		const schema = buildSchema(walk);
+		const fields = (schema.getQueryType() as GraphQLObjectType).getFields();
+		for (const name of ['f', 'g', 'h', 'n'])
+			(fields[name] as { resolve?: unknown }).resolve = () => true;
+		const result = await graphql({ schema: withValidation(schema), source });
+		return result.errors?.[0]?.extensions?.['issues'] as
+			| Record<string, unknown>[]
+			| undefined;
+	}
+
+	test('an argument carries its own constraint', async () => {
+		expect((await ask('{ f(s: "ab") }'))?.[0]).toMatchObject({
+			path: ['s'],
+			constraint: 'minLength',
+			value: 4,
+		});
+	});
+
+	test('a list of input objects: the list rule, then a field inside an item', async () => {
+		const issues = await ask(
+			'{ g(holder: { leaves: [{ name: "abc" }, { name: "a" }] }) }',
+		);
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ['holder', 'leaves'],
+				constraint: 'maxItems',
+				value: 1,
+			}),
+		);
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ['holder', 'leaves', 0, 'name'],
+				constraint: 'maxLength',
+				value: 2,
+			}),
+		);
+	});
+
+	test('a recursive input, a level down', async () => {
+		const issues = await ask('{ h(node: { kids: [{ kids: [{}, {}] }] }) }');
+		expect(issues?.[0]).toMatchObject({
+			path: ['node', 'kids', 0, 'kids'],
+			constraint: 'maxItems',
+			value: 1,
+		});
+	});
+
+	test('a nested list: maxItems on the outer list, maxLength on the items', async () => {
+		const issues = await ask('{ n(grid: [["ab"], ["c"]]) }');
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ['grid'],
+				constraint: 'maxItems',
+				value: 1,
+			}),
+		);
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ['grid', 0, 0],
+				constraint: 'maxLength',
+				value: 1,
+			}),
+		);
+		expect(
+			issues?.filter((issue) => issue['constraint'] === 'maxItems'),
+		).toHaveLength(1);
+	});
+});

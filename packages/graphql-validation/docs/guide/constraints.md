@@ -313,8 +313,8 @@ What a format of your own is:
 - **Its messages are yours.** A refusal reads as your schema writes it (the
   package's own messages never name the value; yours may, so keep the input
   out of them if your logs or clients should not see it). Every issue your
-  schema raises carries `constraint: "format"` and `value` the format's name, whatever its Zod `code` — a
-  `.regex()` inside your format is the format's refusal, not `pattern`'s:
+  schema raises carries `constraint: "format"` and `value` the format's name, whatever
+  its Zod `code` — a `.regex()` inside your format is the format's refusal, not `pattern`'s:
 
   ```json
   { "path": ["input", "siret"], "message": "Invalid SIRET: write its 14 digits", "code": "invalid_format", "constraint": "format", "value": "siret" }

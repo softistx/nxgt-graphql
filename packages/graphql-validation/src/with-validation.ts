@@ -121,6 +121,8 @@ export function withValidation<
 			const named: ConstraintOf = (issue) => {
 				const argument = constraintOf(issue);
 				if (!argument) return undefined;
+				// Found: the SDL carries the constraints (interfaces repeat theirs,
+				// assertInterfaceConstraintsKept), so a miss drops `constraint` by design.
 				const found = declared(issue.path).find(
 					({ rule }) => rule.argument === argument,
 				);

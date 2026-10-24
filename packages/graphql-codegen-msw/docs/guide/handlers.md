@@ -436,7 +436,7 @@ starts with the variable's name, where the server's starts with the
 argument's (the first two are the same when the variable is named after the
 argument); and the mock answers `{ errors }` alone, with no `data`, and no
 `path` or `locations` on the error, which the server's execution adds. There
-is no `constraint` on an issue, as on a client.
+is no `constraint` nor `value` on an issue, as on a client.
 
 ### `'<module>#<export>'`: your own
 
