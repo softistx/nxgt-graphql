@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildSchema, getIntrospectionQuery } from 'graphql';
+import { buildSchema, getIntrospectionQuery, parse, validate } from 'graphql';
 import { check, limitOf } from '../../test/limits';
 import { maxDepth } from './max-depth';
 import { maxFields } from './max-fields';
@@ -117,6 +117,22 @@ describe('maxFields', () => {
 		expect(errors.every((e) => limitOf(e).code !== 'QUERY_TOO_WIDE')).toBe(
 			true,
 		);
+	});
+
+	test('@skip and @include are not evaluated', () => {
+		const source = '{ item(id: "1") { id @skip(if: true) } }';
+		expect(limitOf(run(source, 1)[0]).fields).toBe(2);
+		expect(run(source, 2)).toEqual([]);
+	});
+
+	test('a fragment cycle counts 0 where it closes', () => {
+		const source = `
+			{ item(id: "1") { ...A } }
+			fragment A on Item { id ...B }
+			fragment B on Item { name ...A }
+		`;
+		const [error] = validate(schema, parse(source), [maxFields({ limit: 1 })]);
+		expect(limitOf(error).fields).toBe(3);
 	});
 
 	test('inline fragments on a union count every branch', () => {

@@ -75,7 +75,9 @@ function fragmentCount(walk: FieldsContext, name: string): number {
  * Every field node counts 1, aliases and `__typename` included. A named
  * fragment counts at each spread (walked once), an inline fragment counts its
  * contents, and every branch of a union counts: nothing is pruned by type.
- * `@skip` and `@include` are not evaluated, so the count can overestimate.
+ * `@skip` and `@include` are not evaluated, so the count can be over the
+ * document's field count. It counts the document, spreads expanded, not what the
+ * executor runs: how often a field runs inside a list is `maxListCost`'s.
  * One `GraphQLError` per operation, with
  * `extensions: { code: 'QUERY_TOO_WIDE', fields, limit }`, `fields` being the
  * operation's real count (clamped at `Number.MAX_SAFE_INTEGER`).

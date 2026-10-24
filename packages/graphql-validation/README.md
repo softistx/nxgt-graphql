@@ -277,7 +277,7 @@ const yoga = createYoga({
 
 One `GraphQLError` per operation: `extensions: { code: 'QUERY_TOO_DEEP', depth,
 limit }`, `{ code: 'QUERY_TOO_COSTLY', cost, limit }` or `{ code: 'QUERY_TOO_WIDE',
-fields, limit }`. `maxFields` counts every field selection, aliases and
+fields, limit }`. `maxFields` counts every field selection in the document, aliases and
 `__typename` included, at each spread of a fragment. A list field is sized by
 its `first`, `last` or `limit` argument; a variable, a negative number or no
 argument uses the argument's SDL default, else `defaultFirst`. A size is an

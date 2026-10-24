@@ -260,7 +260,7 @@ packages/graphql-validation/src/
   field-issue-of.ts        fieldIssueOf, FIELD_CODES: a Zod issue as one of those fields,
                            the mapping codegen-msw's default refusal applies
   limits/                  maxDepth, maxListCost and maxFields, one validation rule per file, a spec
-                           beside each; helpers, no rule: describe.ts (what both share),
+                           beside each; helpers, no rule: describe.ts (what the rules share),
                            introspection.ts (sizes of __schema/__type), list-size.ts (how a
                            list field is sized). Never a constraint rule: registry.spec.ts
                            only scans rules/ and formats/

@@ -27,7 +27,7 @@ Four `items` levels of 100 each can ask for 100 million nodes in a query nine
 levels deep (`folder`, four `items`, three `folder`, `id`). `maxDepth` bounds the nesting; `maxListCost` bounds the work.
 
 Neither bounds breadth: a query of 2000 aliases of `item(id: "1") { id }` is two
-levels deep and costs 4000, yet makes the executor run 4000 fields; so does a
+levels deep and costs 4000, yet selects 4000 fields for the executor to run; so does a
 query of thousands of aliases of `__typename`, which neither rule counts.
 `maxFields` bounds that.
 
@@ -203,8 +203,10 @@ it and never `Infinity`.
 
 ## `maxFields({ limit, ignoreIntrospection? })`
 
-The size of an operation is the number of field selections the executor would
-run for it.
+The size of an operation is the number of field selections in its document,
+fragment spreads expanded. It is not what the executor runs: how often a field
+runs inside a list is `maxListCost`'s business, so `maxFields` alone does not
+bound execution.
 
 - Every field node counts 1: aliases count (`a1: id a2: id` is 2), and so does
   `__typename`.
@@ -214,7 +216,7 @@ run for it.
   (`NoFragmentCyclesRule` reports it).
 - Inline fragments count their contents. No type condition prunes anything:
   every branch of a union or an interface counts, so the figure can only be
-  over the truth.
+  over the document's field count.
 - `@skip` and `@include` are not evaluated (the rules read the document, not its
   variables): a field they would remove is counted anyway.
 - `__schema` and `__type` and everything under them count like any field.
