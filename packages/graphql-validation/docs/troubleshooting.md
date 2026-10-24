@@ -8,6 +8,7 @@ is the one a client sees.
 - [Startup](#startup)
 - [Silent traps](#silent-traps)
 - [Runtime](#runtime)
+- [Query limits](#query-limits)
 - [The bin](#the-bin)
 
 ## Install
@@ -404,6 +405,36 @@ every issue. The resolver did not run.
 | `Too big: expected array to have <=2 items` | `maxItems: 2` |
 | `Too small: expected number to be >=18` | `min: 18` |
 | `Invalid string: must match pattern /.../` | `pattern` |
+
+## Query limits
+
+### `Operation "Name" is 9 levels deep, more than the 8 allowed`
+
+**When:** an operation is validated with `maxDepth({ depth: 8 })`.
+**Why:** `extensions` is `{ code: 'QUERY_TOO_DEEP', depth: 9, limit: 8 }`. A
+top-level field is depth 1; named fragments are followed, inline fragments add
+nothing, `__typename` and introspection do not count. An anonymous operation
+reads `Operation is 9 levels deep, ...`.
+**Fix:** flatten the query, or raise `depth`. See
+[Limiting the depth and cost of a query](guide/query-limits.md).
+
+### `Operation "Name" costs 5002, more than the 1000 allowed`
+
+**When:** an operation is validated with `maxListCost({ budget: 1000, ... })`.
+**Why:** `extensions` is `{ code: 'QUERY_TOO_COSTLY', cost: 5002, limit: 1000 }`.
+Each field costs 1, times the sizes of the lists enclosing it. A list without a
+usable `first` (a variable, a negative number, nothing) counts for its SDL
+default, else `defaultFirst`, so a query that is cheap with the variable's real
+value can still be refused.
+**Fix:** ask for fewer items with a literal `first`, or raise `budget`. A query
+on an interface or a union is overestimated (every branch is summed).
+
+### `maxDepth: depth must be an integer of at least 1.`
+
+**When:** `maxDepth` is called with `0`, a negative or a fractional `depth`
+(`maxListCost` throws the same `RangeError` for `budget` and `defaultFirst`,
+at least 0).
+**Fix:** pass an integer in range.
 
 ## The bin
 

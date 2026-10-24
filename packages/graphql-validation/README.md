@@ -234,6 +234,44 @@ if (!result.success)
 The codes, and `fieldsError`, are in
 [Answering invalid input as one error](docs/guide/invalid-input.md).
 
+### Limiting the depth and cost of a query
+
+A schema with list cycles (`Folder.items` returns items, `Item.folder` returns
+its folder) lets a client nest a query whose cost grows exponentially.
+`maxDepth` and `maxListCost` are graphql-js validation rules that refuse such a
+query before any resolver runs.
+
+```ts
+import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
+import { parse, specifiedRules, validate } from 'graphql';
+
+const rules = [maxDepth({ depth: 8 }), maxListCost({ budget: 10_000, defaultFirst: 50 })];
+const errors = validate(schema, parse(query), [...specifiedRules, ...rules]);
+```
+
+```ts
+// graphql-yoga
+import { createYoga } from 'graphql-yoga';
+
+const yoga = createYoga({
+  schema,
+  plugins: [
+    {
+      onValidate: ({ addValidationRule }) => {
+        addValidationRule(maxDepth({ depth: 8 }));
+        addValidationRule(maxListCost({ budget: 10_000, defaultFirst: 50 }));
+      },
+    },
+  ],
+});
+```
+
+One `GraphQLError` per operation: `extensions: { code: 'QUERY_TOO_DEEP', depth,
+limit }` or `{ code: 'QUERY_TOO_COSTLY', cost, limit }`. A list field is sized by
+its `first`, `last` or `limit` argument; a variable, a negative number or no
+argument uses the argument's SDL default, else `defaultFirst`. See
+[Limiting the depth and cost of a query](docs/guide/query-limits.md).
+
 ## IDE support
 
 An IDE's GraphQL plugin (JetBrains GraphQL, VS Code GraphQL) reads your `.graphql`
@@ -285,6 +323,9 @@ the directive declared is this package's. Both at once throw
 | `INVALID_INPUT` | `'validation.errors.invalid-input'` |
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
+| `maxDepth({ depth })` | a graphql-js validation rule refusing an operation nested deeper than `depth` fields, `extensions.code` `QUERY_TOO_DEEP` |
+| `maxListCost({ budget, defaultFirst, sizeArguments? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY` |
+| `MaxDepthOptions`, `MaxListCostOptions` | their options |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `ArgsSchemaFor`, `SchemaOf` | the types `validated` accepts: the schema or shape, and that or the function building it from the context |
 | `WithValidationOptions`, `FormatSchemas`, `OwnFormats`, `StringSchema`, `FormatName` | the types of `withValidation`'s options: a record of string schemas, with no built-in format name (`FormatName`) |
@@ -343,6 +384,6 @@ Every startup error and its fix is in [Troubleshooting](docs/troubleshooting.md)
 ## Documentation
 
 - [Documentation index](docs/README.md)
-- Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md), [Answering invalid input as one error](docs/guide/invalid-input.md)
+- Guides: [Constraints](docs/guide/constraints.md), [Errors](docs/guide/errors.md), [Answering invalid input as one error](docs/guide/invalid-input.md), [Limiting the depth and cost of a query](docs/guide/query-limits.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Roadmap](docs/roadmap.md): schemas that read the context, emitting the invalid-input shape directly

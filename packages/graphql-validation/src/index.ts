@@ -20,6 +20,8 @@ export {
 	invalidInputError,
 	type Translate,
 } from './invalid-input';
+export { type MaxDepthOptions, maxDepth } from './limits/max-depth';
+export { type MaxListCostOptions, maxListCost } from './limits/max-list-cost';
 export type { ConstraintArgument } from './rules';
 export {
 	type ArgsSchema,

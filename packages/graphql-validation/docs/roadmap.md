@@ -18,6 +18,11 @@ Nothing planned yet.
 
 ## Shipped
 
+- **Query depth and cost limits** — next release. `maxDepth({ depth })` and
+  `maxListCost({ budget, defaultFirst })` are graphql-js validation rules (also
+  for graphql-yoga's `addValidationRule`) refusing a query nested too deep or
+  too costly for a schema with list cycles, with stable `QUERY_TOO_DEEP` and
+  `QUERY_TOO_COSTLY` codes.
 - **Schemas that read the context** — 0.5.0. `validated((context, info) =>
   schema, resolver)` builds the schema on each call from the request's context
   and the field's `info`, for checks that need the request (a uniqueness query
