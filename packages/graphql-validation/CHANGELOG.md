@@ -1,5 +1,13 @@
 # @nxgt/graphql-validation
 
+## 0.6.0
+
+### Minor Changes
+
+- [#111](https://github.com/softistx/nxgt-graphql/pull/111) [`8172670`](https://github.com/softistx/nxgt-graphql/commit/8172670a96fad501ba506ac2a748a7e69c3106bc) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Each issue a `@constraint` raises in `extensions.issues` now carries `value`, the value that argument was declared with (`100` for `maxLength: 100`, `"email"` for `format: "email"`), so a client can say "at most 100 characters" without parsing the message; an issue from `validated()` has neither `constraint` nor `value`.
+
+- [#115](https://github.com/softistx/nxgt-graphql/pull/115) [`12f78d1`](https://github.com/softistx/nxgt-graphql/commit/12f78d128cb3d69efe0577b77aa5646432a9f12a) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `maxDepth({ depth, ignoreIntrospection? })` and `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })` are graphql-js validation rules (for `validate` and graphql-yoga's `addValidationRule`) that refuse a query nested too deep or whose list-weighted cost is over a budget, with stable `QUERY_TOO_DEEP` and `QUERY_TOO_COSTLY` error codes; introspection is counted unless `ignoreIntrospection` is set.
+
 ## 0.5.0
 
 ### Minor Changes
