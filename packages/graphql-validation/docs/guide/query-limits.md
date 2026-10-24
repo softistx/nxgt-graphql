@@ -44,6 +44,7 @@ const errors = validate(schema, parse(query), [
 With graphql-yoga, in a plugin:
 
 ```ts
+import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
 import { createYoga } from 'graphql-yoga';
 
 createYoga({
@@ -116,8 +117,8 @@ schema itself: `__Schema.types` is the number of types of the schema, and
 `fields`, `inputFields`, `enumValues`, `args`, `interfaces`, `possibleTypes`,
 `directives` and `locations` are the longest such list anywhere in the schema.
 A query repeating `a1: __schema { ... }` hundreds of times is refused like any
-other. The standard introspection query costs about 185,000 on a schema of one
-field (graphql 16.11; about 222,000 on graphql 17), so it is refused by a budget
+other. The standard introspection query costs on the order of 200,000 even on a
+schema of one field, so it is refused by a budget
 of 10,000: pass `ignoreIntrospection: true` where introspection is disabled or
 the client is trusted, such as GraphiQL in development.
 
@@ -138,17 +139,20 @@ argument says:
 | --- | --- |
 | a literal Int, 0 or more (`first: 5`) | that number |
 | a string literal holding a canonical integer (`limit: "100000000"`, for a `Long`-like scalar) | that number: digits only, no sign, no leading zero |
+| a bigint (an SDL default held by a code-first schema, or after graphql-tools' `mapSchema`) | that number |
 | an integral Float literal (`first: 1000.0`, `first: 1e3`) | that number; `1.5` and `-1000.0` are unusable |
 | a negative literal (`first: -1000`), another string | as if unusable, see below |
 | a variable (`first: $n`) | as if unusable: validation has no variable values |
 | not given | its SDL default, when it has one; else nothing |
 
 An SDL default is read the same way: `limit: String = "1000"` and `first:
-Float = 1000.0` are sizes of 1000. Every size is held below
+Float = 1000.0` are sizes of 1000. Every size is held at most
 `Number.MAX_SAFE_INTEGER`.
 
-An argument given but unusable counts for its SDL default when it is a
-non-negative Int (`items(first: Int = 100)`), and `defaultFirst` otherwise. A
+An argument given but unusable counts for its SDL default when it has one in
+any accepted form (`items(first: Int = 100)`), and `defaultFirst` otherwise. On
+an abstract parent that is the largest default, or `defaultFirst` when it is
+larger and some possible type has no default. A
 field where no size argument says anything is sized `defaultFirst`.
 
 On an interface or a union, the default is the **largest** over the interface's

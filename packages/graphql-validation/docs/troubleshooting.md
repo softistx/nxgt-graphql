@@ -453,7 +453,7 @@ budget at or over it would refuse nothing.
 **When:** `QUERY_TOO_COSTLY` or `QUERY_TOO_DEEP` for GraphiQL's schema fetch or
 a codegen's introspection query.
 **Why:** `__schema` is counted: the standard introspection query is 15 levels
-deep and costs about 185,000 on a one-field schema.
+deep and costs on the order of 200,000 on a one-field schema.
 **Fix:** `ignoreIntrospection: true` on the rule where introspection is
 disabled or the client is trusted. A `first: $n` variable counts for the SDL
 default, not for the value sent.

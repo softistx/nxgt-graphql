@@ -253,6 +253,7 @@ const errors = validate(schema, parse(query), [...specifiedRules, ...rules]);
 
 ```ts
 // graphql-yoga
+import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
 import { createYoga } from 'graphql-yoga';
 
 const yoga = createYoga({
