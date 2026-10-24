@@ -26,6 +26,10 @@ permissions:
 jobs:
   deprecate:
     name: Deprecate
+    # NPM_TOKEN lives in the `npm` environment, whose deployment branches are
+    # limited to develop: a repository secret could be read by any workflow
+    # on any branch.
+    environment: npm
     runs-on: ubuntu-latest
     steps:
       # Bun has no `deprecate`, so this is the one job that uses npm. The
