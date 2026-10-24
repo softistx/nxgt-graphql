@@ -212,3 +212,39 @@ describe('maxListCost: variableSize option', () => {
 		expect(() => maxListCost({ ...options, variableSize: 0 })).not.toThrow();
 	});
 });
+
+describe('maxListCost: a non-integral or exclusive bound', () => {
+	const FLOATS =
+		'directive @constraint(max: Float, exclusiveMax: Float) on ARGUMENT_DEFINITION';
+	const make = (constraint: string) =>
+		buildSchema(/* GraphQL */ `
+			${FLOATS}
+			type Item { id: ID! }
+			type Query { items(first: Int = 5 ${constraint}): [Item!]! }
+		`);
+	const source = 'query($n: Int) { items(first: $n) { id } }';
+
+	test('a non-integral max is rounded up and wins over variableSize', () => {
+		const schema = make('@constraint(max: 100.5)');
+		// items 1 + 101 * 1
+		expect(costOf(source, schema)).toBe(102);
+		expect(costOf(source, schema, { variableSize: 50 })).toBe(102);
+	});
+
+	test('exclusiveMax counts as the size', () => {
+		const schema = make('@constraint(exclusiveMax: 101)');
+		expect(costOf(source, schema)).toBe(102);
+		expect(costOf(source, schema, { variableSize: 50 })).toBe(102);
+	});
+
+	test('the largest of max and exclusiveMax counts', () => {
+		const schema = make('@constraint(max: 20, exclusiveMax: 30)');
+		expect(costOf(source, schema)).toBe(31);
+	});
+
+	test('a negative bound is no bound', () => {
+		const schema = make('@constraint(max: -3)');
+		expect(costOf(source, schema)).toBe(6);
+		expect(costOf(source, schema, { variableSize: 50 })).toBe(51);
+	});
+});

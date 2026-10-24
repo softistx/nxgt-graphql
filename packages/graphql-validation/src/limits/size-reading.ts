@@ -57,10 +57,22 @@ export function defaultSizeOf(
 	return undefined;
 }
 
+/** A bound a literal gives: a finite number of at least 0 rounded up, or what `literalSize` reads in a string. */
+function boundOf(value: ValueNode): number | undefined {
+	if (value.kind === 'StringValue') return literalSize(value);
+	if (value.kind !== 'IntValue' && value.kind !== 'FloatValue')
+		return undefined;
+	const number = Number(value.value);
+	return Number.isFinite(number) && number >= 0
+		? Math.min(Math.ceil(number), CEILING)
+		: undefined;
+}
+
 /**
- * The `max` of an argument's `@constraint` directive, as a size: what the
- * client may send at most. Read from the SDL node, so a code-first argument
- * (no `astNode`) declares none.
+ * The bound of an argument's `@constraint` directive, as a size: what the
+ * client may send at most. The largest of `max` and `exclusiveMax` (the value
+ * itself, a slight over-count), a fractional one rounded up. Read from the SDL
+ * node, so a code-first argument (no `astNode`) declares none.
  */
 export function constraintMaxOf(
 	argument: GraphQLArgument | undefined,
@@ -68,6 +80,15 @@ export function constraintMaxOf(
 	const directive = argument?.astNode?.directives?.find(
 		(node) => node.name.value === 'constraint',
 	);
-	const max = directive?.arguments?.find((node) => node.name.value === 'max');
-	return max ? literalSize(max.value) : undefined;
+	let largest: number | undefined;
+	for (const node of directive?.arguments ?? []) {
+		if (node.name.value !== 'max' && node.name.value !== 'exclusiveMax') {
+			continue;
+		}
+		const bound = boundOf(node.value);
+		if (bound !== undefined && (largest === undefined || bound > largest)) {
+			largest = bound;
+		}
+	}
+	return largest;
 }
