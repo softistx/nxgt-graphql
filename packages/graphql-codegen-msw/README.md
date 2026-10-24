@@ -169,8 +169,11 @@ non-null type, a wrong type, an unknown enum value or input field, an Int
 beyond 32 bits, a value a custom scalar refuses) is answered as graphql-yoga
 answers it, whatever `invalidInput` is: status 400, one plain error per
 problem in graphql 17's wording, types named and "Did you mean …?" included,
-no `extensions`, except a custom scalar's: the `INVALID_SCALAR` ones a `zodScalar` puts in its error. The generated file describes the input types from the schema
-for it. The few cases where the mock still differs are listed in
+no `extensions` (except a value a `zodScalar` refuses, which carries the
+scalar's own `{ code: 'INVALID_SCALAR', scalar, reason }`, as
+[`@nxgt/graphql-scalars`](https://www.npmjs.com/package/@nxgt/graphql-scalars)
+puts it on the server). The generated file describes the input types from the
+schema for it. The few cases where the mock still differs are listed in
 [the handlers guide](./docs/guide/handlers.md#known-differences).
 
 ```json
