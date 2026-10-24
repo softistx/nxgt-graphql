@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.7.0
+
+### Minor Changes
+
+- [#112](https://github.com/softistx/nxgt-graphql/pull/112) [`7581507`](https://github.com/softistx/nxgt-graphql/commit/7581507aac713991b9536b5374f0696cbcf54fc2) Thanks [@SteveGT96](https://github.com/SteveGT96)! - An input a `zodScalar` refuses now carries `extensions: { code: 'INVALID_SCALAR', scalar, reason }` (type `InvalidScalarExtensions`, `reason` being Zod's first issue code), on a variable's error too, so a server maps it without parsing the message; `@nxgt/graphql-codegen-msw` gives a custom scalar's coercion refusal the same extensions.
+
 ## 0.6.2
 
 ### Patch Changes
