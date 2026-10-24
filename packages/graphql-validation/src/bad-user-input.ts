@@ -15,7 +15,17 @@ export interface ValidationIssue {
 	 * refusal of `validated()`'s own schema.
 	 */
 	readonly constraint?: ConstraintArgument;
+	/**
+	 * What that `@constraint` argument was declared with, exactly as written
+	 * (`100` for `maxLength: 100`, `"email"` for `format: "email"`), so a
+	 * client can say "at most 100 characters" without parsing `message`.
+	 * Present exactly when `constraint` is.
+	 */
+	readonly value?: ConstraintValue;
 }
+
+/** What a `@constraint` argument is declared with: a number or a string. */
+export type ConstraintValue = string | number;
 
 /** The `extensions` of the error an invalid input becomes. */
 export type BadUserInputExtensions = {
@@ -23,10 +33,13 @@ export type BadUserInputExtensions = {
 	readonly issues: readonly ValidationIssue[];
 };
 
-/** Names the `@constraint` argument behind an issue, when there is one. */
+/**
+ * Names the `@constraint` argument behind an issue, and what it was declared
+ * with, when there is one.
+ */
 export type ConstraintOf = (
 	issue: z.core.$ZodIssue,
-) => ConstraintArgument | undefined;
+) => { argument: ConstraintArgument; value: ConstraintValue } | undefined;
 
 function issuesOf(
 	error: z.ZodError,
@@ -38,7 +51,13 @@ function issuesOf(
 		);
 		const constraint = constraintOf?.(issue);
 		return constraint
-			? { path, message: issue.message, code: issue.code, constraint }
+			? {
+					path,
+					message: issue.message,
+					code: issue.code,
+					constraint: constraint.argument,
+					value: constraint.value,
+				}
 			: { path, message: issue.message, code: issue.code };
 	});
 }

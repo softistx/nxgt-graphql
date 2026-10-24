@@ -24,9 +24,9 @@ An invalid input is **one** `GraphQLError`, thrown before your resolver runs:
       "extensions": {
         "code": "BAD_USER_INPUT",
         "issues": [
-          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format", "constraint": "format" },
-          { "path": ["input", "name"], "message": "Too small: expected string to have >=2 characters", "code": "too_small", "constraint": "minLength" },
-          { "path": ["input", "tags"], "message": "Too big: expected array to have <=2 items", "code": "too_big", "constraint": "maxItems" }
+          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format", "constraint": "format", "value": "email" },
+          { "path": ["input", "name"], "message": "Too small: expected string to have >=2 characters", "code": "too_small", "constraint": "minLength", "value": 2 },
+          { "path": ["input", "tags"], "message": "Too big: expected array to have <=2 items", "code": "too_big", "constraint": "maxItems", "value": 2 }
         ]
       }
     }
@@ -48,6 +48,13 @@ meant for display in every language: map on `constraint` and `path` if you
 translate. Prefer `constraint` to `code`: it is the name in your schema, while
 `code` is Zod's and can change when Zod does across a major version.
 
+`value` is what that argument was declared with, exactly as written: `100` for
+`maxLength: 100`, `"^[0-9]{5}$"` for a `pattern`, `"email"` for
+`format: "email"`. A client can say "at most 100 characters" from
+`constraint` and `value` without parsing `message`. It is present exactly when
+`constraint` is, so a refusal of a [`validated`](#validated) schema has
+neither.
+
 ### Types
 
 ```ts
@@ -57,6 +64,8 @@ interface ValidationIssue {
   readonly code: string;
   /** The `@constraint` argument that refused; absent for `validated`'s own schema. */
   readonly constraint?: ConstraintArgument;
+  /** What that argument was declared with, as written; present exactly when `constraint` is. */
+  readonly value?: string | number;
 }
 
 type ConstraintArgument =
