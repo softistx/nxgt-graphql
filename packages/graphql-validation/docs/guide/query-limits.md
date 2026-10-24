@@ -202,9 +202,13 @@ selected **directly on its return type**:
   a list: its SDL default, else `defaultFirst`.
 - The rule is structural: any non-list field stating a size sizes the lists
   declaring no size argument directly on its return type, whether or not it is
-  a connection. `user(limit: 0) { friends { … } }` sizes `friends` 0.
-- Inline fragments, and fragment spreads, on that same selection set pass the pending size through. A named fragment is costed
-  once for each distinct pending size it is spread under (`...C` under
+  a connection. `user(limit: 0) { friends { … } }` sizes `friends` 0. So an
+  argument named in `sizeArguments` must size the lists directly under its
+  field: when one of yours means something else, leave its name out of
+  `sizeArguments` (or rename the argument).
+- Inline fragments, and fragment spreads, on that same selection set pass the
+  pending size through. A named fragment is costed once for each distinct
+  pending size it is spread under (`...C` under
   `first: 2` and `first: 5` costs differently). Under more than eight distinct
   sizes in one document a fragment's further sizes are rounded up to the next
   power of two, so the work stays linear in the document and the cost only
@@ -212,7 +216,8 @@ selected **directly on its return type**:
 
 ### Fragments and abstract types
 
-Named fragments are followed, each costed once per pending size (see above; a fragment's type condition fixes
+Named fragments are followed, each costed once per pending size (see above;
+a fragment's type condition fixes
 its parent type). A fragment spread twice counts twice. Inline fragments and
 fragments on an interface or a union are **summed branch by branch**: a
 selection `... on A { ... } ... on B { ... }` costs A's plus B's, although an
