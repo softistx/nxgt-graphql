@@ -130,12 +130,14 @@ function fragmentCost(
  * integer (`"1000"`) or an integral Float (`1e3`) of at least 0 says that
  * number. Anything else (a negative literal, a variable, since validation has
  * no variable values) says the largest of the argument's SDL default when it
- * has a usable one (`defaultFirst` otherwise), its declared `@constraint(max)`
- * and `variableSize`; an argument not given says its SDL default, or nothing. When nothing is said the size is `defaultFirst`. On an interface the
- * largest default over its possible types is used. Hence no subtree ever costs
- * less than nothing: a negative `first` on one field cannot cancel the cost of
- * its sibling. A field whose type (once unwrapped from non-null) is a list is
- * one list, nested `[[X]]` included.
+ * has a usable one (`defaultFirst` otherwise), its declared bound
+ * (`@constraint(max)` or `exclusiveMax`) and, when some definition declares no
+ * bound, `variableSize`; an argument not given says its SDL default, or
+ * nothing. When nothing is said the size is `defaultFirst`. On an interface
+ * the largest default and bound over its possible types is used. Hence no
+ * subtree ever costs less than nothing: a negative `first` on one field cannot
+ * cancel the cost of its sibling. A field whose type (once unwrapped from
+ * non-null) is a list is one list, nested `[[X]]` included.
  *
  * A Relay connection puts the size on a field returning an object, with the
  * list below it (`items(first: 100) { edges { node { id } } }`). A field that

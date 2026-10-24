@@ -21,12 +21,16 @@ export interface MaxListCostOptions {
 	ignoreIntrospection?: boolean;
 	/**
 	 * What to assume for a size argument the client sends as a variable (or
-	 * writes as an unusable literal) when it declares no `@constraint(max)`:
-	 * an integer of at least 0. Validation has no variable values, and the
-	 * client may send any value the argument accepts, so such a size counts as
-	 * the largest of its SDL default (else `defaultFirst`), its declared
-	 * `@constraint(max)`, and this. A declared max wins over this option. The
-	 * operation's own variable default is ignored. Default: none.
+	 * writes as an unusable literal): an integer of at least 0. Validation has
+	 * no variable values, and the client may send any value the argument
+	 * accepts, so such a size counts as the largest of its SDL default (else
+	 * `defaultFirst`), its declared bound (`@constraint(max)` or `exclusiveMax`)
+	 * and, where some definition declares no bound, this. It applies to every
+	 * size argument. A declared bound wins over this option only when every
+	 * definition declares one (the interface's field and each possible type's);
+	 * if any lacks one, this applies too and the largest wins. A code-first
+	 * argument has no SDL node, so only this applies to it. The operation's own
+	 * variable default is ignored. Default: none.
 	 */
 	variableSize?: number;
 }

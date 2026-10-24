@@ -426,10 +426,9 @@ reads `Operation is 9 levels deep, ...`.
 **Why:** `extensions` is `{ code: 'QUERY_TOO_COSTLY', cost: 5002, limit: 1000 }`.
 Each field costs 1, times the sizes of the lists enclosing it. A list without a
 usable `first` counts for its SDL default, else `defaultFirst`; a variable or
-a negative number counts for the largest of that, the argument's
-`@constraint(max)` and `variableSize`, so a query that is cheap with the
-variable's real value can still be refused (a variable now costs what its
-declared max allows). A size argument on a field returning an object (a
+a negative number counts for the largest of that, the declared bound and
+`variableSize`, so a query that is cheap with the variable's real value can
+still be refused, see [Variables](guide/query-limits.md#variables). A size argument on a field returning an object (a
 connection's `first`) now sizes its `edges` and `nodes`, and any non-list field
 stating a size sizes the lists declaring none directly under it, see
 [Relay connections](guide/query-limits.md#relay-connections).
@@ -470,6 +469,17 @@ budget at or over it would refuse nothing.
 **When:** `defaultFirst` is negative, fractional or too large.
 **Fix:** pass the size to assume for a list with no usable size argument.
 
+### `maxListCost: variableSize must be an integer from 0 to 9007199254740990.`
+
+**When:** `variableSize` is negative, fractional or too large.
+**Why:** it is the size assumed for a variable or unusable size argument, and
+a size is an integer from 0 up to a bound a cost cannot overflow.
+**Fix:** pass an integer in range, such as the page cap of your resolvers:
+
+```ts
+maxListCost({ budget: 10_000, defaultFirst: 50, variableSize: 100 });
+```
+
 ### A query refused although its `first` is small, or an introspection query refused
 
 **When:** `QUERY_TOO_COSTLY`, `QUERY_TOO_DEEP` or `QUERY_TOO_WIDE` for GraphiQL's schema fetch or
@@ -478,7 +488,7 @@ a codegen's introspection query.
 deep, selects 220 fields and costs on the order of 200,000 on a one-field schema.
 **Fix:** `ignoreIntrospection: true` on the rule where introspection is
 disabled or the client is trusted. A `first: $n` variable counts for its
-declared `@constraint(max)` or `variableSize`, not for the value sent.
+declared `@constraint(max)` or `exclusiveMax`, or `variableSize`, not for the value sent.
 
 ## The bin
 
