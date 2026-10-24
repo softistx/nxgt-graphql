@@ -3,6 +3,9 @@ import { buildSchema, getIntrospectionQuery, Kind } from 'graphql';
 
 const INTROSPECTION_COST_FLOOR = 100;
 
+/** Generous: the walk takes a fraction of it on a laptop, a quadratic one several times it. */
+const TIME_BOUND_MS = 1500;
+
 import { check, cycleQuery, limitOf } from '../../test/limits';
 import { maxDepth } from './max-depth';
 import { maxListCost } from './max-list-cost';
@@ -199,6 +202,48 @@ describe('maxListCost', () => {
 		expect(costOf('{ items(limit: "007") { id } }', {}, schema)).toBe(1 + 10);
 		expect(costOf('{ items(limit: "-5") { id } }', {}, schema)).toBe(1 + 10);
 		expect(costOf('{ items(limit: "1e3") { id } }', {}, schema)).toBe(1 + 10);
+	});
+
+	test('a string default, a float literal and a float default are sizes', () => {
+		const schema = buildSchema(`
+			type Item { id: ID! }
+			type Query {
+				s(limit: String = "1000"): [Item!]!
+				g(first: Float): [Item!]!
+				h(first: Float = 1000.0): [Item!]!
+			}
+		`);
+		expect(costOf('{ s { id } }', {}, schema)).toBe(1 + 1000);
+		expect(costOf('{ g(first: 1000.0) { id } }', {}, schema)).toBe(1 + 1000);
+		expect(costOf('{ g(first: 1e3) { id } }', {}, schema)).toBe(1 + 1000);
+		expect(costOf('{ h { id } }', {}, schema)).toBe(1 + 1000);
+		// not integral, negative or not canonical: unusable
+		expect(costOf('{ g(first: 1.5) { id } }', {}, schema)).toBe(1 + 10);
+		expect(costOf('{ g(first: -1000.0) { id } }', {}, schema)).toBe(1 + 10);
+		expect(costOf('{ g(first: 1e400) { id } }', {}, schema)).toBe(1 + 10);
+	});
+
+	test('walks a schema of many possible types in time bounded by the document', () => {
+		const types = 2000;
+		let sdl = 'interface Node { id: ID! kids(first: Int = 5): [Node!]! }\n';
+		for (let i = 0; i < types; i++) {
+			sdl += `type T${i} implements Node { id: ID! kids(first: Int = ${i + 1}): [Node!]! }\n`;
+		}
+		sdl += 'type Query { node: Node }';
+		const schema = buildSchema(sdl);
+		let source = '{';
+		for (let i = 0; i < 10000; i++) source += ` a${i}: node { kids { id } }`;
+		source += ' }';
+		const start = performance.now();
+		const [error] = check(
+			source,
+			[maxListCost({ ...options, budget: 0 })],
+			schema,
+		);
+		const elapsed = performance.now() - start;
+		// the largest default over the possible types, once per alias
+		expect(limitOf(error).cost).toBe(10000 * (1 + 1 + types));
+		expect(elapsed).toBeLessThan(TIME_BOUND_MS);
 	});
 
 	test('a nested list is one list, and a non-list multiplies by 1', () => {

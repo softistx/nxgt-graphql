@@ -28,6 +28,17 @@ export function introspectionRoot(
 /** The largest list the introspection types can return for `schema`, by schema. */
 const largest = new WeakMap<GraphQLSchema, number>();
 
+const typeCounts = new WeakMap<GraphQLSchema, number>();
+
+function typeCount(schema: GraphQLSchema): number {
+	let count = typeCounts.get(schema);
+	if (count === undefined) {
+		count = Object.keys(schema.getTypeMap()).length;
+		typeCounts.set(schema, count);
+	}
+	return count;
+}
+
 function largestCount(schema: GraphQLSchema): number {
 	const known = largest.get(schema);
 	if (known !== undefined) return known;
@@ -68,7 +79,5 @@ export function introspectionSize(
 	schema: GraphQLSchema,
 	field: string,
 ): number {
-	return field === 'types'
-		? Object.keys(schema.getTypeMap()).length
-		: largestCount(schema);
+	return field === 'types' ? typeCount(schema) : largestCount(schema);
 }

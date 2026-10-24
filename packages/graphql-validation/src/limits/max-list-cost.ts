@@ -28,7 +28,11 @@ export interface MaxListCostOptions {
 	budget: number;
 	/** The size of a list field whose size cannot be read (an integer of at least 0). */
 	defaultFirst: number;
-	/** The argument names that size a list, the first present wins. Default `['first', 'last', 'limit']`. */
+	/**
+	 * The argument names that size a list. Each one given, or defaulted in the
+	 * SDL, says a size (an Int, a canonical-integer string or an integral Float)
+	 * and the largest wins. Default `['first', 'last', 'limit']`.
+	 */
 	sizeArguments?: readonly string[];
 	/**
 	 * Do not cost `__schema` and `__type` (default `false`). Only where
@@ -152,14 +156,17 @@ function rootType(schema: GraphQLSchema, operation: OperationDefinitionNode) {
  * of types, the other lists the longest list anywhere in the schema), unless
  * `ignoreIntrospection` is set.
  *
- * The size of a list field is the first of `sizeArguments` (default `first`,
- * `last`, `limit`) given on the field. A literal Int of at least 0 is used as
- * it is. Anything else (a negative literal, a variable, since validation has no
- * variable values, or no size argument) uses the argument's SDL default value
- * when it is a non-negative Int, and `defaultFirst` otherwise. Hence no
- * subtree ever costs less than nothing: a negative `first` on one field cannot
- * cancel the cost of its sibling. A field whose type (once unwrapped from
- * non-null) is a list is one list, nested `[[X]]` included.
+ * The size of a list field is the largest size its `sizeArguments` (default
+ * `first`, `last`, `limit`) say. A literal Int, a String holding a canonical
+ * integer (`"1000"`) or an integral Float (`1e3`) of at least 0 says that
+ * number. Anything else (a negative literal, a variable, since validation has
+ * no variable values) says the argument's SDL default when it has a usable one,
+ * `defaultFirst` otherwise; an argument not given says its SDL default, or
+ * nothing. When nothing is said the size is `defaultFirst`. On an interface the
+ * largest default over its possible types is used. Hence no subtree ever costs
+ * less than nothing: a negative `first` on one field cannot cancel the cost of
+ * its sibling. A field whose type (once unwrapped from non-null) is a list is
+ * one list, nested `[[X]]` included.
  *
  * Named fragments are followed, each costed once. Inline fragments and
  * fragments on an abstract type are summed branch by branch, so the cost of a

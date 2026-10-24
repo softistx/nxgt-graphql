@@ -17,16 +17,35 @@ export interface SizeContext {
 	defaultFirst: number;
 }
 
-/** A non-negative integer, or `undefined`. */
+const CANONICAL_INTEGER = /^(0|[1-9]\d*)$/;
+
+/**
+ * The one reading of a size, wherever it comes from (a literal, a default): a
+ * non-negative integral number, or a canonical-integer string, clamped to the
+ * ceiling. Anything else says nothing.
+ */
 function sizeOf(value: unknown): number | undefined {
+	if (typeof value === 'string') {
+		return CANONICAL_INTEGER.test(value)
+			? Math.min(Number(value), CEILING)
+			: undefined;
+	}
 	return typeof value === 'number' && Number.isInteger(value) && value >= 0
-		? value
+		? Math.min(value, CEILING)
 		: undefined;
+}
+
+/** The size a literal gives: an Int, a canonical-integer String or an integral Float (`1e3`). */
+function literalSize(value: ValueNode): number | undefined {
+	if (value.kind === 'IntValue' || value.kind === 'FloatValue') {
+		return sizeOf(Number(value.value));
+	}
+	return value.kind === 'StringValue' ? sizeOf(value.value) : undefined;
 }
 
 /**
  * An argument's SDL default as a size. graphql 16 holds it as `defaultValue`;
- * graphql 17 as `default`, `{ value }` or `{ literal }` (an `IntValue`).
+ * graphql 17 as `default`, `{ value }` or `{ literal }`.
  */
 function defaultSizeOf(argument: object | undefined): number | undefined {
 	if (!argument) return undefined;
@@ -38,65 +57,104 @@ function defaultSizeOf(argument: object | undefined): number | undefined {
 	const fallback = argument.default;
 	if (typeof fallback !== 'object' || fallback === null) return undefined;
 	if ('value' in fallback) return sizeOf(fallback.value);
-	if (
-		'literal' in fallback &&
-		typeof fallback.literal === 'object' &&
-		fallback.literal !== null &&
-		'kind' in fallback.literal &&
-		fallback.literal.kind === 'IntValue' &&
-		'value' in fallback.literal
-	) {
-		return sizeOf(Number(fallback.literal.value));
+	if ('literal' in fallback && typeof fallback.literal === 'object') {
+		const literal = fallback.literal;
+		return literal !== null && 'kind' in literal
+			? literalSize(literal as ValueNode)
+			: undefined;
 	}
 	return undefined;
-}
-
-/** The size a literal gives: an Int of at least 0, or a string holding one. */
-function literalSize(value: ValueNode): number | undefined {
-	if (value.kind === 'IntValue') return sizeOf(Number(value.value));
-	if (value.kind === 'StringValue' && /^(0|[1-9]\d*)$/.test(value.value)) {
-		return Math.min(Number(value.value), CEILING);
-	}
-	return undefined;
-}
-
-/** The size one size argument sizes `definition`'s list at, `undefined` when it says nothing. */
-function argumentSize(
-	cost: SizeContext,
-	definition: GraphQLField<unknown, unknown>,
-	name: string,
-	node: ArgumentNode | undefined,
-): number | undefined {
-	// Not a usable literal (a variable, a negative number): the argument's
-	// own SDL default, else defaultFirst.
-	const fallback = () =>
-		defaultSizeOf(definition.args.find((arg) => arg.name === name));
-	if (!node) return fallback();
-	return literalSize(node.value) ?? fallback() ?? cost.defaultFirst;
-}
-
-/** The size of the list `definition` returns, as selected by `args`: the largest its size arguments say. */
-function sizeIn(
-	cost: SizeContext,
-	definition: GraphQLField<unknown, unknown>,
-	args: readonly ArgumentNode[] | undefined,
-): number {
-	const sizes = cost.sizeArguments.map((name) =>
-		argumentSize(
-			cost,
-			definition,
-			name,
-			args?.find((arg) => arg.name.value === name),
-		),
-	);
-	const known = sizes.filter((size): size is number => size !== undefined);
-	return known.length === 0 ? cost.defaultFirst : Math.max(...known);
 }
 
 /**
- * The size of the list `definition` returns on `parent`. On an interface the
- * object types' own fields count too (each may declare another default), the
- * largest size winning.
+ * What the schema alone says of one list field and the fields implementing it,
+ * per size argument (in `sizeArguments` order): the largest default, whether
+ * some definition has none, and whether some definition has no default at all.
+ */
+interface Profile {
+	largest: (number | undefined)[];
+	someLack: boolean[];
+	someBare: boolean;
+}
+
+const profiles = new WeakMap<
+	GraphQLSchema,
+	WeakMap<readonly string[], Map<string, Profile>>
+>();
+
+function profileOf(
+	cost: SizeContext,
+	parent: GraphQLNamedType | undefined,
+	definition: GraphQLField<unknown, unknown>,
+): Profile {
+	let bySizes = profiles.get(cost.schema);
+	if (!bySizes) {
+		bySizes = new WeakMap();
+		profiles.set(cost.schema, bySizes);
+	}
+	let byField = bySizes.get(cost.sizeArguments);
+	if (!byField) {
+		byField = new Map();
+		bySizes.set(cost.sizeArguments, byField);
+	}
+	const key = `${parent?.name}.${definition.name}`;
+	const known = byField.get(key);
+	if (known) return known;
+
+	// On an interface the object types' own fields count too: each may
+	// declare another default, and the query cannot say which comes back.
+	const definitions = [definition];
+	if (isAbstractType(parent)) {
+		for (const type of cost.schema.getPossibleTypes(parent)) {
+			const implemented = type.getFields()[definition.name];
+			if (implemented) definitions.push(implemented);
+		}
+	}
+	const profile: Profile = {
+		largest: cost.sizeArguments.map(() => undefined),
+		someLack: cost.sizeArguments.map(() => false),
+		someBare: false,
+	};
+	for (const field of definitions) {
+		let any = false;
+		cost.sizeArguments.forEach((name, index) => {
+			const size = defaultSizeOf(field.args.find((arg) => arg.name === name));
+			if (size === undefined) {
+				profile.someLack[index] = true;
+				return;
+			}
+			any = true;
+			profile.largest[index] = Math.max(profile.largest[index] ?? 0, size);
+		});
+		if (!any) profile.someBare = true;
+	}
+	byField.set(key, profile);
+	return profile;
+}
+
+/** The size a size argument says, `undefined` when it says nothing. */
+function argumentSize(
+	cost: SizeContext,
+	profile: Profile,
+	index: number,
+	node: ArgumentNode | undefined,
+): number | undefined {
+	const largest = profile.largest[index];
+	if (!node) return largest;
+	const literal = literalSize(node.value);
+	if (literal !== undefined) return literal;
+	// Given but unusable (a variable, a negative number): the argument's own
+	// default, else defaultFirst.
+	return profile.someLack[index]
+		? Math.max(largest ?? 0, cost.defaultFirst)
+		: largest;
+}
+
+/**
+ * The size of the list `definition` returns on `parent`, as selected by
+ * `args`: the largest its size arguments say, and `defaultFirst` when none
+ * says anything. The schema's part is memoized, so a selection costs
+ * `sizeArguments.length` steps whatever the number of possible types.
  */
 export function listSize(
 	cost: SizeContext,
@@ -104,12 +162,16 @@ export function listSize(
 	definition: GraphQLField<unknown, unknown>,
 	args: readonly ArgumentNode[] | undefined,
 ): number {
-	const sizes = [sizeIn(cost, definition, args)];
-	if (isAbstractType(parent)) {
-		for (const type of cost.schema.getPossibleTypes(parent)) {
-			const implemented = type.getFields()[definition.name];
-			if (implemented) sizes.push(sizeIn(cost, implemented, args));
-		}
-	}
-	return Math.max(...sizes);
+	const profile = profileOf(cost, parent, definition);
+	let size: number | undefined;
+	let given = false;
+	cost.sizeArguments.forEach((name, index) => {
+		const node = args?.find((arg) => arg.name.value === name);
+		if (node) given = true;
+		const said = argumentSize(cost, profile, index, node);
+		if (said !== undefined) size = Math.max(size ?? 0, said);
+	});
+	// Nothing given: a definition without any default is sized defaultFirst.
+	if (!given && profile.someBare) size = Math.max(size ?? 0, cost.defaultFirst);
+	return size ?? cost.defaultFirst;
 }
