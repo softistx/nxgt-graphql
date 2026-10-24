@@ -5,6 +5,7 @@ import {
 	type GraphQLInterfaceType,
 	GraphQLList,
 	GraphQLObjectType,
+	GraphQLScalarType,
 	GraphQLSchema,
 	getIntrospectionQuery,
 	Kind,
@@ -283,6 +284,7 @@ describe('maxListCost', () => {
 			}),
 		});
 		expect(costOf('{ items { id } }', {}, schema)).toBe(1 + 1_000_000);
+		const Long = new GraphQLScalarType({ name: 'Long' });
 		const huge = new GraphQLSchema({
 			query: new GraphQLObjectType({
 				name: 'Query',
@@ -292,8 +294,8 @@ describe('maxListCost', () => {
 						args: {
 							first:
 								versionInfo.major >= 17
-									? { type: GraphQLInt, default: { value: 10n ** 400n } }
-									: { type: GraphQLInt, defaultValue: 10n ** 400n },
+									? { type: Long, default: { value: 10n ** 400n } }
+									: { type: Long, defaultValue: 10n ** 400n },
 						} as any,
 					},
 				},
