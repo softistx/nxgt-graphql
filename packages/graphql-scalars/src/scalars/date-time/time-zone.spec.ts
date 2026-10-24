@@ -14,7 +14,8 @@ describe('TimeZone', () => {
 			'Antarctica/DumontDUrville',
 			'America/Argentina/ComodRivadavia',
 			'Etc/GMT+5',
-			'EST5EDT',
+			// Not `EST5EDT`: tzdata 2024b made it a link, and some ICU builds
+			// (Bun's on macOS) no longer list it, so it is valid on one runtime only.
 			'NZ-CHAT',
 			'UTC',
 		],
