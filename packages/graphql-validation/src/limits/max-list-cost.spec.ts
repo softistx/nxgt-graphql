@@ -134,6 +134,73 @@ describe('maxListCost', () => {
 		).toBe(1 + 4);
 	});
 
+	test('takes the largest of several size arguments', () => {
+		const schema = buildSchema(`
+			type Item { id: ID! }
+			type Query { items(first: Int, last: Int, limit: Int): [Item!]! }
+		`);
+		expect(
+			costOf('{ items(first: 0, limit: 1000000) { id } }', {}, schema),
+		).toBe(1 + 1000000);
+		expect(costOf('{ items(first: 3, last: 5) { id } }', {}, schema)).toBe(
+			1 + 5,
+		);
+		// a size argument left out and without a default says nothing
+		expect(costOf('{ items(first: 3) { id } }', {}, schema)).toBe(1 + 3);
+	});
+
+	test('a size argument given but unusable counts for its default, else defaultFirst', () => {
+		const schema = buildSchema(`
+			type Item { id: ID! }
+			type Query { items(first: Int, limit: Int = 7): [Item!]! }
+		`);
+		expect(
+			costOf(
+				'query($n: Int) { items(first: 2, limit: $n) { id } }',
+				{},
+				schema,
+			),
+		).toBe(1 + 7);
+		expect(
+			costOf(
+				'query($n: Int) { items(first: $n, limit: 2) { id } }',
+				{},
+				schema,
+			),
+		).toBe(1 + 10);
+	});
+
+	test('an interface parent takes the largest default over its possible types', () => {
+		const schema = buildSchema(`
+			interface Node { id: ID! kids(first: Int = 1): [Node!]! }
+			type Folder implements Node { id: ID! kids(first: Int = 100000): [Node!]! }
+			type Leaf implements Node { id: ID! kids(first: Int = 2): [Node!]! }
+			type Query { node: Node }
+		`);
+		// node 1 + kids 1 + 100000 * id 1
+		expect(costOf('{ node { kids { id } } }', {}, schema)).toBe(1 + 1 + 100000);
+		// a literal still counts for every type: the largest default is not used
+		expect(costOf('{ node { kids(first: 5) { id } } }', {}, schema)).toBe(
+			1 + 1 + 5,
+		);
+	});
+
+	test('a string literal holding a canonical integer is a size', () => {
+		const schema = buildSchema(`
+			scalar Long
+			type Item { id: ID! }
+			type Query { items(limit: Long): [Item!]! }
+		`);
+		expect(costOf('{ items(limit: "100000000") { id } }', {}, schema)).toBe(
+			1 + 100000000,
+		);
+		expect(costOf('{ items(limit: "0") { id } }', {}, schema)).toBe(1);
+		// not canonical: as if absent
+		expect(costOf('{ items(limit: "007") { id } }', {}, schema)).toBe(1 + 10);
+		expect(costOf('{ items(limit: "-5") { id } }', {}, schema)).toBe(1 + 10);
+		expect(costOf('{ items(limit: "1e3") { id } }', {}, schema)).toBe(1 + 10);
+	});
+
 	test('a nested list is one list, and a non-list multiplies by 1', () => {
 		const schema = buildSchema(`
 			type Item { id: ID! }

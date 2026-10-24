@@ -7,6 +7,7 @@ import {
 	type GraphQLSchema,
 	getNamedType,
 	getNullableType,
+	isAbstractType,
 	isInterfaceType,
 	isListType,
 	isObjectType,
@@ -14,6 +15,7 @@ import {
 	type SelectionSetNode,
 	type ValidationContext,
 	type ValidationRule,
+	type ValueNode,
 } from 'graphql';
 import { assertInteger, operationLabel } from './describe';
 import {
@@ -91,29 +93,67 @@ function defaultSizeOf(argument: object | undefined): number | undefined {
 	return undefined;
 }
 
-/** The size of the list `definition` returns, as selected by `args`. */
-function listSize(
+/** The size a literal gives: an Int of at least 0, or a string holding one. */
+function literalSize(value: ValueNode): number | undefined {
+	if (value.kind === 'IntValue') return sizeOf(Number(value.value));
+	if (value.kind === 'StringValue' && /^(0|[1-9]\d*)$/.test(value.value)) {
+		return Math.min(Number(value.value), CEILING);
+	}
+	return undefined;
+}
+
+/** The size one size argument sizes `definition`'s list at, `undefined` when it says nothing. */
+function argumentSize(
+	cost: CostContext,
+	definition: GraphQLField<unknown, unknown>,
+	name: string,
+	node: ArgumentNode | undefined,
+): number | undefined {
+	// Not a usable literal (a variable, a negative number): the argument's
+	// own SDL default, else defaultFirst.
+	const fallback = () =>
+		defaultSizeOf(definition.args.find((arg) => arg.name === name));
+	if (!node) return fallback();
+	return literalSize(node.value) ?? fallback() ?? cost.defaultFirst;
+}
+
+/** The size of the list `definition` returns, as selected by `args`: the largest its size arguments say. */
+function sizeIn(
 	cost: CostContext,
 	definition: GraphQLField<unknown, unknown>,
 	args: readonly ArgumentNode[] | undefined,
 ): number {
-	const given = cost.sizeArguments.find((name) =>
-		args?.some((arg) => arg.name.value === name),
+	const sizes = cost.sizeArguments.map((name) =>
+		argumentSize(
+			cost,
+			definition,
+			name,
+			args?.find((arg) => arg.name.value === name),
+		),
 	);
-	const node = args?.find((arg) => arg.name.value === given);
-	if (node?.value.kind === 'IntValue') {
-		const literal = sizeOf(Number(node.value.value));
-		if (literal !== undefined) return literal;
+	const known = sizes.filter((size): size is number => size !== undefined);
+	return known.length === 0 ? cost.defaultFirst : Math.max(...known);
+}
+
+/**
+ * The size of the list `definition` returns on `parent`. On an interface the
+ * object types' own fields count too (each may declare another default), the
+ * largest size winning.
+ */
+function listSize(
+	cost: CostContext,
+	parent: GraphQLNamedType | undefined,
+	definition: GraphQLField<unknown, unknown>,
+	args: readonly ArgumentNode[] | undefined,
+): number {
+	const sizes = [sizeIn(cost, definition, args)];
+	if (isAbstractType(parent)) {
+		for (const type of cost.schema.getPossibleTypes(parent)) {
+			const implemented = type.getFields()[definition.name];
+			if (implemented) sizes.push(sizeIn(cost, implemented, args));
+		}
 	}
-	// Not a usable literal: the argument given, else the first one the
-	// field declares, tells its default.
-	const names = given ? [given] : cost.sizeArguments;
-	for (const name of names) {
-		const declared = definition.args.find((arg) => arg.name === name);
-		const fallback = defaultSizeOf(declared);
-		if (fallback !== undefined) return fallback;
-	}
-	return cost.defaultFirst;
+	return Math.max(...sizes);
 }
 
 /** The definition of the field `name` on `parent`, meta-fields of the query root included. */
@@ -155,7 +195,7 @@ function costOf(
 				if (isListType(getNullableType(definition.type))) {
 					const size = parent?.name.startsWith('__')
 						? introspectionSize(cost.schema, name)
-						: listSize(cost, definition, selection.arguments);
+						: listSize(cost, parent, definition, selection.arguments);
 					inner = multiply(inner, size);
 				}
 			}
