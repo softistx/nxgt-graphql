@@ -15,7 +15,7 @@ export interface MaxDepthOptions {
 	/**
 	 * Do not count `__schema` and `__type` (default `false`). Only where
 	 * introspection is disabled or the client is trusted, e.g. GraphiQL in
-	 * development: the standard introspection query is `INTROSPECTION_DEPTH` levels deep.
+	 * development: the standard introspection query (`getIntrospectionQuery()`) is 15 levels deep.
 	 */
 	ignoreIntrospection?: boolean;
 }

@@ -35,7 +35,7 @@ export interface MaxListCostOptions {
 	/**
 	 * Do not cost `__schema` and `__type` (default `false`). Only where
 	 * introspection is disabled or the client is trusted, e.g. GraphiQL in
-	 * development: the standard introspection query is costly.
+	 * development: the standard introspection query is costly (about 185,000 on a one-field schema).
 	 */
 	ignoreIntrospection?: boolean;
 }

@@ -269,7 +269,9 @@ const yoga = createYoga({
 One `GraphQLError` per operation: `extensions: { code: 'QUERY_TOO_DEEP', depth,
 limit }` or `{ code: 'QUERY_TOO_COSTLY', cost, limit }`. A list field is sized by
 its `first`, `last` or `limit` argument; a variable, a negative number or no
-argument uses the argument's SDL default, else `defaultFirst`. See
+argument uses the argument's SDL default, else `defaultFirst`. Introspection is
+counted too; add `ignoreIntrospection: true` where it is trusted (GraphiQL in
+development). See
 [Limiting the depth and cost of a query](docs/guide/query-limits.md).
 
 ## IDE support
@@ -323,8 +325,8 @@ the directive declared is this package's. Both at once throw
 | `INVALID_INPUT` | `'validation.errors.invalid-input'` |
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
 | `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
-| `maxDepth({ depth })` | a graphql-js validation rule refusing an operation nested deeper than `depth` fields, `extensions.code` `QUERY_TOO_DEEP` |
-| `maxListCost({ budget, defaultFirst, sizeArguments? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY` |
+| `maxDepth({ depth, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation nested deeper than `depth` fields, `extensions.code` `QUERY_TOO_DEEP`; introspection counts (the standard query is 15 levels) unless `ignoreIntrospection` |
+| `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY`; `sizeArguments` names the arguments sizing a list (default `first`, `last`, `limit`, the largest wins); `ignoreIntrospection` skips `__schema` and `__type` |
 | `MaxDepthOptions`, `MaxListCostOptions` | their options |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `ArgsSchemaFor`, `SchemaOf` | the types `validated` accepts: the schema or shape, and that or the function building it from the context |

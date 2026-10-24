@@ -18,8 +18,9 @@ Nothing planned yet.
 
 ## Shipped
 
-- **Query depth and cost limits** — next release. `maxDepth({ depth })` and
-  `maxListCost({ budget, defaultFirst })` are graphql-js validation rules (also
+- **Query depth and cost limits** — next release. `maxDepth` and
+  `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })`
+  (and `maxDepth({ depth, ignoreIntrospection? })`) are graphql-js validation rules (also
   for graphql-yoga's `addValidationRule`) refusing a query nested too deep or
   too costly for a schema with list cycles, with stable `QUERY_TOO_DEEP` and
   `QUERY_TOO_COSTLY` codes.

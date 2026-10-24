@@ -23,8 +23,8 @@ query {
 }
 ```
 
-Four `items` levels of 100 each can ask for 100 million nodes in a 9-level
-query. `maxDepth` bounds the nesting; `maxListCost` bounds the work.
+Four `items` levels of 100 each can ask for 100 million nodes in a query nine
+levels deep (`folder`, four `items`, three `folder`, `id`). `maxDepth` bounds the nesting; `maxListCost` bounds the work.
 
 ## Use
 
@@ -63,7 +63,7 @@ Each rule reports **one** `GraphQLError` per operation, whose `nodes` is the
 operation. An invalid option (`depth: 0`, a fractional `budget`) throws a
 `RangeError` when the rule is created.
 
-## `maxDepth({ depth })`
+## `maxDepth({ depth, ignoreIntrospection? })`
 
 The depth of an operation is the nesting of its field selections: a top-level
 field is depth 1.
@@ -71,8 +71,16 @@ field is depth 1.
 - Named fragments are followed, each measured once. A fragment cycle adds
   nothing (`NoFragmentCyclesRule` reports it).
 - Inline fragments add no depth.
-- `__typename` and the introspection meta-fields (`__schema`, `__type` and
-  everything under them) do not count.
+- `__typename` does not count. `__schema` and `__type` count like any field:
+  the standard introspection query (`getIntrospectionQuery()`) is **15 levels
+  deep**, so `maxDepth({ depth: 8 })` refuses it. Where introspection is
+  disabled, or the client is trusted (GraphiQL in development), pass
+  `ignoreIntrospection: true`: `__schema` and `__type` and everything under
+  them are then left out.
+
+```ts
+maxDepth({ depth: 8, ignoreIntrospection: process.env.NODE_ENV !== 'production' });
+```
 
 The refusal:
 
@@ -86,7 +94,7 @@ The refusal:
 `depth` is the operation's real depth. An anonymous operation reads
 `Operation is 9 levels deep, ...`.
 
-## `maxListCost({ budget, defaultFirst, sizeArguments? })`
+## `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })`
 
 ### How cost is counted
 
@@ -101,24 +109,47 @@ costs 1.
 ```
 
 A type that is a list once unwrapped from non-null is one list, nested
-`[[X]]` included. Introspection meta-fields cost nothing.
+`[[X]]` included. `__typename` costs nothing.
+
+`__schema` and `__type` are costed like any field, their lists sized by the
+schema itself: `__Schema.types` is the number of types of the schema, and
+`fields`, `inputFields`, `enumValues`, `args`, `interfaces`, `possibleTypes`,
+`directives` and `locations` are the longest such list anywhere in the schema.
+A query repeating `a1: __schema { ... }` hundreds of times is refused like any
+other. The standard introspection query costs about 185,000 on a schema of one
+field (graphql 16.11; about 222,000 on graphql 17), so it is refused by a budget
+of 10,000: pass `ignoreIntrospection: true` where introspection is disabled or
+the client is trusted, such as GraphiQL in development.
 
 ### How a list is sized
 
-The size is read from the first of `sizeArguments` (default `['first', 'last',
-'limit']`) given on the field:
+A list field is sized by its **size arguments**, `['first', 'last', 'limit']`
+unless `sizeArguments` says otherwise:
+
+```ts
+maxListCost({ budget: 10_000, defaultFirst: 50, sizeArguments: ['first', 'pageSize'] });
+```
+
+Each size argument the field gives or declares a default for says a size, and
+the **largest** wins: `items(first: 0, limit: 1000000)` is a million items. An
+argument says:
 
 | Argument | Size |
 | --- | --- |
 | a literal Int, 0 or more (`first: 5`) | that number |
-| a negative literal (`first: -1000`) | as if absent, see below |
-| a variable (`first: $n`) | as if absent: validation has no variable values |
-| not given | as if absent |
+| a string literal holding a canonical integer (`limit: "100000000"`, for a `Long`-like scalar) | that number: digits only, no sign, no leading zero |
+| a negative literal (`first: -1000`), another string | as if unusable, see below |
+| a variable (`first: $n`) | as if unusable: validation has no variable values |
+| not given | its SDL default, when it has one; else nothing |
 
-"As if absent" is the argument's SDL default when it is a non-negative Int
-(`items(first: Int = 100)`), and `defaultFirst` otherwise. When no size
-argument is given, the first of `sizeArguments` the field declares with such a
-default is used.
+An argument given but unusable counts for its SDL default when it is a
+non-negative Int (`items(first: Int = 100)`), and `defaultFirst` otherwise. A
+field where no size argument says anything is sized `defaultFirst`.
+
+On an interface or a union, the default is the **largest** over the interface's
+field and the field of every possible type (`Node.kids(first: Int = 1)` next to
+`Folder.kids(first: Int = 100000)` is sized 100,000), since the query cannot
+say which object comes back.
 
 A negative number is therefore never taken as a size: no subtree costs less than
 nothing, and `items(first: -1000)` next to an expensive sibling cannot cancel
@@ -145,6 +176,10 @@ never underestimated.
   "extensions": { "code": "QUERY_TOO_COSTLY", "cost": 5002, "limit": 1000 }
 }
 ```
+
+`budget` and `defaultFirst` must be integers below `Number.MAX_SAFE_INTEGER`
+(a cost never exceeds it, so a budget at or over it would refuse nothing); the
+rule throws a `RangeError` otherwise.
 
 Costs are plain numbers, computed from memoized fragments (no exponential work
 on a hostile query) and held at `Number.MAX_SAFE_INTEGER`: `cost` is exact below

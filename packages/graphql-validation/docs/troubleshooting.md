@@ -413,7 +413,9 @@ every issue. The resolver did not run.
 **When:** an operation is validated with `maxDepth({ depth: 8 })`.
 **Why:** `extensions` is `{ code: 'QUERY_TOO_DEEP', depth: 9, limit: 8 }`. A
 top-level field is depth 1; named fragments are followed, inline fragments add
-nothing, `__typename` and introspection do not count. An anonymous operation
+nothing, `__typename` does not count. `__schema` and `__type` do: the standard
+introspection query is 15 levels deep (pass `ignoreIntrospection: true` where
+it is trusted). An anonymous operation
 reads `Operation is 9 levels deep, ...`.
 **Fix:** flatten the query, or raise `depth`. See
 [Limiting the depth and cost of a query](guide/query-limits.md).
@@ -429,12 +431,32 @@ value can still be refused.
 **Fix:** ask for fewer items with a literal `first`, or raise `budget`. A query
 on an interface or a union is overestimated (every branch is summed).
 
-### `maxDepth: depth must be an integer of at least 1.`
+### `maxDepth: depth must be an integer from 1 to 9007199254740990.`
 
-**When:** `maxDepth` is called with `0`, a negative or a fractional `depth`
-(`maxListCost` throws the same `RangeError` for `budget` and `defaultFirst`,
-at least 0).
+**When:** `maxDepth` is called with `0`, a negative or a fractional `depth`.
 **Fix:** pass an integer in range.
+
+### `maxListCost: budget must be an integer from 0 to 9007199254740990.`
+
+**When:** `maxListCost` is called with a negative, fractional or too large
+`budget`. A cost never exceeds `Number.MAX_SAFE_INTEGER` (9007199254740991), so a
+budget at or over it would refuse nothing.
+**Fix:** pass an integer in range.
+
+### `maxListCost: defaultFirst must be an integer from 0 to 9007199254740990.`
+
+**When:** `defaultFirst` is negative, fractional or too large.
+**Fix:** pass the size to assume for a list with no usable size argument.
+
+### A query refused although its `first` is small, or an introspection query refused
+
+**When:** `QUERY_TOO_COSTLY` or `QUERY_TOO_DEEP` for GraphiQL's schema fetch or
+a codegen's introspection query.
+**Why:** `__schema` is counted: the standard introspection query is 15 levels
+deep and costs about 185,000 on a one-field schema.
+**Fix:** `ignoreIntrospection: true` on the rule where introspection is
+disabled or the client is trusted. A `first: $n` variable counts for the SDL
+default, not for the value sent.
 
 ## The bin
 
