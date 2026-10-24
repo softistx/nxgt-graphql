@@ -1,6 +1,7 @@
 export {
 	type BadUserInputExtensions,
 	badUserInput,
+	type ConstraintValue,
 	type ValidationIssue,
 } from './bad-user-input';
 export { constraintTypeDefs } from './constraint-directive';

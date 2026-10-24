@@ -40,6 +40,7 @@ interface Issue {
 	path: string[];
 	code: string;
 	constraint?: string;
+	value?: string | number;
 	message: string;
 }
 
@@ -91,6 +92,7 @@ describe('withValidation with formats of the application', () => {
 				path: ['input', 'siret'],
 				code: 'custom',
 				constraint: 'format',
+				value: 'siret',
 				message: 'Invalid SIRET: write its 14 digits',
 			},
 		]);

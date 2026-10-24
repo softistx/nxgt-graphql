@@ -5,7 +5,7 @@ import {
 	type GraphQLSchema,
 } from 'graphql';
 import type { z } from 'zod';
-import { parseArgs } from './bad-user-input';
+import { type ConstraintOf, parseArgs } from './bad-user-input';
 import { checkConstraints } from './builder/check-constraints';
 import type { FormatSchemas, OwnFormats } from './formats/registry';
 import { constraintOf } from './rules';
@@ -34,6 +34,7 @@ function checking(
 	schema: z.ZodType,
 	where: string,
 	resolve: Resolver,
+	constraintOf: ConstraintOf,
 ): Resolver {
 	const check: Resolver = async (source, args, context, info) =>
 		await resolve(
@@ -57,15 +58,18 @@ function wrap(
 	args: z.ZodType,
 	where: string,
 	subscription: boolean,
+	constraintOf: ConstraintOf,
 ): void {
 	const subscribe = (field.subscribe ??
 		(subscription ? defaultFieldResolver : undefined)) as Resolver | undefined;
 	if (subscribe) {
-		if (!subscribe[wrapped]) field.subscribe = checking(args, where, subscribe);
+		if (!subscribe[wrapped])
+			field.subscribe = checking(args, where, subscribe, constraintOf);
 		return;
 	}
 	const resolve = (field.resolve ?? defaultFieldResolver) as Resolver;
-	if (!resolve[wrapped]) field.resolve = checking(args, where, resolve);
+	if (!resolve[wrapped])
+		field.resolve = checking(args, where, resolve, constraintOf);
 }
 
 /**
@@ -111,9 +115,20 @@ export function withValidation<
 	}
 	const directive = checkConstraints(
 		schema,
-		(type, field, args) => {
+		(type, field, args, declared) => {
 			const subscription = type === schema.getSubscriptionType();
-			wrap(field, args, `${type.name}.${field.name}`, subscription);
+			// The rule that refused, with the value this field's SDL declares at the path.
+			const named: ConstraintOf = (issue) => {
+				const argument = constraintOf(issue);
+				if (!argument) return undefined;
+				// Found: the SDL carries the constraints (interfaces repeat theirs,
+				// assertInterfaceConstraintsKept), so a miss drops `constraint` by design.
+				const found = declared(issue.path).find(
+					({ rule }) => rule.argument === argument,
+				);
+				return found && { argument, value: found.value };
+			};
+			wrap(field, args, `${type.name}.${field.name}`, subscription, named);
 		},
 		formats,
 	);
