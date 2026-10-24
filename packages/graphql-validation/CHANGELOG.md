@@ -1,5 +1,11 @@
 # @nxgt/graphql-validation
 
+## 0.8.0
+
+### Minor Changes
+
+- [#124](https://github.com/softistx/nxgt-graphql/pull/124) [`72943cb`](https://github.com/softistx/nxgt-graphql/commit/72943cba630faefa6c7fbace9a8e4c02f9a7b5a9) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `maxListCost` now counts a size given as a variable (or an unusable literal) at its declared `@constraint(max)` or `exclusiveMax` (a fractional bound is rounded up, the largest counts) or the new `variableSize` option, never below its SDL default, so a cost can rise. The operation's own variable default is ignored, since the client can override it.
+
 ## 0.7.0
 
 ### Minor Changes
