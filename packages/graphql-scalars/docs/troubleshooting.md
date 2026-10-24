@@ -58,6 +58,7 @@ npm ls @nxgt/zod   # or: bun pm ls --all | grep @nxgt/zod
 **Why:** the value is not what the scalar accepts; `<issue>` says what. For a
 bad *variable*, graphql 16 prefixes the message with the value the client sent,
 `Variable "$n" got invalid value -3; PositiveInt cannot represent this input: Too small: expected number to be >0`; graphql 17 does not, `Variable "$n" has invalid value: PositiveInt cannot represent this input: Too small: expected number to be >0`.
+The error's `extensions` are `{ code: 'INVALID_SCALAR', scalar: 'PositiveInt', reason: 'too_small' }` (`reason` is Zod's first issue `code`, absent when the schema threw), also on the variable's wrapping error, so a server can map it without reading the message.
 **Fix:** send a valid value. Common issues:
 
 | Message | Cause |

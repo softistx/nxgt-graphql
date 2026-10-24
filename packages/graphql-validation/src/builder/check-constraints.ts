@@ -10,7 +10,8 @@ import type { z } from 'zod';
 import { assertOwnConstraint } from '../constraint-directive';
 import { type FormatSchemas, registryOf } from '../formats/registry';
 import { argsSchemaOf, assertInterfaceConstraintsKept } from './args-schema';
-import { constraintsOn } from './constraints';
+import { type Constraint, constraintsOn } from './constraints';
+import { declaredAt } from './declared';
 import { InputSchemas } from './input-schema';
 
 /**
@@ -19,7 +20,8 @@ import { InputSchemas } from './input-schema';
  * constraint applies where it is written (in every input type), none sits on
  * a directive's argument, objects keep their interfaces' constraints, and no
  * default value breaks its own. `onArgs` receives each object field's
- * arguments schema, for a field with something to check.
+ * arguments schema, for a field with something to check, and `declared`
+ * the `@constraint`s the field's SDL writes where an issue's path points.
  *
  * `formats` are the application's own, which `@constraint(format: "...")`
  * may name beside the built-in ones; they are checked first (name, no
@@ -34,6 +36,7 @@ export function checkConstraints(
 		type: GraphQLObjectType,
 		field: GraphQLField<unknown, unknown>,
 		args: z.ZodType,
+		declared: (path: readonly PropertyKey[]) => readonly Constraint[],
 	) => void,
 	formats?: FormatSchemas,
 ): GraphQLDirective | undefined {
@@ -56,7 +59,8 @@ export function checkConstraints(
 			unknown
 		>[]) {
 			const args = argsSchemaOf(inputs, type.name, field);
-			if (args) onArgs?.(type, field, args);
+			if (args)
+				onArgs?.(type, field, args, (path) => declaredAt(inputs, field, path));
 		}
 	}
 	inputs.checkDefaults();

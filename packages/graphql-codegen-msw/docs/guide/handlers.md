@@ -254,7 +254,10 @@ invalid-input answer never names them. The mock answers them as graphql-yoga
 - status **400**, under `Accept: application/json` and
   `application/graphql-response+json` alike;
 - one plain GraphQL error per problem, `{ message, locations }`, with no
-  `extensions`: no `code`, no `fields`;
+  `extensions`: no `code`, no `fields`. The one exception is a value a
+  `zodScalar` refuses: its error carries the scalar's
+  `{ code: 'INVALID_SCALAR', scalar, reason }` (the scalar's GraphQL name and
+  Zod's issue code), as `@nxgt/graphql-scalars` puts it on the server;
 - the message in graphql 17's wording, every type named as the schema names
   it and graphql's "Did you mean …?" included, located at the variable's
   definition in the query sent;
@@ -436,7 +439,7 @@ starts with the variable's name, where the server's starts with the
 argument's (the first two are the same when the variable is named after the
 argument); and the mock answers `{ errors }` alone, with no `data`, and no
 `path` or `locations` on the error, which the server's execution adds. There
-is no `constraint` on an issue, as on a client.
+is no `constraint` nor `value` on an issue, as on a client.
 
 ### `'<module>#<export>'`: your own
 

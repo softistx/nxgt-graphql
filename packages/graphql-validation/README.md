@@ -151,8 +151,8 @@ formats, or none, it throws. Without `formats`, nothing changes. Details in
       "extensions": {
         "code": "BAD_USER_INPUT",
         "issues": [
-          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format", "constraint": "format" },
-          { "path": ["input", "age"], "message": "Too small: expected number to be >=18", "code": "too_small", "constraint": "min" }
+          { "path": ["input", "email"], "message": "Invalid email address", "code": "invalid_format", "constraint": "format", "value": "email" },
+          { "path": ["input", "age"], "message": "Too small: expected number to be >=18", "code": "too_small", "constraint": "min", "value": 18 }
         ]
       }
     }
@@ -161,7 +161,9 @@ formats, or none, it throws. Without `formats`, nothing changes. Details in
 ```
 
 `issues[].path` is relative to the arguments, and `issues[].constraint` names the
-`@constraint` argument that refused. Mapping issues to form fields is
+`@constraint` argument that refused, with `issues[].value` the value it was
+declared with (`18` for `min: 18`): "at least 18" without parsing `message`.
+Mapping issues to form fields is
 in [Errors](docs/guide/errors.md).
 
 ### Rules a directive cannot say
@@ -324,7 +326,7 @@ the directive declared is this package's. Both at once throw
 | `FIELD_CODES` | those codes, keyed `tooShort`, `tooLong`, `outOfRange`, `tooFew`, `tooMany`, `invalidFormat`, `invalid` |
 | `INVALID_INPUT` | `'validation.errors.invalid-input'` |
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
-| `ValidationIssue`, `BadUserInputExtensions` | the types of `extensions.issues` and `extensions` |
+| `ValidationIssue`, `ConstraintValue`, `BadUserInputExtensions` | the types of `extensions.issues`, of an issue's `value`, and of `extensions` |
 | `maxDepth({ depth, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation nested deeper than `depth` fields, `extensions.code` `QUERY_TOO_DEEP`; introspection counts (the standard query is 15 levels) unless `ignoreIntrospection` |
 | `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY`; `sizeArguments` names the arguments sizing a list (default `first`, `last`, `limit`, the largest wins); `ignoreIntrospection` skips `__schema` and `__type` |
 | `MaxDepthOptions`, `MaxListCostOptions` | their options |
@@ -338,7 +340,7 @@ refuses the schemas `withValidation` refuses. A server does not need it.
 
 | Export | Is |
 | --- | --- |
-| `checkConstraints(schema, onArgs?, formats?)` | runs every startup check of `withValidation` without wrapping anything; returns the `@constraint` directive, or `undefined` when the schema declares none. `formats` is the record `withValidation` takes, checked the same way |
+| `checkConstraints(schema, onArgs?, formats?)` | runs every startup check of `withValidation` without wrapping anything (`onArgs(type, field, args, declared)`: `declared(path)` lists the `Constraint`s the field's SDL writes where a Zod issue's `path` points); returns the `@constraint` directive, or `undefined` when the schema declares none. `formats` is the record `withValidation` takes, checked the same way |
 | `constraintsOn(directive, node)` | the `Constraint`s written on an argument or input field (`arg.astNode`), `format` first |
 | `inputCode(type, constraints, where, named, options?, formats?)` | the schema of that argument or field as source, `z` a free identifier: built-in scalars and lists written in full, nullable types `.nullish()`; every other named type (enum, input object, custom scalar) is what `named(type)` returns. A constraint that cannot apply throws the startup message, naming `where`. `options` (`InputCodeOptions`): `list({ type, code, single })` returns each list's source, given `code` (the array with every rule) and `single` (the list's named type, non-null, without rules), e.g. to take a single value as graphql does: `single`, wrapped, piped into `code`. `format(name)` returns the source of one of your formats, since only the generator knows where your record is imported from: a reference to your schema, which the other rules narrow (`formatSchemas.siret.max(14)`); built-in formats never reach it. `formats`: the record `withValidation` takes, checked the same way, so its names are known; a field using one of them without the `format` option throws `@constraint(format: "<name>") is one of the application's formats: its source is the code generator's to write, through inputCode's format option.` |
 | `FormatSchemas` | the type of that record |

@@ -94,7 +94,13 @@ describe('a format with an async check, from another zod copy', () => {
 		});
 		expect(refused.errors?.[0]?.extensions['code']).toBe('BAD_USER_INPUT');
 		expect(refused.errors?.[0]?.extensions['issues']).toEqual([
-			{ path: ['s'], code: 'custom', constraint: 'format', message: 'taken' },
+			{
+				path: ['s'],
+				code: 'custom',
+				constraint: 'format',
+				value: 'free',
+				message: 'taken',
+			},
 		]);
 	});
 
