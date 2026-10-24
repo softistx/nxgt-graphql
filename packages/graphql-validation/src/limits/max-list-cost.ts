@@ -184,7 +184,10 @@ function rootType(schema: GraphQLSchema, operation: OperationDefinitionNode) {
  */
 export function maxListCost(options: MaxListCostOptions): ValidationRule {
 	const { budget, defaultFirst } = options;
-	const sizeArguments = options.sizeArguments ?? DEFAULT_SIZE_ARGUMENTS;
+	// A copy: a caller changing its array later must not desync the schema cache keyed by it.
+	const sizeArguments = Object.freeze([
+		...(options.sizeArguments ?? DEFAULT_SIZE_ARGUMENTS),
+	]);
 	assertInteger('maxListCost: budget', budget, 0);
 	assertInteger('maxListCost: defaultFirst', defaultFirst, 0);
 

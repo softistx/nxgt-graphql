@@ -1,9 +1,21 @@
 import { describe, expect, test } from 'bun:test';
-import { buildSchema, getIntrospectionQuery, Kind } from 'graphql';
+import {
+	buildSchema,
+	GraphQLInt,
+	type GraphQLInterfaceType,
+	GraphQLList,
+	GraphQLObjectType,
+	GraphQLSchema,
+	getIntrospectionQuery,
+	Kind,
+	parse,
+	validate,
+	versionInfo,
+} from 'graphql';
 
 const INTROSPECTION_COST_FLOOR = 100;
 
-/** Generous: the walk takes a fraction of it on a laptop, a quadratic one several times it. */
+/** Generous: the walk takes a fraction of it on a laptop, the old walk, quadratic in the possible types, took about 1.2 times it. The call count below is the real guard. */
 const TIME_BOUND_MS = 1500;
 
 import { check, cycleQuery, limitOf } from '../../test/limits';
@@ -234,16 +246,79 @@ describe('maxListCost', () => {
 		let source = '{';
 		for (let i = 0; i < 10000; i++) source += ` a${i}: node { kids { id } }`;
 		source += ' }';
+		const node = schema.getType('Node') as GraphQLInterfaceType;
+		const original = schema.getPossibleTypes.bind(schema);
+		let calls = 0;
+		schema.getPossibleTypes = (type) => {
+			if (type === node) calls++;
+			return original(type);
+		};
 		const start = performance.now();
-		const [error] = check(
-			source,
-			[maxListCost({ ...options, budget: 0 })],
-			schema,
-		);
+		const [error] = validate(schema, parse(source), [
+			maxListCost({ ...options, budget: 0 }),
+		]);
 		const elapsed = performance.now() - start;
+		// the schema's part is read once per (parent, field), not per alias
+		expect(calls).toBeLessThanOrEqual(1);
 		// the largest default over the possible types, once per alias
 		expect(limitOf(error).cost).toBe(10000 * (1 + 1 + types));
 		expect(elapsed).toBeLessThan(TIME_BOUND_MS);
+	});
+
+	test('a bigint default is a size, as graphql-tools and code-first schemas hold it', () => {
+		const first =
+			versionInfo.major >= 17
+				? { type: GraphQLInt, default: { value: 1_000_000n } }
+				: { type: GraphQLInt, defaultValue: 1_000_000n };
+		const Item = new GraphQLObjectType({
+			name: 'Item',
+			fields: { id: { type: GraphQLInt } },
+		});
+		const schema = new GraphQLSchema({
+			query: new GraphQLObjectType({
+				name: 'Query',
+				fields: {
+					items: { type: new GraphQLList(Item), args: { first } as any },
+				},
+			}),
+		});
+		expect(costOf('{ items { id } }', {}, schema)).toBe(1 + 1_000_000);
+		const huge = new GraphQLSchema({
+			query: new GraphQLObjectType({
+				name: 'Query',
+				fields: {
+					items: {
+						type: new GraphQLList(Item),
+						args: {
+							first:
+								versionInfo.major >= 17
+									? { type: GraphQLInt, default: { value: 10n ** 400n } }
+									: { type: GraphQLInt, defaultValue: 10n ** 400n },
+						} as any,
+					},
+				},
+			}),
+		});
+		expect(costOf('{ items { id } }', {}, huge)).toBe(Number.MAX_SAFE_INTEGER);
+	});
+
+	test('mutating the sizeArguments array after creation changes nothing', () => {
+		const schema = buildSchema(`
+			type Item { id: ID! }
+			type Query {
+				items(first: Int = 3, limit: Int = 9): [Item!]!
+				other(first: Int = 3, limit: Int = 9): [Item!]!
+			}
+		`);
+		const names = ['first'];
+		const rule = maxListCost({ ...options, budget: 0, sizeArguments: names });
+		const cost = (field: string) =>
+			limitOf(check(`{ ${field} { id } }`, [rule], schema)[0]).cost;
+		expect(cost('items')).toBe(1 + 3);
+		names.push('limit');
+		names[0] = 'limit';
+		// a field not seen yet is still sized by the arguments given at creation
+		expect(cost('other')).toBe(1 + 3);
 	});
 
 	test('a nested list is one list, and a non-list multiplies by 1', () => {
