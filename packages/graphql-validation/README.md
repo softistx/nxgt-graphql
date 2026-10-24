@@ -241,19 +241,24 @@ The codes, and `fieldsError`, are in
 A schema with list cycles (`Folder.items` returns items, `Item.folder` returns
 its folder) lets a client nest a query whose cost grows exponentially.
 `maxDepth` and `maxListCost` are graphql-js validation rules that refuse such a
-query before any resolver runs.
+query before any resolver runs; `maxFields` bounds the breadth they leave open
+(thousands of aliases of a cheap field).
 
 ```ts
-import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
+import { maxDepth, maxFields, maxListCost } from '@nxgt/graphql-validation';
 import { parse, specifiedRules, validate } from 'graphql';
 
-const rules = [maxDepth({ depth: 8 }), maxListCost({ budget: 10_000, defaultFirst: 50 })];
+const rules = [
+  maxDepth({ depth: 8 }),
+  maxListCost({ budget: 10_000, defaultFirst: 50 }),
+  maxFields({ limit: 500 }),
+];
 const errors = validate(schema, parse(query), [...specifiedRules, ...rules]);
 ```
 
 ```ts
 // graphql-yoga
-import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
+import { maxDepth, maxFields, maxListCost } from '@nxgt/graphql-validation';
 import { createYoga } from 'graphql-yoga';
 
 const yoga = createYoga({
@@ -263,6 +268,7 @@ const yoga = createYoga({
       onValidate: ({ addValidationRule }) => {
         addValidationRule(maxDepth({ depth: 8 }));
         addValidationRule(maxListCost({ budget: 10_000, defaultFirst: 50 }));
+        addValidationRule(maxFields({ limit: 500 }));
       },
     },
   ],
@@ -270,7 +276,9 @@ const yoga = createYoga({
 ```
 
 One `GraphQLError` per operation: `extensions: { code: 'QUERY_TOO_DEEP', depth,
-limit }` or `{ code: 'QUERY_TOO_COSTLY', cost, limit }`. A list field is sized by
+limit }`, `{ code: 'QUERY_TOO_COSTLY', cost, limit }` or `{ code: 'QUERY_TOO_WIDE',
+fields, limit }`. `maxFields` counts every field selection, aliases and
+`__typename` included, at each spread of a fragment. A list field is sized by
 its `first`, `last` or `limit` argument; a variable, a negative number or no
 argument uses the argument's SDL default, else `defaultFirst`. A size is an
 Int, a canonical-integer string or an integral Float; the largest of several
@@ -332,7 +340,8 @@ the directive declared is this package's. Both at once throw
 | `ValidationIssue`, `ConstraintValue`, `BadUserInputExtensions` | the types of `extensions.issues`, of an issue's `value`, and of `extensions` |
 | `maxDepth({ depth, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation nested deeper than `depth` fields, `extensions.code` `QUERY_TOO_DEEP`; introspection counts (the standard query is 15 levels) unless `ignoreIntrospection` |
 | `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY`; `sizeArguments` names the arguments sizing a list (default `first`, `last`, `limit`, the largest wins); `ignoreIntrospection` skips `__schema` and `__type` |
-| `MaxDepthOptions`, `MaxListCostOptions` | their options |
+| `maxFields({ limit, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation that selects more than `limit` fields (aliases, `__typename` and every fragment spread counted, `@skip`/`@include` not evaluated), `extensions.code` `QUERY_TOO_WIDE`; introspection counts (the standard query selects 220 fields) unless `ignoreIntrospection` |
+| `MaxDepthOptions`, `MaxListCostOptions`, `MaxFieldsOptions` | their options |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |
 | `ArgsSchema`, `ArgsSchemaFor`, `SchemaOf` | the types `validated` accepts: the schema or shape, and that or the function building it from the context |
 | `WithValidationOptions`, `FormatSchemas`, `OwnFormats`, `StringSchema`, `FormatName` | the types of `withValidation`'s options: a record of string schemas, with no built-in format name (`FormatName`) |

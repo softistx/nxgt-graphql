@@ -431,6 +431,23 @@ value can still be refused.
 **Fix:** ask for fewer items with a literal `first`, or raise `budget`. A query
 on an interface or a union is overestimated (every branch is summed).
 
+### `Operation "Name" selects 4000 fields, more than the 500 allowed`
+
+**When:** an operation is validated with `maxFields({ limit: 500 })`.
+**Why:** `extensions` is `{ code: 'QUERY_TOO_WIDE', fields: 4000, limit: 500 }`.
+Every field selection counts 1, aliases and `__typename` included, and a named
+fragment counts at each spread; every branch of an inline fragment counts and
+`@skip`/`@include` are not evaluated, so the figure can be over what runs. An
+anonymous operation reads `Operation selects 4000 fields, ...`.
+**Fix:** ask for fewer fields (a fragment spread many times is many fields), or
+raise `limit`. See [Limiting the depth and cost of a query](guide/query-limits.md).
+
+### `maxFields: limit must be an integer from 1 to 9007199254740990.`
+
+**When:** `maxFields` is called with `0`, a negative, a fractional or a too
+large `limit`.
+**Fix:** pass an integer in range.
+
 ### `maxDepth: depth must be an integer from 1 to 9007199254740990.`
 
 **When:** `maxDepth` is called with `0`, a negative or a fractional `depth`.
@@ -450,10 +467,10 @@ budget at or over it would refuse nothing.
 
 ### A query refused although its `first` is small, or an introspection query refused
 
-**When:** `QUERY_TOO_COSTLY` or `QUERY_TOO_DEEP` for GraphiQL's schema fetch or
+**When:** `QUERY_TOO_COSTLY`, `QUERY_TOO_DEEP` or `QUERY_TOO_WIDE` for GraphiQL's schema fetch or
 a codegen's introspection query.
 **Why:** `__schema` is counted: the standard introspection query is 15 levels
-deep and costs on the order of 200,000 on a one-field schema.
+deep, selects 220 fields and costs on the order of 200,000 on a one-field schema.
 **Fix:** `ignoreIntrospection: true` on the rule where introspection is
 disabled or the client is trusted. A `first: $n` variable counts for the SDL
 default, not for the value sent.

@@ -39,6 +39,7 @@ export interface LimitExtensions {
 	code?: string;
 	depth?: number;
 	cost?: number;
+	fields?: number;
 	limit?: number;
 }
 
