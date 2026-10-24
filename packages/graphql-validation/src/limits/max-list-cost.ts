@@ -1,26 +1,23 @@
 import {
-	type FragmentDefinitionNode,
 	GraphQLError,
-	type GraphQLField,
 	type GraphQLNamedType,
-	type GraphQLSchema,
 	getNamedType,
 	getNullableType,
-	isInterfaceType,
 	isListType,
-	isObjectType,
-	type OperationDefinitionNode,
 	type SelectionSetNode,
 	type ValidationContext,
 	type ValidationRule,
 } from 'graphql';
-import { assertInteger, operationLabel } from './describe';
 import {
-	introspectionRoot,
-	introspectionSize,
-	isIntrospectionRoot,
-} from './introspection';
-import { listSize, type SizeContext } from './list-size';
+	add,
+	type CostContext,
+	fieldOf,
+	multiply,
+	rootType,
+} from './cost-context';
+import { assertInteger, operationLabel } from './describe';
+import { introspectionSize, isIntrospectionRoot } from './introspection';
+import { listSize } from './list-size';
 
 /** Options of {@link maxListCost}. */
 export interface MaxListCostOptions {
@@ -44,34 +41,6 @@ export interface MaxListCostOptions {
 }
 
 const DEFAULT_SIZE_ARGUMENTS = ['first', 'last', 'limit'] as const;
-
-/** Costs are plain numbers, held below this so a hostile query never reaches `Infinity`. */
-const CEILING = Number.MAX_SAFE_INTEGER;
-
-const add = (a: number, b: number) => Math.min(CEILING, a + b);
-const multiply = (a: number, b: number) => Math.min(CEILING, a * b);
-
-/** What a walk of one document needs: the options, and what it has measured so far. */
-interface CostContext extends SizeContext {
-	ignoreIntrospection: boolean;
-	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
-	fragmentCosts: Map<string, number>;
-	costing: Set<string>;
-}
-
-/** The definition of the field `name` on `parent`, meta-fields of the query root included. */
-function fieldOf(
-	cost: CostContext,
-	parent: GraphQLNamedType | undefined,
-	name: string,
-): GraphQLField<unknown, unknown> | undefined {
-	if (parent === cost.schema.getQueryType() && isIntrospectionRoot(name)) {
-		return introspectionRoot(name);
-	}
-	return isObjectType(parent) || isInterfaceType(parent)
-		? parent.getFields()[name]
-		: undefined;
-}
 
 /** The cost of `selectionSet` selected on `parent`. */
 function costOf(
@@ -131,17 +100,6 @@ function fragmentCost(cost: CostContext, name: string): number {
 	cost.costing.delete(name);
 	cost.fragmentCosts.set(name, result);
 	return result;
-}
-
-/** The type an operation selects on. */
-function rootType(schema: GraphQLSchema, operation: OperationDefinitionNode) {
-	const type =
-		operation.operation === 'query'
-			? schema.getQueryType()
-			: operation.operation === 'mutation'
-				? schema.getMutationType()
-				: schema.getSubscriptionType();
-	return type ?? undefined;
 }
 
 /**
