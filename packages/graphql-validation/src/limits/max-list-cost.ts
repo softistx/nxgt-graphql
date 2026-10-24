@@ -52,6 +52,33 @@ function sizeOf(value: unknown): number | undefined {
 		: undefined;
 }
 
+/**
+ * An argument's SDL default as a size. graphql 16 holds it as `defaultValue`;
+ * graphql 17 as `default`, `{ value }` or `{ literal }` (an `IntValue`).
+ */
+function defaultSizeOf(argument: object | undefined): number | undefined {
+	if (!argument) return undefined;
+	if ('defaultValue' in argument) {
+		const size = sizeOf(argument.defaultValue);
+		if (size !== undefined) return size;
+	}
+	if (!('default' in argument)) return undefined;
+	const fallback = argument.default;
+	if (typeof fallback !== 'object' || fallback === null) return undefined;
+	if ('value' in fallback) return sizeOf(fallback.value);
+	if (
+		'literal' in fallback &&
+		typeof fallback.literal === 'object' &&
+		fallback.literal !== null &&
+		'kind' in fallback.literal &&
+		fallback.literal.kind === 'IntValue' &&
+		'value' in fallback.literal
+	) {
+		return sizeOf(Number(fallback.literal.value));
+	}
+	return undefined;
+}
+
 /** The size of the list `definition` returns, as selected by `args`. */
 function listSize(
 	cost: CostContext,
@@ -71,7 +98,7 @@ function listSize(
 	const names = given ? [given] : cost.sizeArguments;
 	for (const name of names) {
 		const declared = definition.args.find((arg) => arg.name === name);
-		const fallback = sizeOf(declared?.defaultValue);
+		const fallback = defaultSizeOf(declared);
 		if (fallback !== undefined) return fallback;
 	}
 	return cost.defaultFirst;
