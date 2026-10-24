@@ -21,8 +21,8 @@ const CANONICAL_INTEGER = /^(0|[1-9]\d*)$/;
 
 /**
  * The one reading of a size, wherever it comes from (a literal, a default): a
- * non-negative integral number or bigint, or a canonical-integer string, clamped to the
- * ceiling. Anything else says nothing.
+ * non-negative integral number or bigint, or a canonical-integer string,
+ * clamped to the ceiling. Anything else says nothing.
  */
 function sizeOf(value: unknown): number | undefined {
 	if (typeof value === 'string') {
@@ -30,7 +30,8 @@ function sizeOf(value: unknown): number | undefined {
 			? Math.min(Number(value), CEILING)
 			: undefined;
 	}
-	// A bigint is how a Long scalar's default is held once its real scalar is swapped in.
+	// A bigint is how a Long scalar's default is held once its real scalar is
+	// swapped in.
 	if (typeof value === 'bigint') {
 		return value >= 0n ? Math.min(Number(value), CEILING) : undefined;
 	}
