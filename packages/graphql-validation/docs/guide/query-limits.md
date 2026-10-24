@@ -160,14 +160,14 @@ An argument given but unusable (a negative number, a variable) counts for the
 largest of its SDL default when it has one in any accepted form (`items(first:
 Int = 100)`, else `defaultFirst`), its declared bound (`@constraint(max)` or
 `exclusiveMax`) and, where some definition declares no bound, `variableSize`:
-see [Variables](#variables). On an abstract parent the default is the largest
-one, or `defaultFirst` when it is larger and some possible type has no default.
-A field where no size argument says anything is sized `defaultFirst`.
+see [Variables](#variables). A field where no size argument says anything is
+sized `defaultFirst`.
 
 On an interface or a union, the default is the **largest** over the interface's
 field and the field of every possible type (`Node.kids(first: Int = 1)` next to
 `Folder.kids(first: Int = 100000)` is sized 100,000), since the query cannot
-say which object comes back.
+say which object comes back; `defaultFirst` counts too when it is larger and
+some possible type has no default.
 
 A negative number is therefore never taken as a size: no subtree costs less than
 nothing, and `items(first: -1000)` next to an expensive sibling cannot cancel

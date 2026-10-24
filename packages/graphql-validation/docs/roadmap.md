@@ -22,10 +22,11 @@ Nothing planned yet.
   a connection from the connection field's size argument (`items(first: 100)
   { edges { … } }`), not `defaultFirst`.
 - **Variable sizes counted at their bound** — `maxListCost` counts a size sent
-  as a variable (or an unusable literal) at the argument's declared
-  `@constraint(max)` or `exclusiveMax`, or at the new `variableSize` option where
-  none is declared, instead of its default, so a query cannot hide a large page
-  behind a variable.
+  as a variable (or an unusable literal) at the argument's declared bound
+  (`@constraint(max)` or `exclusiveMax`) and the new `variableSize` option. The
+  bound wins only when every definition declares one, and never counts below the
+  SDL default or `defaultFirst`, so a query cannot hide a large page behind a
+  variable.
 - **Query depth, cost and breadth limits** — `maxDepth`, `maxListCost` and
   `maxFields` are graphql-js validation rules (also for graphql-yoga's
   `addValidationRule`) that refuse a query nested too deep, too costly for a

@@ -2,12 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
 	buildSchema,
 	GraphQLInt,
-	type GraphQLInterfaceType,
 	GraphQLList,
 	GraphQLObjectType,
 	GraphQLSchema,
-	parse,
-	validate,
 } from 'graphql';
 import { check, limitOf } from '../../test/limits';
 import { maxListCost } from './max-list-cost';
@@ -127,49 +124,6 @@ describe('maxListCost: an unusable literal size', () => {
 	});
 });
 
-describe('maxListCost: a declared max on an abstract parent', () => {
-	const schema = buildSchema(/* GraphQL */ `
-		${DIRECTIVE}
-		interface Node { id: ID! kids(first: Int = 1 @constraint(max: 10)): [Node!]! }
-		type A implements Node { id: ID! kids(first: Int = 1 @constraint(max: 30)): [Node!]! }
-		type B implements Node { id: ID! kids(first: Int = 1 @constraint(max: 20)): [Node!]! }
-		type Query { node: Node }
-	`);
-
-	test('the largest over the interface and its possible types counts', () => {
-		// node 1 + kids (1 + 30)
-		expect(
-			costOf('query($n: Int) { node { kids(first: $n) { id } } }', schema),
-		).toBe(32);
-	});
-
-	test('reads the schema once per field, not per selection', () => {
-		const types = 500;
-		let sdl = `${DIRECTIVE}\ninterface Node { id: ID! kids(first: Int = 1 @constraint(max: 2)): [Node!]! }\n`;
-		for (let i = 0; i < types; i++) {
-			sdl += `type T${i} implements Node { id: ID! kids(first: Int = 1 @constraint(max: ${i + 2})): [Node!]! }\n`;
-		}
-		sdl += 'type Query { node: Node }';
-		const big = buildSchema(sdl);
-		const node = big.getType('Node') as GraphQLInterfaceType;
-		const original = big.getPossibleTypes.bind(big);
-		let calls = 0;
-		big.getPossibleTypes = (type) => {
-			if (type === node) calls++;
-			return original(type);
-		};
-		let source = 'query($n: Int) {';
-		for (let i = 0; i < 2000; i++)
-			source += ` a${i}: node { kids(first: $n) { id } }`;
-		source += ' }';
-		const [error] = validate(big, parse(source), [
-			maxListCost({ ...options, budget: 0 }),
-		]);
-		expect(calls).toBeLessThanOrEqual(1);
-		expect(limitOf(error).cost).toBe(2000 * (1 + 1 + (types + 1)));
-	});
-});
-
 describe('maxListCost: a code-first size argument', () => {
 	// No astNode: nothing declares a max.
 	const Item = new GraphQLObjectType({
@@ -246,5 +200,17 @@ describe('maxListCost: a non-integral or exclusive bound', () => {
 		const schema = make('@constraint(max: -3)');
 		expect(costOf(source, schema)).toBe(6);
 		expect(costOf(source, schema, { variableSize: 50 })).toBe(51);
+	});
+
+	test('an overflowing bound (1e400, Infinity) is no bound', () => {
+		const schema = make('@constraint(max: 1e400)');
+		expect(costOf(source, schema)).toBe(6);
+		expect(costOf(source, schema, { variableSize: 500 })).toBe(501);
+	});
+
+	test('a string bound is read as a number: only an invalid schema has one', () => {
+		// buildSchema, not withValidation: the SDL is invalid on purpose.
+		const schema = make('@constraint(max: "100")');
+		expect(costOf(source, schema)).toBe(101);
 	});
 });

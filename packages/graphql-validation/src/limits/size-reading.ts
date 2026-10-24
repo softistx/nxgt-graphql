@@ -59,10 +59,12 @@ export function defaultSizeOf(
 
 /** A bound a literal gives: a finite number of at least 0 rounded up, or what `literalSize` reads in a string. */
 function boundOf(value: ValueNode): number | undefined {
+	// Only an invalid schema has a string bound; reading "100" as 100 errs high.
 	if (value.kind === 'StringValue') return literalSize(value);
 	if (value.kind !== 'IntValue' && value.kind !== 'FloatValue')
 		return undefined;
 	const number = Number(value.value);
+	// `max: 1e400` overflows to Infinity: an Infinity bound means unbounded.
 	return Number.isFinite(number) && number >= 0
 		? Math.min(Math.ceil(number), CEILING)
 		: undefined;

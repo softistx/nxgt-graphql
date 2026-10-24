@@ -267,7 +267,8 @@ packages/graphql-validation/src/
                            options), fragments.ts (the fragment walk the three
                            rules share: cache, cycle guard), cost-context.ts (maxListCost's
                            state and helpers), pending-size.ts (a connection's size handed to its
-                           lists). variable-size.spec.ts covers maxListCost's variable sizing, kept
+                           lists). variable-size.spec.ts covers maxListCost's variable sizing and
+                           variable-size-abstract.spec.ts its abstract parents, kept
                            apart because max-list-cost.spec.ts is 700+ lines. Never a constraint
                            rule: registry.spec.ts only scans
                            rules/ and formats/

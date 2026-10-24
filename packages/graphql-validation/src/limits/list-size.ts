@@ -12,7 +12,7 @@ export interface SizeContext {
 	schema: GraphQLSchema;
 	sizeArguments: readonly string[];
 	defaultFirst: number;
-	/** What to assume for a size argument given as a variable when it declares no `@constraint(max)`. */
+	/** What to assume for a size argument given as a variable where some definition declares no bound. */
 	variableSize?: number | undefined;
 }
 
@@ -23,9 +23,9 @@ export interface SizeContext {
  */
 interface Profile {
 	largest: (number | undefined)[];
-	/** Per size argument, the largest `@constraint(max)` over the definitions. */
+	/** Per size argument, the largest bound (`max` or `exclusiveMax`) over the definitions. */
 	maxima: (number | undefined)[];
-	/** Per size argument, whether some definition declares no max. */
+	/** Per size argument, whether some definition declares no bound (`max` or `exclusiveMax`). */
 	someNoMax: boolean[];
 	someLack: boolean[];
 	someBare: boolean;
@@ -115,7 +115,7 @@ function argumentSize(
 	const literal = literalSize(node.value);
 	if (literal !== undefined) return literal;
 	// Given but unusable (a variable, a negative number): the argument's own
-	// default, else defaultFirst; and no less than what the client may send.
+	// default, else defaultFirst; and no less than the bound the client may send.
 	const today = profile.someLack[index]
 		? Math.max(largest ?? 0, cost.defaultFirst)
 		: largest;
@@ -123,7 +123,7 @@ function argumentSize(
 	return bound === undefined ? today : Math.max(today ?? 0, bound);
 }
 
-/** What an unusable size may be at most: the declared max, `variableSize` where none is declared. */
+/** What an unusable size may be at most: the declared bound (`max` or `exclusiveMax`), and `variableSize` where some definition declares none. */
 function unusableBound(
 	cost: SizeContext,
 	profile: Profile,

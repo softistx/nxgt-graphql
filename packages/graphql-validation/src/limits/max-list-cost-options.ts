@@ -1,4 +1,4 @@
-/** Options of {@link maxListCost}. */
+/** Options of `maxListCost`. */
 export interface MaxListCostOptions {
 	/** The most an operation may cost (at least 0). */
 	budget: number;
