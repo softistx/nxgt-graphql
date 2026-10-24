@@ -175,9 +175,59 @@ Pick `defaultFirst` knowing a variable counts for it: a client using
 `first: $n` is charged the default whatever it sends. If your server caps a size
 argument, set `defaultFirst` (or the SDL default) at that cap.
 
+### Relay connections
+
+On a Relay connection the size is on a field that returns an **object**, and the
+list is below it:
+
+```graphql
+type Query { items(first: Int): ItemConnection! }
+type ItemConnection { edges: [ItemEdge!]! nodes: [Item!]! pageInfo: PageInfo! }
+```
+
+```graphql
+{ items(first: 100) { edges { node { id } } nodes { id } } }
+```
+
+A field that is not a list and states a size, read as for a list above (a size
+argument given, or declared with a default; on an abstract parent the largest
+over its possible types), hands it down as a **pending size** to the lists
+selected **directly on its return type**:
+
+- Only a list that **declares none of the size arguments** takes it, instead of
+  `defaultFirst`: `edges` and `nodes` above are both 100. A list that declares
+  one (`recent(first: Int)`) reads its own arguments, else `defaultFirst`,
+  never the pending size.
+- On an interface, when some possible types declare a size argument on that
+  list and others do not, the larger of the pending size and the list's own
+  reading is used, since the query cannot say which comes back.
+- It stops at the first field crossed: an object field (`owner`), `pageInfo` or
+  a wrapper object passes nothing on, so the lists below them are sized as
+  without a connection. In `items(first: 0) { owner { friends { … } } }` the
+  `0` does not reach `friends`. A nested field that states a size hands its own
+  to the lists directly on it.
+- A connection field that states nothing (no size argument given, none declared
+  with a default) hands down nothing: its lists are sized `defaultFirst`, as
+  before. A variable, a negative number or an unusable value on it counts as for
+  a list: its SDL default, else `defaultFirst`.
+- The rule is structural: any non-list field stating a size sizes the lists
+  declaring no size argument directly on its return type, whether or not it is
+  a connection. `user(limit: 0) { friends { … } }` sizes `friends` 0. So an
+  argument named in `sizeArguments` must size the lists directly under its
+  field: when one of yours means something else, leave its name out of
+  `sizeArguments` (or rename the argument).
+- Inline fragments, and fragment spreads, on that same selection set pass the
+  pending size through. A named fragment is costed once for each distinct
+  pending size it is spread under (`...C` under
+  `first: 2` and `first: 5` costs differently). Under more than eight distinct
+  sizes in one document a fragment's further sizes are rounded up to the next
+  power of two, so the work stays linear in the document and the cost only
+  over-counts.
+
 ### Fragments and abstract types
 
-Named fragments are followed, each costed once (a fragment's type condition fixes
+Named fragments are followed, each costed once per pending size (see above;
+a fragment's type condition fixes
 its parent type). A fragment spread twice counts twice. Inline fragments and
 fragments on an interface or a union are **summed branch by branch**: a
 selection `... on A { ... } ... on B { ... }` costs A's plus B's, although an

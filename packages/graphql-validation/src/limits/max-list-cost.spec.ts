@@ -458,6 +458,248 @@ describe('maxListCost', () => {
 	});
 });
 
+const connectionSchema = buildSchema(/* GraphQL */ `
+	interface Feed { items(first: Int = 3): ItemConnection! }
+	type Blog implements Feed { items(first: Int = 20): ItemConnection! }
+	type PageInfo { hasNext: Boolean! }
+	type User { id: ID! friends: [User!]! }
+	type Item { id: ID! children(first: Int): ItemConnection! }
+	type ItemEdge { node: Item! }
+	type ItemConnection {
+		edges: [ItemEdge!]!
+		nodes: [Item!]!
+		pageInfo: PageInfo!
+		recent(first: Int): [Item!]!
+		owner: User!
+		recentUsers(first: Int): [User!]!
+	}
+	type Wrapper {
+		inner: ItemConnection!
+		sub(first: Int): ItemConnection!
+	}
+	type Query {
+		items(first: Int): ItemConnection!
+		sized(first: Int = 7): ItemConnection!
+		wrapped(first: Int): Wrapper!
+		feed: Feed
+		user(limit: Int): User!
+	}
+`);
+
+/** The cost of `source` against the connection schema, defaultFirst 10. */
+const connectionCost = (source: string) => costOf(source, {}, connectionSchema);
+
+describe('maxListCost on a connection', () => {
+	test('sizes the lists below a connection from its first (the issue query)', () => {
+		// innermost: edges { node { id } } = 1 + 100 * 2 = 201; children = 202;
+		// node { children } = 203; edges = 1 + 100 * 203 = 20301; items = 20302
+		const source = `query { items(first: 100) { edges { node { children(first: 100) { edges { node { id } } } } } } }`;
+		expect(costOf(source, { defaultFirst: 50 }, connectionSchema)).toBe(20302);
+	});
+
+	test('a small first costs less than defaultFirst would', () => {
+		// edges 1 + 2 * 2 = 5, items 6 (defaultFirst 10 would give 22)
+		expect(
+			connectionCost('{ items(first: 2) { edges { node { id } } } }'),
+		).toBe(6);
+	});
+
+	test('edges and nodes each use the connection first', () => {
+		// edges 1 + 3 * 2 = 7, nodes 1 + 3 = 4, items 1 + 11
+		const source = '{ items(first: 3) { edges { node { id } } nodes { id } } }';
+		expect(connectionCost(source)).toBe(12);
+	});
+
+	test('pageInfo passes the size through, and costs its own fields', () => {
+		const source =
+			'{ items(first: 3) { pageInfo { hasNext } edges { node { id } } } }';
+		expect(connectionCost(source)).toBe(1 + 2 + 7);
+	});
+
+	test('a connection stating nothing leaves its lists at defaultFirst', () => {
+		expect(connectionCost('{ items { edges { node { id } } } }')).toBe(22);
+	});
+
+	test('a list with its own size uses it, and consumes the connection size', () => {
+		expect(
+			connectionCost('{ items(first: 100) { recent(first: 2) { id } } }'),
+		).toBe(4);
+		// recent 1 + 2 * (children 1 + edges (1 + 10 * 2)) = 45: the 100 is spent
+		const source =
+			'{ items(first: 100) { recent(first: 2) { children { edges { node { id } } } } } }';
+		expect(connectionCost(source)).toBe(46);
+	});
+
+	test('a list below a list does not see the size of the connection', () => {
+		// edges 1 + 100 * (node 1 + children 1 + edges (1 + 10 * 2)) = 2501
+		const source =
+			'{ items(first: 100) { edges { node { children { edges { node { id } } } } } } }';
+		expect(connectionCost(source)).toBe(1 + 1 + 100 * (1 + 1 + 21));
+	});
+
+	test('a variable first says the SDL default, else defaultFirst', () => {
+		const bare =
+			'query ($n: Int) { items(first: $n) { edges { node { id } } } }';
+		expect(connectionCost(bare)).toBe(22);
+		const sized =
+			'query ($n: Int) { sized(first: $n) { edges { node { id } } } }';
+		expect(connectionCost(sized)).toBe(1 + 1 + 7 * 2);
+		expect(connectionCost('{ sized { edges { node { id } } } }')).toBe(
+			1 + 1 + 7 * 2,
+		);
+	});
+
+	test('a negative first never lowers the cost', () => {
+		const source = '{ items(first: -5) { edges { node { id } } } }';
+		expect(connectionCost(source)).toBe(22);
+	});
+
+	test('an interface parent takes the largest default over its possible types', () => {
+		// edges 1 + 20 * 2 = 41, items 42, feed 43
+		expect(connectionCost('{ feed { items { edges { node { id } } } } }')).toBe(
+			43,
+		);
+	});
+
+	test('a wrapper does not pass the size on, a nested sized field hands its own', () => {
+		// inner is crossed: edges 1 + 10 * 2 = 21, inner 22, wrapped 23
+		const wrapped = '{ wrapped(first: 3) { inner { edges { node { id } } } } }';
+		expect(connectionCost(wrapped)).toBe(23);
+		const nested =
+			'{ wrapped(first: 100) { sub(first: 2) { edges { node { id } } } } }';
+		expect(connectionCost(nested)).toBe(1 + 1 + 5);
+	});
+
+	describe('a size never reaches a list its field does not size', () => {
+		const friends =
+			'friends { friends { friends { friends { friends { id } } } } }';
+		// six nested lists of 10: 111111 under a field
+		test('across an object field of the connection', () => {
+			expect(
+				connectionCost(`{ items(first: 0) { owner { ${friends} } } }`),
+			).toBe(111113);
+		});
+		test('across a list declaring its own size argument', () => {
+			expect(
+				connectionCost(`{ items(first: 0) { recentUsers { ${friends} } } }`),
+			).toBe(1111112);
+		});
+		// The rule is structural: `friends` declares no size argument and sits
+		// directly on `user`'s return type, so it takes `limit: 0` (develop: 111112).
+		test('on a list directly under a non-list field that states a size', () => {
+			expect(connectionCost(`{ user(limit: 0) { ${friends} } }`)).toBe(2);
+		});
+		test('fifty aliases of it', () => {
+			let source = '{';
+			for (let i = 0; i < 50; i++)
+				source += ` a${i}: user(limit: 0) { ${friends} }`;
+			expect(connectionCost(`${source} }`)).toBe(100);
+		});
+	});
+
+	test('inline fragments pass the size through', () => {
+		const source =
+			'{ items(first: 2) { ... on ItemConnection { edges { node { id } } } } }';
+		expect(connectionCost(source)).toBe(6);
+	});
+
+	test('a fragment spread under two sizes is costed under each', () => {
+		const source = `
+			query { a: items(first: 2) { ...C } b: items(first: 5) { ...C } }
+			fragment C on ItemConnection { edges { node { id } } }
+		`;
+		// a 1 + (1 + 2 * 2) = 6, b 1 + (1 + 5 * 2) = 12
+		expect(connectionCost(source)).toBe(18);
+	});
+
+	test('a fragment size rounded up is never rounded down, past 2 ** 49', () => {
+		for (const base of [2 ** 49, 2 ** 52]) {
+			// eight sizes fill the exact slots; the ninth is rounded up
+			let source = '';
+			for (let k = 1; k <= 9; k++)
+				source += ` a${k}: items(first: ${k}) { ...C }`;
+			source += ` z: items(first: ${base + 1}) { ...C }`;
+			const cost = connectionCost(
+				`query {${source} } fragment C on ItemConnection { nodes { id } }`,
+			);
+			// a_k: 1 + (1 + 2^k), 8 of them; z: 1 + (1 + base + 1)
+			const exact = 8 * 2 + 255 + (base + 3);
+			expect(cost).toBeGreaterThanOrEqual(exact);
+		}
+	});
+
+	test('many fragments under many sizes stay fast, and never under-count', () => {
+		const sizes = 200;
+		const chain = 200;
+		let source = '';
+		for (let i = 0; i < chain - 1; i++) {
+			source += ` fragment F${i} on ItemConnection { ...F${i + 1} }`;
+		}
+		source += ` fragment F${chain - 1} on ItemConnection { edges { node { id } } }`;
+		source += ' query {';
+		let exact = 0;
+		for (let k = 1; k <= sizes; k++) {
+			source += ` a${k}: items(first: ${k}) { ...F0 }`;
+			exact += 1 + 1 + 2 * k;
+		}
+		source += ' }';
+		const start = performance.now();
+		const cost = connectionCost(source);
+		expect(performance.now() - start).toBeLessThan(TIME_BOUND_MS);
+		// beyond a few sizes per fragment, a size is rounded up to a power of two
+		expect(cost).toBeGreaterThanOrEqual(exact);
+		expect(cost).toBeLessThanOrEqual(2 * exact);
+	});
+});
+
+describe('maxListCost: a size handed to an abstract parent', () => {
+	const schema = buildSchema(/* GraphQL */ `
+		type Item { id: ID! }
+		interface Mixed { nodes: [Item!]! }
+		type A implements Mixed { nodes: [Item!]! }
+		type B implements Mixed { nodes(first: Int): [Item!]! }
+		interface Declared { nodes(first: Int): [Item!]! }
+		type C implements Declared { nodes(first: Int): [Item!]! }
+		interface Bare { nodes: [Item!]! }
+		type D implements Bare { nodes: [Item!]! }
+		union U = A | B
+		type Query {
+			mixed(first: Int): Mixed
+			declared(first: Int): Declared
+			bare(first: Int): Bare
+			union(first: Int): U
+		}
+	`);
+	const cost = (source: string) => costOf(source, {}, schema);
+
+	test('mixed declarations: a possible type declaring none takes the size', () => {
+		// nodes 1 + 1000, mixed 1002 (A would take 1000 at run time)
+		expect(cost('{ mixed(first: 1000) { nodes { id } } }')).toBe(1002);
+		expect(cost('{ mixed(first: 1000) { ... on A { nodes { id } } } }')).toBe(
+			1002,
+		);
+		// B declares `first`: its own reading, defaultFirst 10
+		expect(cost('{ mixed(first: 1000) { ... on B { nodes { id } } } }')).toBe(
+			12,
+		);
+	});
+
+	test('every definition declares: the pending size is never used', () => {
+		expect(cost('{ declared(first: 1000) { nodes { id } } }')).toBe(12);
+	});
+
+	test('no definition declares: the pending size is used', () => {
+		expect(cost('{ bare(first: 1000) { nodes { id } } }')).toBe(1002);
+	});
+
+	test('a union is costed branch by branch', () => {
+		const source =
+			'{ union(first: 1000) { ... on A { nodes { id } } ... on B { nodes { id } } } }';
+		// 1 + (1 + 1000) + (1 + 10)
+		expect(cost(source)).toBe(1013);
+	});
+});
+
 describe('maxDepth and maxListCost together', () => {
 	test('each reports its own error for the same operation', () => {
 		const errors = check(cycleQuery, [

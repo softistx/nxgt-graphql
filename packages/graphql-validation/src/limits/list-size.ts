@@ -80,6 +80,10 @@ interface Profile {
 	largest: (number | undefined)[];
 	someLack: boolean[];
 	someBare: boolean;
+	/** Whether some definition declares any of the size arguments. */
+	declares: boolean;
+	/** Whether some definition declares none of them. */
+	someUndeclared: boolean;
 }
 
 const profiles = new WeakMap<
@@ -119,6 +123,8 @@ function profileOf(
 		largest: cost.sizeArguments.map(() => undefined),
 		someLack: cost.sizeArguments.map(() => false),
 		someBare: false,
+		declares: false,
+		someUndeclared: false,
 	};
 	for (const field of definitions) {
 		let any = false;
@@ -132,6 +138,11 @@ function profileOf(
 			profile.largest[index] = Math.max(profile.largest[index] ?? 0, size);
 		});
 		if (!any) profile.someBare = true;
+		if (field.args.some((arg) => cost.sizeArguments.includes(arg.name))) {
+			profile.declares = true;
+		} else {
+			profile.someUndeclared = true;
+		}
 	}
 	byField.set(key, profile);
 	return profile;
@@ -156,17 +167,19 @@ function argumentSize(
 }
 
 /**
- * The size of the list `definition` returns on `parent`, as selected by
- * `args`: the largest its size arguments say, and `defaultFirst` when none
- * says anything. The schema's part is memoized, so a selection costs
- * `sizeArguments.length` steps whatever the number of possible types.
+ * The size `definition` states on `parent`, as selected by `args`: the largest
+ * its size arguments say, `undefined` when none says anything (none given, and
+ * none declared with a default). The schema's part is memoized, so a selection
+ * costs `sizeArguments.length` steps whatever the number of possible types.
+ * A list uses it, and a field returning an object (a Relay connection) hands it
+ * to the lists below it.
  */
-export function listSize(
+export function statedSize(
 	cost: SizeContext,
 	parent: GraphQLNamedType | undefined,
 	definition: GraphQLField<unknown, unknown>,
 	args: readonly ArgumentNode[] | undefined,
-): number {
+): number | undefined {
 	const profile = profileOf(cost, parent, definition);
 	let size: number | undefined;
 	let given = false;
@@ -177,6 +190,23 @@ export function listSize(
 		if (said !== undefined) size = Math.max(size ?? 0, said);
 	});
 	// Nothing given: a definition without any default is sized defaultFirst.
-	if (!given && profile.someBare) size = Math.max(size ?? 0, cost.defaultFirst);
-	return size ?? cost.defaultFirst;
+	if (size !== undefined && !given && profile.someBare) {
+		return Math.max(size, cost.defaultFirst);
+	}
+	return size;
+}
+
+/**
+ * Whether `definition` and the fields implementing it declare a size argument:
+ * `'all'` of them, `'none'` of them, or `'some'` (an abstract parent whose
+ * possible types differ).
+ */
+export function declaration(
+	cost: SizeContext,
+	parent: GraphQLNamedType | undefined,
+	definition: GraphQLField<unknown, unknown>,
+): 'all' | 'none' | 'some' {
+	const { declares, someUndeclared } = profileOf(cost, parent, definition);
+	if (!declares) return 'none';
+	return someUndeclared ? 'some' : 'all';
 }

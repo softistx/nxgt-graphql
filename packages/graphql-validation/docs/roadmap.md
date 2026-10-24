@@ -18,6 +18,9 @@ Nothing planned yet.
 
 ## Shipped
 
+- **Relay connection sizing** — `maxListCost` sizes the `edges` and `nodes` of
+  a connection from the connection field's size argument (`items(first: 100)
+  { edges { … } }`), not `defaultFirst`.
 - **Query depth, cost and breadth limits** — `maxDepth`, `maxListCost` and
   `maxFields` are graphql-js validation rules (also for graphql-yoga's
   `addValidationRule`) that refuse a query nested too deep, too costly for a
