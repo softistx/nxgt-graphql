@@ -80,6 +80,8 @@ interface Profile {
 	largest: (number | undefined)[];
 	someLack: boolean[];
 	someBare: boolean;
+	/** Whether some definition declares any of the size arguments. */
+	declares: boolean;
 }
 
 const profiles = new WeakMap<
@@ -119,6 +121,7 @@ function profileOf(
 		largest: cost.sizeArguments.map(() => undefined),
 		someLack: cost.sizeArguments.map(() => false),
 		someBare: false,
+		declares: false,
 	};
 	for (const field of definitions) {
 		let any = false;
@@ -132,6 +135,9 @@ function profileOf(
 			profile.largest[index] = Math.max(profile.largest[index] ?? 0, size);
 		});
 		if (!any) profile.someBare = true;
+		if (field.args.some((arg) => cost.sizeArguments.includes(arg.name))) {
+			profile.declares = true;
+		}
 	}
 	byField.set(key, profile);
 	return profile;
@@ -183,4 +189,13 @@ export function statedSize(
 		return Math.max(size, cost.defaultFirst);
 	}
 	return size;
+}
+
+/** Whether `definition` (or, on an abstract parent, a possible type's field) declares a size argument. */
+export function declaresSize(
+	cost: SizeContext,
+	parent: GraphQLNamedType | undefined,
+	definition: GraphQLField<unknown, unknown>,
+): boolean {
+	return profileOf(cost, parent, definition).declares;
 }

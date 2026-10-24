@@ -462,6 +462,7 @@ const connectionSchema = buildSchema(/* GraphQL */ `
 	interface Feed { items(first: Int = 3): ItemConnection! }
 	type Blog implements Feed { items(first: Int = 20): ItemConnection! }
 	type PageInfo { hasNext: Boolean! }
+	type User { id: ID! friends: [User!]! }
 	type Item { id: ID! children(first: Int): ItemConnection! }
 	type ItemEdge { node: Item! }
 	type ItemConnection {
@@ -469,6 +470,8 @@ const connectionSchema = buildSchema(/* GraphQL */ `
 		nodes: [Item!]!
 		pageInfo: PageInfo!
 		recent(first: Int): [Item!]!
+		owner: User!
+		recentUsers(first: Int): [User!]!
 	}
 	type Wrapper {
 		inner: ItemConnection!
@@ -479,6 +482,7 @@ const connectionSchema = buildSchema(/* GraphQL */ `
 		sized(first: Int = 7): ItemConnection!
 		wrapped(first: Int): Wrapper!
 		feed: Feed
+		user(limit: Int): User!
 	}
 `);
 
@@ -557,12 +561,40 @@ describe('maxListCost on a connection', () => {
 		);
 	});
 
-	test('a wrapper passes the size through, a nested sized field replaces it', () => {
+	test('a wrapper does not pass the size on, a nested sized field hands its own', () => {
+		// inner is crossed: edges 1 + 10 * 2 = 21, inner 22, wrapped 23
 		const wrapped = '{ wrapped(first: 3) { inner { edges { node { id } } } } }';
-		expect(connectionCost(wrapped)).toBe(1 + 1 + 7);
+		expect(connectionCost(wrapped)).toBe(23);
 		const nested =
 			'{ wrapped(first: 100) { sub(first: 2) { edges { node { id } } } } }';
 		expect(connectionCost(nested)).toBe(1 + 1 + 5);
+	});
+
+	describe('a size never reaches a list its field does not size', () => {
+		const friends =
+			'friends { friends { friends { friends { friends { id } } } } }';
+		// six nested lists of 10: 111111 under a field
+		test('across an object field of the connection', () => {
+			expect(
+				connectionCost(`{ items(first: 0) { owner { ${friends} } } }`),
+			).toBe(111113);
+		});
+		test('across a list declaring its own size argument', () => {
+			expect(
+				connectionCost(`{ items(first: 0) { recentUsers { ${friends} } } }`),
+			).toBe(1111112);
+		});
+		// The rule is structural: `friends` declares no size argument and sits
+		// directly on `user`'s return type, so it takes `limit: 0` (develop: 111112).
+		test('on a list directly under a non-list field that states a size', () => {
+			expect(connectionCost(`{ user(limit: 0) { ${friends} } }`)).toBe(2);
+		});
+		test('fifty aliases of it', () => {
+			let source = '{';
+			for (let i = 0; i < 50; i++)
+				source += ` a${i}: user(limit: 0) { ${friends} }`;
+			expect(connectionCost(`${source} }`)).toBe(100);
+		});
 	});
 
 	test('inline fragments pass the size through', () => {
@@ -578,6 +610,22 @@ describe('maxListCost on a connection', () => {
 		`;
 		// a 1 + (1 + 2 * 2) = 6, b 1 + (1 + 5 * 2) = 12
 		expect(connectionCost(source)).toBe(18);
+	});
+
+	test('a fragment size rounded up is never rounded down, past 2 ** 49', () => {
+		for (const base of [2 ** 49, 2 ** 52]) {
+			// eight sizes fill the exact slots; the ninth is rounded up
+			let source = '';
+			for (let k = 1; k <= 9; k++)
+				source += ` a${k}: items(first: ${k}) { ...C }`;
+			source += ` z: items(first: ${base + 1}) { ...C }`;
+			const cost = connectionCost(
+				`query {${source} } fragment C on ItemConnection { nodes { id } }`,
+			);
+			// a_k: 1 + (1 + 2^k), 8 of them; z: 1 + (1 + base + 1)
+			const exact = 8 * 2 + 255 + (base + 3);
+			expect(cost).toBeGreaterThanOrEqual(exact);
+		}
 	});
 
 	test('many fragments under many sizes stay fast, and never under-count', () => {

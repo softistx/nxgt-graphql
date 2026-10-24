@@ -22,6 +22,7 @@ import {
 import { assertInteger, operationLabel } from './describe';
 import { introspectionSize, isIntrospectionRoot } from './introspection';
 import { statedSize } from './list-size';
+import { listSizeUnder } from './pending-size';
 
 /** Options of {@link maxListCost}. */
 export interface MaxListCostOptions {
@@ -47,9 +48,9 @@ export interface MaxListCostOptions {
 const DEFAULT_SIZE_ARGUMENTS = ['first', 'last', 'limit'] as const;
 
 /**
- * The cost of one selected field. `pending` is the size a connection above
- * hands down: a list stating no size of its own takes it, and every list
- * consumes it, so it never reaches a list further down.
+ * The cost of one selected field. `pending` is the size of the field whose
+ * return type this selection is on: only a list declaring no size argument
+ * takes it, and no field passes it on.
  */
 function fieldCost(
 	cost: CostContext,
@@ -62,21 +63,20 @@ function fieldCost(
 	const name = selection.name.value;
 	const type = getNamedType(definition.type);
 	if (!isListType(getNullableType(definition.type))) {
-		// An object field: its own size replaces the pending one, else it is passed on.
+		// An object field hands its own size, if it states one, to the lists
+		// selected directly on it; the pending size stops here.
 		const stated = statedSize(cost, parent, definition, selection.arguments);
-		const inner = costOf(cost, selection.selectionSet, type, stated ?? pending);
+		const inner = costOf(cost, selection.selectionSet, type, stated);
 		return add(1, inner);
 	}
 	const inner = costOf(cost, selection.selectionSet, type, undefined);
 	const size = parent?.name.startsWith('__')
 		? introspectionSize(cost.schema, name)
-		: (statedSize(cost, parent, definition, selection.arguments) ??
-			pending ??
-			cost.defaultFirst);
+		: listSizeUnder(cost, parent, definition, selection.arguments, pending);
 	return add(1, multiply(inner, size));
 }
 
-/** The cost of `selectionSet` selected on `parent`, under the `pending` size of the connection above. */
+/** The cost of `selectionSet` selected on `parent`, under the `pending` size of the field they are selected on. */
 function costOf(
 	cost: CostContext,
 	selectionSet: SelectionSetNode,
@@ -168,13 +168,14 @@ function fragmentCost(
  *
  * A Relay connection puts the size on a field returning an object, with the
  * list below it (`items(first: 100) { edges { node { id } } }`). A field that
- * is not a list and states a size (by the same reading) hands it down as a
- * pending size: the first list on each path below it that states none of its
- * own (no size argument given, none declared with a default) takes it instead
- * of `defaultFirst`, and every list consumes it, so lists further down do not
- * see it. `edges` and `nodes` each take it; a field in between (`pageInfo`, a
- * wrapper) passes it on, a nested sized field replaces it. A connection stating
- * nothing hands down nothing: its lists are sized `defaultFirst`.
+ * is not a list and states a size (by the same reading) hands it to the lists
+ * selected directly on its return type, through inline fragments and fragment
+ * spreads on that same selection set, and only to those declaring none of the
+ * size arguments (`edges`, `nodes`): such a list takes it instead of
+ * `defaultFirst`. A list declaring a size argument (`recent(first: Int)`)
+ * reads its own, never the pending size. Crossing any other field (an object
+ * field, `pageInfo`, a wrapper) ends it. A connection stating nothing hands
+ * down nothing: its lists are sized `defaultFirst`.
  *
  * Named fragments are followed, each costed once per pending size (past eight
  * distinct sizes under one fragment a size is rounded up to a power of two, so

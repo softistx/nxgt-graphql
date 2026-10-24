@@ -184,23 +184,26 @@ type ItemConnection { edges: [ItemEdge!]! nodes: [Item!]! pageInfo: PageInfo! }
 
 A field that is not a list and states a size, read as for a list above (a size
 argument given, or declared with a default; on an abstract parent the largest
-over its possible types), hands it down as a **pending size**:
+over its possible types), hands it down as a **pending size** to the lists
+selected **directly on its return type**:
 
-- The first list on each path below it that states **no size of its own** (no
-  size argument given and none declared with a default) takes the pending size
-  instead of `defaultFirst`. Siblings take it independently: `edges` and
-  `nodes` above are both 100.
-- A list consumes the pending size, whether it uses it or states its own: the
-  lists further down do not see it. In `items(first: 100) { edges { node {
-  children { edges { node { id } } } } } }` the inner `edges` is sized
-  `defaultFirst`, since `children` states nothing.
-- A field in between that is not a list (`pageInfo`, a wrapper object) passes the
-  pending size through; a nested field that states a size replaces it.
+- Only a list that **declares none of the size arguments** takes it, instead of
+  `defaultFirst`: `edges` and `nodes` above are both 100. A list that declares
+  one (`recent(first: Int)`) reads its own arguments, else `defaultFirst`,
+  never the pending size.
+- It stops at the first field crossed: an object field (`owner`), `pageInfo` or
+  a wrapper object passes nothing on, so the lists below them are sized as
+  without a connection. In `items(first: 0) { owner { friends { … } } }` the
+  `0` does not reach `friends`. A nested field that states a size hands its own
+  to the lists directly on it.
 - A connection field that states nothing (no size argument given, none declared
   with a default) hands down nothing: its lists are sized `defaultFirst`, as
   before. A variable, a negative number or an unusable value on it counts as for
   a list: its SDL default, else `defaultFirst`.
-- Inline fragments pass the pending size through. A named fragment is costed
+- The rule is structural: any non-list field stating a size sizes the lists
+  declaring no size argument directly on its return type, whether or not it is
+  a connection. `user(limit: 0) { friends { … } }` sizes `friends` 0.
+- Inline fragments, and fragment spreads, on that same selection set pass the pending size through. A named fragment is costed
   once for each distinct pending size it is spread under (`...C` under
   `first: 2` and `first: 5` costs differently). Under more than eight distinct
   sizes in one document a fragment's further sizes are rounded up to the next

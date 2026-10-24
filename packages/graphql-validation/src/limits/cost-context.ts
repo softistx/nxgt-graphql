@@ -72,5 +72,8 @@ export function memoSize(
 	if (pending === undefined || known.has(pending) || known.size < EXACT_SIZES) {
 		return pending;
 	}
-	return Math.min(CEILING, 2 ** Math.ceil(Math.log2(Math.max(pending, 1))));
+	// Math.log2 rounds near 2^k + d, so the power is checked, not trusted.
+	let rounded = 2 ** Math.ceil(Math.log2(Math.max(pending, 1)));
+	if (rounded < pending) rounded *= 2;
+	return Math.min(CEILING, rounded);
 }

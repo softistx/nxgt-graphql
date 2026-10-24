@@ -275,7 +275,8 @@ its `first`, `last` or `limit` argument; a variable, a negative number or no
 argument uses the argument's SDL default, else `defaultFirst`. A size is an
 Int, a canonical-integer string or an integral Float; the largest of several
 size arguments wins. On a Relay connection (`items(first: 100) { edges {
-node { id } } }`) the `first` on the object field sizes the lists below it.
+node { id } } }`) the `first` on the object field sizes the `edges` and `nodes` lists directly
+under it (not lists further down, nor lists declaring their own size argument).
 Introspection is counted too; add `ignoreIntrospection: true` where it is trusted (GraphiQL in
 development). See
 [Limiting the depth and cost of a query](docs/guide/query-limits.md).
