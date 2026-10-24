@@ -1,4 +1,5 @@
 import {
+	type FragmentDefinitionNode,
 	GraphQLError,
 	type SelectionSetNode,
 	type ValidationContext,
@@ -10,6 +11,47 @@ import { assertInteger, operationLabel } from './describe';
 export interface MaxDepthOptions {
 	/** The deepest nesting of field selections an operation may have (at least 1). */
 	depth: number;
+}
+
+/** What a walk of one document needs: what it has measured so far. */
+interface DepthContext {
+	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
+	fragmentDepths: Map<string, number>;
+	measuring: Set<string>;
+}
+
+/** The depth of `selectionSet`: 0 when it selects no field. */
+function depthOf(depth: DepthContext, selectionSet: SelectionSetNode): number {
+	let deepest = 0;
+	for (const selection of selectionSet.selections) {
+		let here = 0;
+		if (selection.kind === 'Field') {
+			if (selection.name.value.startsWith('__')) continue;
+			here =
+				1 +
+				(selection.selectionSet ? depthOf(depth, selection.selectionSet) : 0);
+		} else if (selection.kind === 'InlineFragment') {
+			here = depthOf(depth, selection.selectionSet);
+		} else {
+			here = fragmentDepth(depth, selection.name.value);
+		}
+		if (here > deepest) deepest = here;
+	}
+	return deepest;
+}
+
+/** The depth of the named fragment, measured once. */
+function fragmentDepth(depth: DepthContext, name: string): number {
+	const known = depth.fragmentDepths.get(name);
+	if (known !== undefined) return known;
+	const fragment = depth.getFragment(name);
+	// A cycle is NoFragmentCyclesRule's to report; here it adds nothing.
+	if (!fragment || depth.measuring.has(name)) return 0;
+	depth.measuring.add(name);
+	const result = depthOf(depth, fragment.selectionSet);
+	depth.measuring.delete(name);
+	depth.fragmentDepths.set(name, result);
+	return result;
 }
 
 /**
@@ -30,43 +72,14 @@ export interface MaxDepthOptions {
 export function maxDepth({ depth: limit }: MaxDepthOptions): ValidationRule {
 	assertInteger('maxDepth: depth', limit, 1);
 	return (context: ValidationContext) => {
-		const fragmentDepths = new Map<string, number>();
-		const measuring = new Set<string>();
-
-		const depthOf = (selectionSet: SelectionSetNode): number => {
-			let deepest = 0;
-			for (const selection of selectionSet.selections) {
-				let depth = 0;
-				if (selection.kind === 'Field') {
-					if (selection.name.value.startsWith('__')) continue;
-					depth =
-						1 + (selection.selectionSet ? depthOf(selection.selectionSet) : 0);
-				} else if (selection.kind === 'InlineFragment') {
-					depth = depthOf(selection.selectionSet);
-				} else {
-					depth = fragmentDepth(selection.name.value);
-				}
-				if (depth > deepest) deepest = depth;
-			}
-			return deepest;
+		const walk: DepthContext = {
+			getFragment: (name) => context.getFragment(name),
+			fragmentDepths: new Map(),
+			measuring: new Set(),
 		};
-
-		const fragmentDepth = (name: string): number => {
-			const known = fragmentDepths.get(name);
-			if (known !== undefined) return known;
-			const fragment = context.getFragment(name);
-			// A cycle is NoFragmentCyclesRule's to report; here it adds nothing.
-			if (!fragment || measuring.has(name)) return 0;
-			measuring.add(name);
-			const depth = depthOf(fragment.selectionSet);
-			measuring.delete(name);
-			fragmentDepths.set(name, depth);
-			return depth;
-		};
-
 		return {
 			OperationDefinition(operation) {
-				const depth = depthOf(operation.selectionSet);
+				const depth = depthOf(walk, operation.selectionSet);
 				if (depth > limit) {
 					context.reportError(
 						new GraphQLError(
