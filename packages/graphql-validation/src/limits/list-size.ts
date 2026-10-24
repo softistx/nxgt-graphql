@@ -82,6 +82,8 @@ interface Profile {
 	someBare: boolean;
 	/** Whether some definition declares any of the size arguments. */
 	declares: boolean;
+	/** Whether some definition declares none of them. */
+	someUndeclared: boolean;
 }
 
 const profiles = new WeakMap<
@@ -122,6 +124,7 @@ function profileOf(
 		someLack: cost.sizeArguments.map(() => false),
 		someBare: false,
 		declares: false,
+		someUndeclared: false,
 	};
 	for (const field of definitions) {
 		let any = false;
@@ -137,6 +140,8 @@ function profileOf(
 		if (!any) profile.someBare = true;
 		if (field.args.some((arg) => cost.sizeArguments.includes(arg.name))) {
 			profile.declares = true;
+		} else {
+			profile.someUndeclared = true;
 		}
 	}
 	byField.set(key, profile);
@@ -191,11 +196,17 @@ export function statedSize(
 	return size;
 }
 
-/** Whether `definition` (or, on an abstract parent, a possible type's field) declares a size argument. */
-export function declaresSize(
+/**
+ * Whether `definition` and the fields implementing it declare a size argument:
+ * `'all'` of them, `'none'` of them, or `'some'` (an abstract parent whose
+ * possible types differ).
+ */
+export function declaration(
 	cost: SizeContext,
 	parent: GraphQLNamedType | undefined,
 	definition: GraphQLField<unknown, unknown>,
-): boolean {
-	return profileOf(cost, parent, definition).declares;
+): 'all' | 'none' | 'some' {
+	const { declares, someUndeclared } = profileOf(cost, parent, definition);
+	if (!declares) return 'none';
+	return someUndeclared ? 'some' : 'all';
 }

@@ -652,6 +652,54 @@ describe('maxListCost on a connection', () => {
 	});
 });
 
+describe('maxListCost: a size handed to an abstract parent', () => {
+	const schema = buildSchema(/* GraphQL */ `
+		type Item { id: ID! }
+		interface Mixed { nodes: [Item!]! }
+		type A implements Mixed { nodes: [Item!]! }
+		type B implements Mixed { nodes(first: Int): [Item!]! }
+		interface Declared { nodes(first: Int): [Item!]! }
+		type C implements Declared { nodes(first: Int): [Item!]! }
+		interface Bare { nodes: [Item!]! }
+		type D implements Bare { nodes: [Item!]! }
+		union U = A | B
+		type Query {
+			mixed(first: Int): Mixed
+			declared(first: Int): Declared
+			bare(first: Int): Bare
+			union(first: Int): U
+		}
+	`);
+	const cost = (source: string) => costOf(source, {}, schema);
+
+	test('mixed declarations: a possible type declaring none takes the size', () => {
+		// nodes 1 + 1000, mixed 1002 (A would take 1000 at run time)
+		expect(cost('{ mixed(first: 1000) { nodes { id } } }')).toBe(1002);
+		expect(cost('{ mixed(first: 1000) { ... on A { nodes { id } } } }')).toBe(
+			1002,
+		);
+		// B declares `first`: its own reading, defaultFirst 10
+		expect(cost('{ mixed(first: 1000) { ... on B { nodes { id } } } }')).toBe(
+			12,
+		);
+	});
+
+	test('every definition declares: the pending size is never used', () => {
+		expect(cost('{ declared(first: 1000) { nodes { id } } }')).toBe(12);
+	});
+
+	test('no definition declares: the pending size is used', () => {
+		expect(cost('{ bare(first: 1000) { nodes { id } } }')).toBe(1002);
+	});
+
+	test('a union is costed branch by branch', () => {
+		const source =
+			'{ union(first: 1000) { ... on A { nodes { id } } ... on B { nodes { id } } } }';
+		// 1 + (1 + 1000) + (1 + 10)
+		expect(cost(source)).toBe(1013);
+	});
+});
+
 describe('maxDepth and maxListCost together', () => {
 	test('each reports its own error for the same operation', () => {
 		const errors = check(cycleQuery, [
