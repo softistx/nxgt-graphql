@@ -34,6 +34,8 @@ export interface Problem {
 	readonly path: Path;
 	readonly value: unknown;
 	readonly reason: string;
+	/** What the refusing scalar puts in its error's `extensions`. */
+	readonly extensions?: Record<string, unknown>;
 }
 
 /** What a walk reads, and the problems it found so far. */
@@ -107,8 +109,9 @@ function validateNamed(walk: Walk, value: unknown, name: string, at: At): void {
 		validateObject(walk, value, name, named, at);
 		return;
 	}
-	const reason = leafRefusal(walk, value, name, named, at);
-	if (reason !== undefined) report(walk, at, value, reason);
+	const refusal = leafRefusal(walk, value, name, named, at);
+	if (refusal !== undefined)
+		report(walk, at, value, refusal.reason, refusal.extensions);
 }
 
 function leafRefusal(
@@ -117,12 +120,12 @@ function leafRefusal(
 	name: string,
 	named: Exclude<InputType, InputObject>,
 	at: At,
-): string | undefined {
+): { reason: string; extensions?: Record<string, unknown> } | undefined {
 	switch (named.kind) {
 		case 'builtin':
-			return builtinRefusal(name, value);
+			return plain(builtinRefusal(name, value));
 		case 'enum':
-			return enumRefusal(name, named.values, value);
+			return plain(enumRefusal(name, named.values, value));
 		case 'scalar':
 			return scalarRefusal(name, issueAt(walk.issues, at.zodPath));
 		default:
@@ -130,6 +133,10 @@ function leafRefusal(
 			// another version of the plugin.
 			throw new Error(STALE_FILE);
 	}
+}
+
+function plain(reason: string | undefined): { reason: string } | undefined {
+	return reason === undefined ? undefined : { reason };
 }
 
 /** Thrown on an input type whose `kind` this runtime does not know. */
@@ -195,6 +202,17 @@ function validateOneOf(
 		);
 }
 
-function report(walk: Walk, at: At, value: unknown, reason: string): void {
-	walk.problems.push({ path: at.path, value, reason });
+function report(
+	walk: Walk,
+	at: At,
+	value: unknown,
+	reason: string,
+	extensions?: Record<string, unknown>,
+): void {
+	walk.problems.push({
+		path: at.path,
+		value,
+		reason,
+		...(extensions === undefined ? {} : { extensions }),
+	});
 }

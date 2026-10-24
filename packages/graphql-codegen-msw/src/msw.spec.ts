@@ -295,12 +295,15 @@ describe('a hand-written handler, without variableTypes or inputTypes', () => {
 describe('what the API refuses before validation', () => {
 	// graphql-yoga 5.24 refuses these while coercing the variables: one
 	// error per problem, no extensions, status 400 under either Accept.
-	const refusal = (...errors: [string, number][]) => ({
+	const refusal = (
+		...errors: [string, number, Record<string, unknown>?][]
+	) => ({
 		status: 400,
 		body: {
-			errors: errors.map(([message, column]) => ({
+			errors: errors.map(([message, column, extensions]) => ({
 				message,
 				locations: [{ line: 1, column }],
+				...(extensions === undefined ? {} : { extensions }),
 			})),
 		},
 	});
@@ -444,6 +447,11 @@ describe('what the API refuses before validation', () => {
 			refusal([
 				'Variable "$input" got invalid value "yesterday" at "input.birth"; DateTime cannot represent this input: Invalid ISO datetime',
 				17,
+				{
+					code: 'INVALID_SCALAR',
+					scalar: 'DateTime',
+					reason: 'invalid_format',
+				},
 			]),
 		);
 	});

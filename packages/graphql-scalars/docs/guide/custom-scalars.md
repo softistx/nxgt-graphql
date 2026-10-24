@@ -225,6 +225,20 @@ your schema's issue holds it: a custom `refine` message, or a strict object's
 `Unrecognized key: "<key>"`. A throw while Zod runs the schema (your codec's
 own error, an async check) gives `<Name> cannot represent this input` or
 `<Name> cannot serialize this value`, with the error kept as `originalError`.
+An input refusal (never an output one) also has `extensions`
+`{ code: 'INVALID_SCALAR', scalar: '<Name>', reason: '<issue code>' }`, typed
+as `InvalidScalarExtensions`: `reason` is Zod's first issue `code`
+(`invalid_format`, `too_small`, `custom`…), `invalid_type` for a literal of a
+kind the scalar does not read, and absent when the schema threw. graphql copies
+them onto the `Variable "$n" got invalid value …` error, so a server tells which
+scalar refused and why without parsing the message:
+
+```ts
+if (error.extensions?.code === 'INVALID_SCALAR') {
+  console.log(error.extensions.scalar, error.extensions.reason); // 'Slug', 'invalid_format'
+}
+```
+
 graphql 16 prefixes the error of a bad variable with the value the client
 sent (`Variable "$n" got invalid value …`); graphql 17 does not
 (`Variable "$n" has invalid value: …`).

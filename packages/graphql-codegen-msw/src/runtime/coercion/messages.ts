@@ -79,15 +79,22 @@ function suggest(value: string, values: readonly string[]): string {
 }
 
 /**
- * Why a custom scalar refuses the value, as a scalar built with
- * `zodScalar` (`@nxgt/graphql-scalars`) words it: its schema's first issue,
- * which the client's schema, the same one, reports too.
+ * Why a custom scalar refuses the value, and the `extensions` it carries, as
+ * a scalar built with `zodScalar` (`@nxgt/graphql-scalars`) words it: its
+ * schema's first issue, which the client's schema, the same one, reports too.
  */
 export function scalarRefusal(
 	name: string,
 	issue: z.core.$ZodIssue | undefined,
-): string | undefined {
-	return issue && `${name} cannot represent this input: ${issue.message}`;
+): { reason: string; extensions: Record<string, unknown> } | undefined {
+	return (
+		issue && {
+			reason: `${name} cannot represent this input: ${issue.message}`,
+			// What `zodScalar` puts in its error, which graphql keeps on the
+			// variable's.
+			extensions: { code: 'INVALID_SCALAR', scalar: name, reason: issue.code },
+		}
+	);
 }
 
 /** The input object messages, by what is wrong with the object. */
