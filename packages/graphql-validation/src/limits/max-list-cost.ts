@@ -16,6 +16,11 @@ import {
 	type ValidationRule,
 } from 'graphql';
 import { assertInteger, operationLabel } from './describe';
+import {
+	introspectionRoot,
+	introspectionSize,
+	isIntrospectionRoot,
+} from './introspection';
 
 /** Options of {@link maxListCost}. */
 export interface MaxListCostOptions {
@@ -25,6 +30,12 @@ export interface MaxListCostOptions {
 	defaultFirst: number;
 	/** The argument names that size a list, the first present wins. Default `['first', 'last', 'limit']`. */
 	sizeArguments?: readonly string[];
+	/**
+	 * Do not cost `__schema` and `__type` (default `false`). Only where
+	 * introspection is disabled or the client is trusted, e.g. GraphiQL in
+	 * development: the standard introspection query is costly.
+	 */
+	ignoreIntrospection?: boolean;
 }
 
 const DEFAULT_SIZE_ARGUMENTS = ['first', 'last', 'limit'] as const;
@@ -40,6 +51,7 @@ interface CostContext {
 	schema: GraphQLSchema;
 	sizeArguments: readonly string[];
 	defaultFirst: number;
+	ignoreIntrospection: boolean;
 	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
 	fragmentCosts: Map<string, number>;
 	costing: Set<string>;
@@ -104,6 +116,20 @@ function listSize(
 	return cost.defaultFirst;
 }
 
+/** The definition of the field `name` on `parent`, meta-fields of the query root included. */
+function fieldOf(
+	cost: CostContext,
+	parent: GraphQLNamedType | undefined,
+	name: string,
+): GraphQLField<unknown, unknown> | undefined {
+	if (parent === cost.schema.getQueryType() && isIntrospectionRoot(name)) {
+		return introspectionRoot(name);
+	}
+	return isObjectType(parent) || isInterfaceType(parent)
+		? parent.getFields()[name]
+		: undefined;
+}
+
 /** The cost of `selectionSet` selected on `parent`. */
 function costOf(
 	cost: CostContext,
@@ -113,11 +139,10 @@ function costOf(
 	let total = 0;
 	for (const selection of selectionSet.selections) {
 		if (selection.kind === 'Field') {
-			if (selection.name.value.startsWith('__')) continue;
-			const definition =
-				isObjectType(parent) || isInterfaceType(parent)
-					? parent.getFields()[selection.name.value]
-					: undefined;
+			const name = selection.name.value;
+			if (name === '__typename') continue;
+			if (isIntrospectionRoot(name) && cost.ignoreIntrospection) continue;
+			const definition = fieldOf(cost, parent, name);
 			// An unknown field is another rule's to report.
 			if (!definition) continue;
 			let inner = 0;
@@ -128,10 +153,10 @@ function costOf(
 					getNamedType(definition.type),
 				);
 				if (isListType(getNullableType(definition.type))) {
-					inner = multiply(
-						inner,
-						listSize(cost, definition, selection.arguments),
-					);
+					const size = parent?.name.startsWith('__')
+						? introspectionSize(cost.schema, name)
+						: listSize(cost, definition, selection.arguments);
+					inner = multiply(inner, size);
 				}
 			}
 			total = add(total, add(1, inner));
@@ -184,7 +209,10 @@ function rootType(schema: GraphQLSchema, operation: OperationDefinitionNode) {
  * The cost of an operation is the sum, over every selected field, of the
  * product of the sizes of the list fields enclosing it: a field costs 1, and a
  * list field multiplies the cost of its sub-selection by its size.
- * Introspection meta-fields (`__typename`, `__schema`, `__type`) cost nothing.
+ * `__typename` costs nothing. `__schema` and `__type` are costed like any
+ * field, their lists sized by the schema itself (`__Schema.types` is the number
+ * of types, the other lists the longest list anywhere in the schema), unless
+ * `ignoreIntrospection` is set.
  *
  * The size of a list field is the first of `sizeArguments` (default `first`,
  * `last`, `limit`) given on the field. A literal Int of at least 0 is used as
@@ -221,6 +249,7 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 			schema,
 			sizeArguments,
 			defaultFirst,
+			ignoreIntrospection: options.ignoreIntrospection ?? false,
 			getFragment: (name) => context.getFragment(name),
 			fragmentCosts: new Map(),
 			costing: new Set(),

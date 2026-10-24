@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { Kind } from 'graphql';
+import { getIntrospectionQuery, Kind } from 'graphql';
+
+/** Levels of the standard introspection query, measured. */
+const INTROSPECTION_DEPTH = 15;
+
 import { check, cycleQuery, limitOf } from '../../test/limits';
 import { maxDepth } from './max-depth';
 
@@ -78,17 +82,43 @@ describe('maxDepth', () => {
 		);
 	});
 
-	test('__typename and introspection do not count', () => {
-		const source = `{ __typename __schema { types { fields { type { ofType { ofType { name } } } } } } }`;
-		expect(check(source, [maxDepth({ depth: 1 })])).toEqual([]);
+	test('__typename does not count', () => {
 		expect(
 			check('{ folder(id: "1") { __typename id } }', [maxDepth({ depth: 2 })]),
 		).toEqual([]);
+		expect(check('{ __typename }', [maxDepth({ depth: 1 })])).toEqual([]);
+	});
+
+	test('introspection counts like any field', () => {
+		const source = '{ __schema { types { fields { type { name } } } } }';
+		expect(limitOf(check(source, [maxDepth({ depth: 4 })])[0]).depth).toBe(5);
 		expect(
 			check('{ __type(name: "Folder") { fields { name } } }', [
-				maxDepth({ depth: 1 }),
+				maxDepth({ depth: 3 }),
 			]),
 		).toEqual([]);
+	});
+
+	test('the standard introspection query is refused by a limit of 8', () => {
+		const [error] = check(getIntrospectionQuery(), [maxDepth({ depth: 8 })]);
+		expect(limitOf(error).code).toBe('QUERY_TOO_DEEP');
+		expect(limitOf(error).depth).toBe(INTROSPECTION_DEPTH);
+	});
+
+	test('ignoreIntrospection lets introspection through', () => {
+		const rule = maxDepth({ depth: 8, ignoreIntrospection: true });
+		expect(check(getIntrospectionQuery(), [rule])).toEqual([]);
+		expect(
+			check(
+				'{ __schema { types { name } } folder(id: "1") { items { id } } }',
+				[maxDepth({ depth: 2, ignoreIntrospection: true })],
+			),
+		).toHaveLength(1);
+	});
+
+	test('aliased introspection cannot hide a deep selection', () => {
+		const source = `{ a: __schema { types { fields { type { fields { type { name } } } } } } }`;
+		expect(check(source, [maxDepth({ depth: 4 })])).toHaveLength(1);
 	});
 
 	test('reports one error per operation', () => {

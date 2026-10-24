@@ -6,11 +6,18 @@ import {
 	type ValidationRule,
 } from 'graphql';
 import { assertInteger, operationLabel } from './describe';
+import { isIntrospectionRoot } from './introspection';
 
 /** Options of {@link maxDepth}. */
 export interface MaxDepthOptions {
 	/** The deepest nesting of field selections an operation may have (at least 1). */
 	depth: number;
+	/**
+	 * Do not count `__schema` and `__type` (default `false`). Only where
+	 * introspection is disabled or the client is trusted, e.g. GraphiQL in
+	 * development: the standard introspection query is `INTROSPECTION_DEPTH` levels deep.
+	 */
+	ignoreIntrospection?: boolean;
 }
 
 /** What a walk of one document needs: what it has measured so far. */
@@ -18,6 +25,7 @@ interface DepthContext {
 	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
 	fragmentDepths: Map<string, number>;
 	measuring: Set<string>;
+	ignoreIntrospection: boolean;
 }
 
 /** The depth of `selectionSet`: 0 when it selects no field. */
@@ -26,7 +34,9 @@ function depthOf(depth: DepthContext, selectionSet: SelectionSetNode): number {
 	for (const selection of selectionSet.selections) {
 		let here = 0;
 		if (selection.kind === 'Field') {
-			if (selection.name.value.startsWith('__')) continue;
+			const name = selection.name.value;
+			if (name === '__typename') continue;
+			if (depth.ignoreIntrospection && isIntrospectionRoot(name)) continue;
 			here =
 				1 +
 				(selection.selectionSet ? depthOf(depth, selection.selectionSet) : 0);
@@ -59,8 +69,7 @@ function fragmentDepth(depth: DepthContext, name: string): number {
  * `depth` fields: a top-level field is depth 1.
  *
  * Named fragments are followed (each measured once), inline fragments add no
- * depth, and `__typename` and the introspection meta-fields (`__schema`,
- * `__type` and everything under them) do not count. One `GraphQLError` per
+ * depth, and `__typename` does not count. One `GraphQLError` per
  * operation, with `extensions: { code: 'QUERY_TOO_DEEP', depth, limit }`,
  * `depth` being the operation's real depth.
  *
@@ -69,13 +78,15 @@ function fragmentDepth(depth: DepthContext, name: string): number {
  * // graphql-yoga: onValidate: ({ addValidationRule }) => addValidationRule(maxDepth({ depth: 8 }))
  * ```
  */
-export function maxDepth({ depth: limit }: MaxDepthOptions): ValidationRule {
+export function maxDepth(options: MaxDepthOptions): ValidationRule {
+	const limit = options.depth;
 	assertInteger('maxDepth: depth', limit, 1);
 	return (context: ValidationContext) => {
 		const walk: DepthContext = {
 			getFragment: (name) => context.getFragment(name),
 			fragmentDepths: new Map(),
 			measuring: new Set(),
+			ignoreIntrospection: options.ignoreIntrospection ?? false,
 		};
 		return {
 			OperationDefinition(operation) {

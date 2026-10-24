@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildSchema, Kind } from 'graphql';
+import { buildSchema, getIntrospectionQuery, Kind } from 'graphql';
+
+const INTROSPECTION_COST_FLOOR = 100;
+
 import { check, cycleQuery, limitOf } from '../../test/limits';
 import { maxDepth } from './max-depth';
 import { maxListCost } from './max-list-cost';
@@ -183,13 +186,47 @@ describe('maxListCost', () => {
 		expect(costOf(source, {}, schema)).toBe(1 + 2 * (1 + 4 + 5));
 	});
 
-	test('introspection costs nothing', () => {
-		expect(
-			check('{ __schema { types { fields { name } } } }', [
-				maxListCost({ budget: 0, defaultFirst: 10 }),
-			]),
-		).toEqual([]);
+	test('__typename costs nothing', () => {
 		expect(costOf('{ __typename folder(id: "1") { __typename id } }')).toBe(2);
+	});
+
+	test('introspection is costed by the size of the schema', () => {
+		const schema = buildSchema('type Query { a: Int }');
+		const cost = costOf('{ __schema { directives { name } } }', {}, schema);
+		// __schema 1 + directives 1 + (the longest list of the schema: the
+		// introspection types' own, e.g. __DirectiveLocation's values) * name 1
+		expect(cost).toBeGreaterThan(1 + 1 + schema.getDirectives().length);
+		const types = costOf('{ __schema { types { name } } }', {}, schema);
+		expect(types).toBe(1 + 1 + Object.keys(schema.getTypeMap()).length);
+	});
+
+	test('a query repeating aliased introspection is refused', () => {
+		const inner =
+			'types { fields { type { fields { type { fields { name } } } } } }';
+		let source = '{';
+		for (let i = 0; i < 500; i++) source += ` a${i}: __schema { ${inner} }`;
+		source += ' }';
+		const [error] = check(source, [
+			maxListCost({ budget: 100_000, defaultFirst: 10 }),
+		]);
+		expect(limitOf(error).code).toBe('QUERY_TOO_COSTLY');
+	});
+
+	test('the standard introspection query is costed, and ignoreIntrospection skips it', () => {
+		const cost = costOf(getIntrospectionQuery());
+		expect(cost).toBeGreaterThan(INTROSPECTION_COST_FLOOR);
+		const rule = maxListCost({
+			...options,
+			budget: 0,
+			ignoreIntrospection: true,
+		});
+		expect(check(getIntrospectionQuery(), [rule])).toEqual([]);
+	});
+
+	test('__type is costed too', () => {
+		expect(
+			costOf('{ __type(name: "Folder") { fields { name } } }'),
+		).toBeGreaterThan(3);
 	});
 
 	test('stays fast and finite on a hostile query', () => {
