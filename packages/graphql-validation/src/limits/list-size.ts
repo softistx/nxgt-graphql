@@ -6,9 +6,7 @@ import {
 	isAbstractType,
 	type ValueNode,
 } from 'graphql';
-
-/** Sizes are plain numbers, held below this so a hostile query never reaches `Infinity`. */
-const CEILING = Number.MAX_SAFE_INTEGER;
+import { CEILING } from './describe';
 
 /** What sizing a list needs: the schema and the options of the rule. */
 export interface SizeContext {

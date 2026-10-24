@@ -1,5 +1,4 @@
 import {
-	type FragmentDefinitionNode,
 	type GraphQLField,
 	type GraphQLNamedType,
 	type GraphQLSchema,
@@ -7,21 +6,16 @@ import {
 	isObjectType,
 	type OperationDefinitionNode,
 } from 'graphql';
+import { CEILING } from './describe';
+import type { FragmentWalk } from './fragments';
 import { introspectionRoot, isIntrospectionRoot } from './introspection';
 import type { SizeContext } from './list-size';
 
-/** Costs are plain numbers, held below this so a hostile query never reaches `Infinity`. */
-const CEILING = Number.MAX_SAFE_INTEGER;
-
-export const add = (a: number, b: number) => Math.min(CEILING, a + b);
 export const multiply = (a: number, b: number) => Math.min(CEILING, a * b);
 
 /** What a walk of one document needs: the options, and what it has measured so far. */
-export interface CostContext extends SizeContext {
+export interface CostContext extends SizeContext, FragmentWalk {
 	ignoreIntrospection: boolean;
-	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
-	fragmentCosts: Map<string, Map<number, number>>;
-	costing: Set<string>;
 }
 
 /** The definition of the field `name` on `parent`, meta-fields of the query root included. */
