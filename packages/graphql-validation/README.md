@@ -271,7 +271,9 @@ const yoga = createYoga({
 One `GraphQLError` per operation: `extensions: { code: 'QUERY_TOO_DEEP', depth,
 limit }` or `{ code: 'QUERY_TOO_COSTLY', cost, limit }`. A list field is sized by
 its `first`, `last` or `limit` argument; a variable, a negative number or no
-argument uses the argument's SDL default, else `defaultFirst`. Introspection is
+argument uses the argument's SDL default, else `defaultFirst`. A size is an
+Int, a canonical-integer string or an integral Float; the largest of several
+size arguments wins. Introspection is
 counted too; add `ignoreIntrospection: true` where it is trusted (GraphiQL in
 development). See
 [Limiting the depth and cost of a query](docs/guide/query-limits.md).

@@ -138,9 +138,14 @@ argument says:
 | --- | --- |
 | a literal Int, 0 or more (`first: 5`) | that number |
 | a string literal holding a canonical integer (`limit: "100000000"`, for a `Long`-like scalar) | that number: digits only, no sign, no leading zero |
+| an integral Float literal (`first: 1000.0`, `first: 1e3`) | that number; `1.5` and `-1000.0` are unusable |
 | a negative literal (`first: -1000`), another string | as if unusable, see below |
 | a variable (`first: $n`) | as if unusable: validation has no variable values |
 | not given | its SDL default, when it has one; else nothing |
+
+An SDL default is read the same way: `limit: String = "1000"` and `first:
+Float = 1000.0` are sizes of 1000. Every size is held below
+`Number.MAX_SAFE_INTEGER`.
 
 An argument given but unusable counts for its SDL default when it is a
 non-negative Int (`items(first: Int = 100)`), and `defaultFirst` otherwise. A
@@ -187,6 +192,11 @@ it and never `Infinity`.
 
 ## Not covered
 
-The rules read the document, not its variables' values, and not what a resolver
-does: a resolver can still return more than `first` items. They complement a
-page-size cap in the resolver; they do not replace it.
+- A size carried inside an input object (`items(page: { first: 1000 })`) is not
+  read: the field has no size argument, so it is sized `defaultFirst`. Name the
+  size as an argument, or raise `defaultFirst`.
+- A nested list `[[X]]` is sized **once**: the inner lists are not multiplied. A
+  schema returning a list of lists should size it with its own argument.
+- The rules read the document, not its variables' values, and not what a
+  resolver does: a resolver can still return more than `first` items. They
+  complement a page-size cap in the resolver; they do not replace it.
