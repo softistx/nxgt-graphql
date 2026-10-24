@@ -36,12 +36,25 @@ const base = buildSchema(`
 		boom(value: Boom): Boolean
 	}
 `);
+// graphql 16 calls the first three, graphql 17 the `coerce*` ones: a schema
+// patched with only one set would accept every value on the other version.
+const hooks = [
+	'parseValue',
+	'parseLiteral',
+	'serialize',
+	'coerceInputValue',
+	'coerceInputLiteral',
+	'coerceOutputValue',
+] as const;
 for (const scalar of [EmailAddressScalar, Quantity, Boom]) {
-	Object.assign(base.getType(scalar.name) as object, {
-		parseValue: scalar.parseValue,
-		parseLiteral: scalar.parseLiteral,
-		serialize: scalar.serialize,
-	});
+	const target = base.getType(scalar.name) as unknown as Record<
+		string,
+		unknown
+	>;
+	const source = scalar as unknown as Record<string, unknown>;
+	for (const hook of hooks) {
+		if (source[hook] !== undefined) target[hook] = source[hook];
+	}
 }
 const schema: GraphQLSchema = base;
 const rootValue = { save: () => true, buy: () => true, boom: () => true };
