@@ -1,11 +1,16 @@
 import {
-	type FragmentDefinitionNode,
 	GraphQLError,
 	type SelectionSetNode,
 	type ValidationContext,
 	type ValidationRule,
 } from 'graphql';
-import { assertInteger, operationLabel } from './describe';
+import { add, assertInteger, operationLabel } from './describe';
+import {
+	type FragmentWalk,
+	fragmentValue,
+	NO_KEY,
+	newFragmentWalk,
+} from './fragments';
 import { isIntrospectionRoot } from './introspection';
 
 /** Options of {@link maxFields}. */
@@ -21,17 +26,9 @@ export interface MaxFieldsOptions {
 	ignoreIntrospection?: boolean;
 }
 
-/** What a walk of one document needs: what it has counted so far. */
-interface FieldsContext {
-	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
-	fragmentCounts: Map<string, number>;
-	counting: Set<string>;
+/** What a walk of one document needs: the options, and what it has counted so far. */
+interface FieldsContext extends FragmentWalk {
 	ignoreIntrospection: boolean;
-}
-
-/** `a + b`, clamped where a count stops being exact. */
-function add(a: number, b: number): number {
-	return Math.min(a + b, Number.MAX_SAFE_INTEGER);
 }
 
 /** The field selections of `selectionSet`, nested ones included. */
@@ -55,16 +52,9 @@ function countOf(walk: FieldsContext, selectionSet: SelectionSetNode): number {
 
 /** The count of the named fragment, walked once. */
 function fragmentCount(walk: FieldsContext, name: string): number {
-	const known = walk.fragmentCounts.get(name);
-	if (known !== undefined) return known;
-	const fragment = walk.getFragment(name);
-	// A cycle is NoFragmentCyclesRule's to report; here it adds nothing.
-	if (!fragment || walk.counting.has(name)) return 0;
-	walk.counting.add(name);
-	const result = countOf(walk, fragment.selectionSet);
-	walk.counting.delete(name);
-	walk.fragmentCounts.set(name, result);
-	return result;
+	return fragmentValue(walk, name, NO_KEY, (fragment) =>
+		countOf(walk, fragment.selectionSet),
+	);
 }
 
 /**
@@ -92,9 +82,7 @@ export function maxFields(options: MaxFieldsOptions): ValidationRule {
 	assertInteger('maxFields: limit', limit, 1);
 	return (context: ValidationContext) => {
 		const walk: FieldsContext = {
-			getFragment: (name) => context.getFragment(name),
-			fragmentCounts: new Map(),
-			counting: new Set(),
+			...newFragmentWalk((name) => context.getFragment(name)),
 			ignoreIntrospection: options.ignoreIntrospection ?? false,
 		};
 		return {

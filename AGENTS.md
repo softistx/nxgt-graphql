@@ -262,8 +262,9 @@ packages/graphql-validation/src/
   limits/                  maxDepth, maxListCost and maxFields, one validation rule per file, a spec
                            beside each; helpers, no rule: describe.ts (what the rules share),
                            introspection.ts (sizes of __schema/__type), list-size.ts (how a
-                           list field is sized), cost-context.ts (the walk's shared state and
-                           helpers), pending-size.ts (a connection's size handed to its
+                           list field is sized), fragments.ts (the fragment walk the three
+                           rules share: cache, cycle guard), cost-context.ts (maxListCost's
+                           state and helpers), pending-size.ts (a connection's size handed to its
                            lists). Never a constraint rule: registry.spec.ts only scans
                            rules/ and formats/
   typedefs-command.ts      the bin's `typedefs` command; cli.ts is the bin itself

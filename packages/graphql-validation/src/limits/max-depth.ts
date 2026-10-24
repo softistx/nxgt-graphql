@@ -1,11 +1,16 @@
 import {
-	type FragmentDefinitionNode,
 	GraphQLError,
 	type SelectionSetNode,
 	type ValidationContext,
 	type ValidationRule,
 } from 'graphql';
 import { assertInteger, operationLabel } from './describe';
+import {
+	type FragmentWalk,
+	fragmentValue,
+	NO_KEY,
+	newFragmentWalk,
+} from './fragments';
 import { isIntrospectionRoot } from './introspection';
 
 /** Options of {@link maxDepth}. */
@@ -20,11 +25,8 @@ export interface MaxDepthOptions {
 	ignoreIntrospection?: boolean;
 }
 
-/** What a walk of one document needs: what it has measured so far. */
-interface DepthContext {
-	getFragment: (name: string) => FragmentDefinitionNode | null | undefined;
-	fragmentDepths: Map<string, number>;
-	measuring: Set<string>;
+/** What a walk of one document needs: the options, and what it has measured so far. */
+interface DepthContext extends FragmentWalk {
 	ignoreIntrospection: boolean;
 }
 
@@ -52,16 +54,9 @@ function depthOf(depth: DepthContext, selectionSet: SelectionSetNode): number {
 
 /** The depth of the named fragment, measured once. */
 function fragmentDepth(depth: DepthContext, name: string): number {
-	const known = depth.fragmentDepths.get(name);
-	if (known !== undefined) return known;
-	const fragment = depth.getFragment(name);
-	// A cycle is NoFragmentCyclesRule's to report; here it adds nothing.
-	if (!fragment || depth.measuring.has(name)) return 0;
-	depth.measuring.add(name);
-	const result = depthOf(depth, fragment.selectionSet);
-	depth.measuring.delete(name);
-	depth.fragmentDepths.set(name, result);
-	return result;
+	return fragmentValue(depth, name, NO_KEY, (fragment) =>
+		depthOf(depth, fragment.selectionSet),
+	);
 }
 
 /**
@@ -83,9 +78,7 @@ export function maxDepth(options: MaxDepthOptions): ValidationRule {
 	assertInteger('maxDepth: depth', limit, 1);
 	return (context: ValidationContext) => {
 		const walk: DepthContext = {
-			getFragment: (name) => context.getFragment(name),
-			fragmentDepths: new Map(),
-			measuring: new Set(),
+			...newFragmentWalk((name) => context.getFragment(name)),
 			ignoreIntrospection: options.ignoreIntrospection ?? false,
 		};
 		return {

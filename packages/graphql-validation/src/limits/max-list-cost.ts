@@ -11,7 +11,6 @@ import {
 	type ValidationRule,
 } from 'graphql';
 import {
-	add,
 	type CostContext,
 	fieldOf,
 	memoSize,
@@ -19,7 +18,8 @@ import {
 	NO_PENDING,
 	rootType,
 } from './cost-context';
-import { assertInteger, operationLabel } from './describe';
+import { add, assertInteger, operationLabel } from './describe';
+import { fragmentValue, newFragmentWalk } from './fragments';
 import { introspectionSize, isIntrospectionRoot } from './introspection';
 import { statedSize } from './list-size';
 import { listSizeUnder } from './pending-size';
@@ -119,28 +119,16 @@ function fragmentCost(
 	name: string,
 	pending: number | undefined,
 ): number {
-	let known = cost.fragmentCosts.get(name);
-	if (!known) {
-		known = new Map();
-		cost.fragmentCosts.set(name, known);
-	}
-	const size = memoSize(known, pending);
-	const key = size ?? NO_PENDING;
-	const memo = known.get(key);
-	if (memo !== undefined) return memo;
-	const fragment = cost.getFragment(name);
-	// A cycle is NoFragmentCyclesRule's to report; here it adds nothing.
-	if (!fragment || cost.costing.has(name)) return 0;
-	cost.costing.add(name);
-	const result = costOf(
-		cost,
-		fragment.selectionSet,
-		cost.schema.getType(fragment.typeCondition.name.value),
-		size,
+	const key = (known: ReadonlyMap<number, number>) =>
+		memoSize(known, pending) ?? NO_PENDING;
+	return fragmentValue(cost, name, key, (fragment, at) =>
+		costOf(
+			cost,
+			fragment.selectionSet,
+			cost.schema.getType(fragment.typeCondition.name.value),
+			at === NO_PENDING ? undefined : at,
+		),
 	);
-	cost.costing.delete(name);
-	known.set(key, result);
-	return result;
 }
 
 /**
@@ -212,9 +200,7 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 			sizeArguments,
 			defaultFirst,
 			ignoreIntrospection: options.ignoreIntrospection ?? false,
-			getFragment: (name) => context.getFragment(name),
-			fragmentCosts: new Map(),
-			costing: new Set(),
+			...newFragmentWalk((name) => context.getFragment(name)),
 		};
 		return {
 			OperationDefinition(operation) {
