@@ -282,11 +282,19 @@ fields, limit }`. `maxFields` counts every field selection in the document, alia
 its `first`, `last` or `limit` argument; a variable, a negative number or no
 argument uses the argument's SDL default, else `defaultFirst`. A size is an
 Int, a canonical-integer string or an integral Float; the largest of several
-size arguments wins. On a Relay connection (`items(first: 100) { edges {
-node { id } } }`) the `first` on the object field sizes the `edges` and `nodes` lists directly
-under it (not lists further down, nor lists declaring their own size argument).
-Introspection is counted too; add `ignoreIntrospection: true` where it is trusted (GraphiQL in
-development). See
+size arguments wins. On a Relay connection the `first` on the object field
+sizes the `edges` and `nodes` lists directly under it (not lists further down,
+nor lists declaring their own size argument):
+
+```graphql
+{ items(first: 100) { edges { node { id } } } }
+```
+
+Trap: any non-list field stating a size sizes the lists declaring none directly
+under it, so an argument that means something else (`limit`, say) and is named in
+`sizeArguments` now sizes them: leave it out of `sizeArguments`.
+Introspection is counted too; add `ignoreIntrospection: true` where it is
+trusted (GraphiQL in development). See
 [Limiting the depth and cost of a query](docs/guide/query-limits.md).
 
 ## IDE support

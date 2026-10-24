@@ -198,7 +198,9 @@ selected **directly on its return type**:
   `defaultFirst`: `edges` and `nodes` above are both 100. A list that declares
   one (`recent(first: Int)`) reads its own arguments, else `defaultFirst`,
   never the pending size.
-- On an interface, when some possible types declare a size argument on that list and others do not, the larger of the pending size and the list's own reading is used, since the query cannot say which comes back.
+- On an interface, when some possible types declare a size argument on that
+  list and others do not, the larger of the pending size and the list's own
+  reading is used, since the query cannot say which comes back.
 - It stops at the first field crossed: an object field (`owner`), `pageInfo` or
   a wrapper object passes nothing on, so the lists below them are sized as
   without a connection. In `items(first: 0) { owner { friends { … } } }` the

@@ -263,8 +263,9 @@ packages/graphql-validation/src/
                            beside each; helpers, no rule: describe.ts (what the rules share),
                            introspection.ts (sizes of __schema/__type), list-size.ts (how a
                            list field is sized), cost-context.ts (the walk's shared state and
-                           helpers), pending-size.ts (a connection's size handed to its lists). Never a constraint rule: registry.spec.ts
-                           only scans rules/ and formats/
+                           helpers), pending-size.ts (a connection's size handed to its
+                           lists). Never a constraint rule: registry.spec.ts only scans
+                           rules/ and formats/
   typedefs-command.ts      the bin's `typedefs` command; cli.ts is the bin itself
   codegen.ts               the `./codegen` subpath, for @nxgt/graphql-codegen-zod
   registry.spec.ts         the guards below

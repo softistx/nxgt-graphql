@@ -33,7 +33,9 @@ export interface MaxListCostOptions {
 	/**
 	 * The argument names that size a list. Each one given, or defaulted in the
 	 * SDL, says a size (an Int, a canonical-integer string or an integral Float)
-	 * and the largest wins. Default `['first', 'last', 'limit']`.
+	 * and the largest wins. Default `['first', 'last', 'limit']`. One on a
+	 * non-list field also sizes the lists declaring none directly on its return
+	 * type (a Relay connection's `edges` and `nodes`).
 	 */
 	sizeArguments?: readonly string[];
 	/**

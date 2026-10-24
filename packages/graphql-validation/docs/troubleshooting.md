@@ -427,7 +427,10 @@ reads `Operation is 9 levels deep, ...`.
 Each field costs 1, times the sizes of the lists enclosing it. A list without a
 usable `first` (a variable, a negative number, nothing) counts for its SDL
 default, else `defaultFirst`, so a query that is cheap with the variable's real
-value can still be refused.
+value can still be refused. A size argument on a field returning an object (a
+connection's `first`) now sizes its `edges` and `nodes`, and any non-list field
+stating a size sizes the lists declaring none directly under it, see
+[Relay connections](guide/query-limits.md#relay-connections).
 **Fix:** ask for fewer items with a literal `first`, or raise `budget`. A query
 on an interface or a union is overestimated (every branch is summed).
 
