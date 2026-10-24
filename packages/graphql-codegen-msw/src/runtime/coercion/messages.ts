@@ -79,9 +79,9 @@ function suggest(value: string, values: readonly string[]): string {
 }
 
 /**
- * Why a custom scalar refuses the value, and the `extensions` it carries, as a scalar built with
- * `zodScalar` (`@nxgt/graphql-scalars`) words it: its schema's first issue,
- * which the client's schema, the same one, reports too.
+ * Why a custom scalar refuses the value, and the `extensions` it carries, as
+ * a scalar built with `zodScalar` (`@nxgt/graphql-scalars`) words it: its
+ * schema's first issue, which the client's schema, the same one, reports too.
  */
 export function scalarRefusal(
 	name: string,
