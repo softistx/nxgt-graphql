@@ -4,69 +4,16 @@ import {
 	type GraphQLNamedType,
 	type GraphQLSchema,
 	isAbstractType,
-	type ValueNode,
 } from 'graphql';
-import { CEILING } from './describe';
+import { constraintMaxOf, defaultSizeOf, literalSize } from './size-reading';
 
 /** What sizing a list needs: the schema and the options of the rule. */
 export interface SizeContext {
 	schema: GraphQLSchema;
 	sizeArguments: readonly string[];
 	defaultFirst: number;
-}
-
-const CANONICAL_INTEGER = /^(0|[1-9]\d*)$/;
-
-/**
- * The one reading of a size, wherever it comes from (a literal, a default): a
- * non-negative integral number or bigint, or a canonical-integer string,
- * clamped to the ceiling. Anything else says nothing.
- */
-function sizeOf(value: unknown): number | undefined {
-	if (typeof value === 'string') {
-		return CANONICAL_INTEGER.test(value)
-			? Math.min(Number(value), CEILING)
-			: undefined;
-	}
-	// A bigint is how a Long scalar's default is held once its real scalar is
-	// swapped in.
-	if (typeof value === 'bigint') {
-		return value >= 0n ? Math.min(Number(value), CEILING) : undefined;
-	}
-	return typeof value === 'number' && Number.isInteger(value) && value >= 0
-		? Math.min(value, CEILING)
-		: undefined;
-}
-
-/** The size a literal gives: an Int, a canonical-integer String or an integral Float (`1e3`). */
-function literalSize(value: ValueNode): number | undefined {
-	if (value.kind === 'IntValue' || value.kind === 'FloatValue') {
-		return sizeOf(Number(value.value));
-	}
-	return value.kind === 'StringValue' ? sizeOf(value.value) : undefined;
-}
-
-/**
- * An argument's SDL default as a size. graphql 16 holds it as `defaultValue`;
- * graphql 17 as `default`, `{ value }` or `{ literal }`.
- */
-function defaultSizeOf(argument: object | undefined): number | undefined {
-	if (!argument) return undefined;
-	if ('defaultValue' in argument) {
-		const size = sizeOf(argument.defaultValue);
-		if (size !== undefined) return size;
-	}
-	if (!('default' in argument)) return undefined;
-	const fallback = argument.default;
-	if (typeof fallback !== 'object' || fallback === null) return undefined;
-	if ('value' in fallback) return sizeOf(fallback.value);
-	if ('literal' in fallback && typeof fallback.literal === 'object') {
-		const literal = fallback.literal;
-		return literal !== null && 'kind' in literal
-			? literalSize(literal as ValueNode)
-			: undefined;
-	}
-	return undefined;
+	/** What to assume for a size argument given as a variable where some definition declares no bound. */
+	variableSize?: number | undefined;
 }
 
 /**
@@ -76,6 +23,10 @@ function defaultSizeOf(argument: object | undefined): number | undefined {
  */
 interface Profile {
 	largest: (number | undefined)[];
+	/** Per size argument, the largest bound (`max` or `exclusiveMax`) over the definitions. */
+	maxima: (number | undefined)[];
+	/** Per size argument, whether some definition declares no bound (`max` or `exclusiveMax`). */
+	someNoMax: boolean[];
 	someLack: boolean[];
 	someBare: boolean;
 	/** Whether some definition declares any of the size arguments. */
@@ -119,6 +70,8 @@ function profileOf(
 	}
 	const profile: Profile = {
 		largest: cost.sizeArguments.map(() => undefined),
+		maxima: cost.sizeArguments.map(() => undefined),
+		someNoMax: cost.sizeArguments.map(() => false),
 		someLack: cost.sizeArguments.map(() => false),
 		someBare: false,
 		declares: false,
@@ -127,7 +80,11 @@ function profileOf(
 	for (const field of definitions) {
 		let any = false;
 		cost.sizeArguments.forEach((name, index) => {
-			const size = defaultSizeOf(field.args.find((arg) => arg.name === name));
+			const argument = field.args.find((arg) => arg.name === name);
+			const max = constraintMaxOf(argument);
+			if (max === undefined) profile.someNoMax[index] = true;
+			else profile.maxima[index] = Math.max(profile.maxima[index] ?? 0, max);
+			const size = defaultSizeOf(argument);
 			if (size === undefined) {
 				profile.someLack[index] = true;
 				return;
@@ -158,10 +115,24 @@ function argumentSize(
 	const literal = literalSize(node.value);
 	if (literal !== undefined) return literal;
 	// Given but unusable (a variable, a negative number): the argument's own
-	// default, else defaultFirst.
-	return profile.someLack[index]
+	// default, else defaultFirst; and no less than the bound the client may send.
+	const today = profile.someLack[index]
 		? Math.max(largest ?? 0, cost.defaultFirst)
 		: largest;
+	const bound = unusableBound(cost, profile, index);
+	return bound === undefined ? today : Math.max(today ?? 0, bound);
+}
+
+/** What an unusable size may be at most: the declared bound (`max` or `exclusiveMax`), and `variableSize` where some definition declares none. */
+function unusableBound(
+	cost: SizeContext,
+	profile: Profile,
+	index: number,
+): number | undefined {
+	const assumed = profile.someNoMax[index] ? cost.variableSize : undefined;
+	const declared = profile.maxima[index];
+	if (assumed === undefined) return declared;
+	return Math.max(declared ?? 0, assumed);
 }
 
 /**

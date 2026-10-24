@@ -279,8 +279,13 @@ One `GraphQLError` per operation: `extensions: { code: 'QUERY_TOO_DEEP', depth,
 limit }`, `{ code: 'QUERY_TOO_COSTLY', cost, limit }` or `{ code: 'QUERY_TOO_WIDE',
 fields, limit }`. `maxFields` counts every field selection in the document, aliases and
 `__typename` included, at each spread of a fragment. A list field is sized by
-its `first`, `last` or `limit` argument; a variable, a negative number or no
-argument uses the argument's SDL default, else `defaultFirst`. A size is an
+its `first`, `last` or `limit` argument. An argument not given says its SDL
+default; with no argument and no default the size is `defaultFirst`. A variable
+or an unusable literal (a negative number) counts as the largest of that
+default (else `defaultFirst`), the argument's declared `@constraint(max)` or
+`exclusiveMax`, and `variableSize` where some definition declares no bound; the
+operation's own variable default is ignored. A code-first argument has no SDL
+node, so only `variableSize` applies to it. A size is an
 Int, a canonical-integer string or an integral Float; the largest of several
 size arguments wins. On a Relay connection the `first` on the object field
 sizes the `edges` and `nodes` lists directly under it (not lists further down,
@@ -349,7 +354,7 @@ the directive declared is this package's. Both at once throw
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |
 | `ValidationIssue`, `ConstraintValue`, `BadUserInputExtensions` | the types of `extensions.issues`, of an issue's `value`, and of `extensions` |
 | `maxDepth({ depth, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation nested deeper than `depth` fields, `extensions.code` `QUERY_TOO_DEEP`; introspection counts (the standard query is 15 levels) unless `ignoreIntrospection` |
-| `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY`; `sizeArguments` names the arguments sizing a list (default `first`, `last`, `limit`, the largest wins); `ignoreIntrospection` skips `__schema` and `__type` |
+| `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection?, variableSize? })` | a graphql-js validation rule refusing an operation whose list-weighted cost is over `budget`, `extensions.code` `QUERY_TOO_COSTLY`; `sizeArguments` names the arguments sizing a list (default `first`, `last`, `limit`, the largest wins); `ignoreIntrospection` skips `__schema` and `__type`; `variableSize` is the size assumed for any size argument (`first`, `last`, `limit`, custom `sizeArguments`) sent as a variable or an unusable literal; see [Variables](docs/guide/query-limits.md#variables) for how a declared bound and `variableSize` combine |
 | `maxFields({ limit, ignoreIntrospection? })` | a graphql-js validation rule refusing an operation that selects more than `limit` fields (aliases, `__typename` and every fragment spread counted, `@skip`/`@include` not evaluated), `extensions.code` `QUERY_TOO_WIDE`; introspection counts (the standard query selects 220 fields) unless `ignoreIntrospection` |
 | `MaxDepthOptions`, `MaxListCostOptions`, `MaxFieldsOptions` | their options |
 | `ConstraintArgument` | the type of `issues[].constraint`: `'minLength' \| 'format' \| ...` |

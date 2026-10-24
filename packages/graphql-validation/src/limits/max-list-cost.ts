@@ -22,32 +22,13 @@ import { add, assertInteger, operationLabel } from './describe';
 import { fragmentValue, newFragmentWalk } from './fragments';
 import { introspectionSize, isIntrospectionRoot } from './introspection';
 import { statedSize } from './list-size';
+import {
+	DEFAULT_SIZE_ARGUMENTS,
+	type MaxListCostOptions,
+} from './max-list-cost-options';
 import { listSizeUnder } from './pending-size';
 
-/** Options of {@link maxListCost}. */
-export interface MaxListCostOptions {
-	/** The most an operation may cost (at least 0). */
-	budget: number;
-	/** The size of a list field whose size cannot be read (an integer of at least 0). */
-	defaultFirst: number;
-	/**
-	 * The argument names that size a list. Each one given, or defaulted in the
-	 * SDL, says a size (an Int, a canonical-integer string or an integral Float)
-	 * and the largest wins. Default `['first', 'last', 'limit']`. One on a
-	 * non-list field also sizes the lists declaring none directly on its return
-	 * type (a Relay connection's `edges` and `nodes`).
-	 */
-	sizeArguments?: readonly string[];
-	/**
-	 * Do not cost `__schema` and `__type` (default `false`). Only where
-	 * introspection is disabled or the client is trusted, e.g. GraphiQL in
-	 * development: the standard introspection query is costly (on the order of
-	 * 200,000 on a one-field schema).
-	 */
-	ignoreIntrospection?: boolean;
-}
-
-const DEFAULT_SIZE_ARGUMENTS = ['first', 'last', 'limit'] as const;
+export type { MaxListCostOptions };
 
 /**
  * The cost of one selected field. `pending` is the size of the field whose
@@ -148,13 +129,15 @@ function fragmentCost(
  * `first`, `last`, `limit`) say. A literal Int, a String holding a canonical
  * integer (`"1000"`) or an integral Float (`1e3`) of at least 0 says that
  * number. Anything else (a negative literal, a variable, since validation has
- * no variable values) says the argument's SDL default when it has a usable one,
- * `defaultFirst` otherwise; an argument not given says its SDL default, or
- * nothing. When nothing is said the size is `defaultFirst`. On an interface the
- * largest default over its possible types is used. Hence no subtree ever costs
- * less than nothing: a negative `first` on one field cannot cancel the cost of
- * its sibling. A field whose type (once unwrapped from non-null) is a list is
- * one list, nested `[[X]]` included.
+ * no variable values) says the largest of the argument's SDL default when it
+ * has a usable one (`defaultFirst` otherwise), its declared bound
+ * (`@constraint(max)` or `exclusiveMax`) and, when some definition declares no
+ * bound, `variableSize`; an argument not given says its SDL default, or
+ * nothing. When nothing is said the size is `defaultFirst`. On an interface
+ * the largest default and bound over its possible types is used. Hence no
+ * subtree ever costs less than nothing: a negative `first` on one field cannot
+ * cancel the cost of its sibling. A field whose type (once unwrapped from
+ * non-null) is a list is one list, nested `[[X]]` included.
  *
  * A Relay connection puts the size on a field returning an object, with the
  * list below it (`items(first: 100) { edges { node { id } } }`). A field that
@@ -192,6 +175,10 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 	]);
 	assertInteger('maxListCost: budget', budget, 0);
 	assertInteger('maxListCost: defaultFirst', defaultFirst, 0);
+	const { variableSize } = options;
+	if (variableSize !== undefined) {
+		assertInteger('maxListCost: variableSize', variableSize, 0);
+	}
 
 	return (context: ValidationContext) => {
 		const schema = context.getSchema();
@@ -199,6 +186,7 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 			schema,
 			sizeArguments,
 			defaultFirst,
+			variableSize,
 			ignoreIntrospection: options.ignoreIntrospection ?? false,
 			...newFragmentWalk((name) => context.getFragment(name)),
 		};
