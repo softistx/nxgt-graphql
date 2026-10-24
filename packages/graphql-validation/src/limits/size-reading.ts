@@ -1,4 +1,4 @@
-import type { ValueNode } from 'graphql';
+import type { GraphQLArgument, ValueNode } from 'graphql';
 import { CEILING } from './describe';
 
 const CANONICAL_INTEGER = /^(0|[1-9]\d*)$/;
@@ -55,4 +55,19 @@ export function defaultSizeOf(
 			: undefined;
 	}
 	return undefined;
+}
+
+/**
+ * The `max` of an argument's `@constraint` directive, as a size: what the
+ * client may send at most. Read from the SDL node, so a code-first argument
+ * (no `astNode`) declares none.
+ */
+export function constraintMaxOf(
+	argument: GraphQLArgument | undefined,
+): number | undefined {
+	const directive = argument?.astNode?.directives?.find(
+		(node) => node.name.value === 'constraint',
+	);
+	const max = directive?.arguments?.find((node) => node.name.value === 'max');
+	return max ? literalSize(max.value) : undefined;
 }

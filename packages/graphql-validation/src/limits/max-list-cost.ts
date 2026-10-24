@@ -45,6 +45,16 @@ export interface MaxListCostOptions {
 	 * 200,000 on a one-field schema).
 	 */
 	ignoreIntrospection?: boolean;
+	/**
+	 * What to assume for a size argument the client sends as a variable (or
+	 * writes as an unusable literal) when it declares no `@constraint(max)`:
+	 * an integer of at least 0. Validation has no variable values, and the
+	 * client may send any value the argument accepts, so such a size counts as
+	 * the largest of its SDL default (else `defaultFirst`), its declared
+	 * `@constraint(max)`, and this. A declared max wins over this option. The
+	 * operation's own variable default is ignored. Default: none.
+	 */
+	variableSize?: number;
 }
 
 const DEFAULT_SIZE_ARGUMENTS = ['first', 'last', 'limit'] as const;
@@ -148,9 +158,9 @@ function fragmentCost(
  * `first`, `last`, `limit`) say. A literal Int, a String holding a canonical
  * integer (`"1000"`) or an integral Float (`1e3`) of at least 0 says that
  * number. Anything else (a negative literal, a variable, since validation has
- * no variable values) says the argument's SDL default when it has a usable one,
- * `defaultFirst` otherwise; an argument not given says its SDL default, or
- * nothing. When nothing is said the size is `defaultFirst`. On an interface the
+ * no variable values) says the largest of the argument's SDL default when it
+ * has a usable one (`defaultFirst` otherwise), its declared `@constraint(max)`
+ * and `variableSize`; an argument not given says its SDL default, or nothing. When nothing is said the size is `defaultFirst`. On an interface the
  * largest default over its possible types is used. Hence no subtree ever costs
  * less than nothing: a negative `first` on one field cannot cancel the cost of
  * its sibling. A field whose type (once unwrapped from non-null) is a list is
@@ -192,6 +202,10 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 	]);
 	assertInteger('maxListCost: budget', budget, 0);
 	assertInteger('maxListCost: defaultFirst', defaultFirst, 0);
+	const { variableSize } = options;
+	if (variableSize !== undefined) {
+		assertInteger('maxListCost: variableSize', variableSize, 0);
+	}
 
 	return (context: ValidationContext) => {
 		const schema = context.getSchema();
@@ -199,6 +213,7 @@ export function maxListCost(options: MaxListCostOptions): ValidationRule {
 			schema,
 			sizeArguments,
 			defaultFirst,
+			variableSize,
 			ignoreIntrospection: options.ignoreIntrospection ?? false,
 			...newFragmentWalk((name) => context.getFragment(name)),
 		};

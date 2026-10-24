@@ -102,7 +102,7 @@ The refusal:
 `depth` is the operation's real depth. An anonymous operation reads
 `Operation is 9 levels deep, ...`.
 
-## `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection? })`
+## `maxListCost({ budget, defaultFirst, sizeArguments?, ignoreIntrospection?, variableSize? })`
 
 ### How cost is counted
 
@@ -149,7 +149,7 @@ argument says:
 | a bigint (an SDL default held by a code-first schema, or after graphql-tools' `mapSchema`) | that number |
 | an integral Float literal (`first: 1000.0`, `first: 1e3`) | that number; `1.5` and `-1000.0` are unusable |
 | a negative literal (`first: -1000`), another string | as if unusable, see below |
-| a variable (`first: $n`) | as if unusable: validation has no variable values |
+| a variable (`first: $n`) | as if unusable, see below: validation has no variable values |
 | not given | its SDL default, when it has one; else nothing |
 
 An SDL default is read the same way: `limit: String = "1000"` and `first:
@@ -171,9 +171,32 @@ A negative number is therefore never taken as a size: no subtree costs less than
 nothing, and `items(first: -1000)` next to an expensive sibling cannot cancel
 the sibling's cost.
 
-Pick `defaultFirst` knowing a variable counts for it: a client using
-`first: $n` is charged the default whatever it sends. If your server caps a size
-argument, set `defaultFirst` (or the SDL default) at that cap.
+### Variables
+
+The client can send any value the argument accepts, so a size given as a
+variable (or as an unusable literal) counts as the **largest** of:
+
+- its SDL default, else `defaultFirst`: never less than that;
+- the `max` of the argument's `@constraint` (the directive `withValidation`
+  enforces), read from the schema's SDL: `first: Int = 20 @constraint(max: 100)`
+  counts 100 for `first: $n`. On an interface it is the largest over the
+  interface's field and each possible type's field. A code-first argument has
+  no SDL node, hence no declared max;
+- `variableSize`, only where the argument declares no `@constraint(max)`:
+  `maxListCost({ budget, defaultFirst, variableSize: 100 })` for a server that
+  caps every page at 100 in its resolvers. A declared max wins over it.
+
+```graphql
+query ($n: Int) { wards(first: $n) { edges { node { rooms(first: $n) { id } } } } }
+```
+
+With `first: Int = 20 @constraint(max: 100)` on both fields, that query is
+costed as the same one written with `first: 100`, not with the defaults. The
+operation's own variable default (`query ($n: Int = 5)`) is ignored: the client
+can override it. An argument not given at all keeps its SDL default.
+Without `@constraint(max)` or `variableSize` a variable still counts for the
+default, whatever the client sends: cap the size with `@constraint(max)`, or
+set `defaultFirst` (or the SDL default) at the cap.
 
 ### Relay connections
 
@@ -209,7 +232,7 @@ selected **directly on its return type**:
 - A connection field that states nothing (no size argument given, none declared
   with a default) hands down nothing: its lists are sized `defaultFirst`, as
   before. A variable, a negative number or an unusable value on it counts as for
-  a list: its SDL default, else `defaultFirst`.
+  a list, see [Variables](#variables).
 - The rule is structural: any non-list field stating a size sizes the lists
   declaring no size argument directly on its return type, whether or not it is
   a connection. `user(limit: 0) { friends { … } }` sizes `friends` 0. So an
@@ -243,7 +266,7 @@ never underestimated.
 }
 ```
 
-`budget` and `defaultFirst` must be integers below `Number.MAX_SAFE_INTEGER`
+`budget`, `defaultFirst` and `variableSize` must be integers below `Number.MAX_SAFE_INTEGER`
 (a cost never exceeds it, so a budget at or over it would refuse nothing); the
 rule throws a `RangeError` otherwise.
 
