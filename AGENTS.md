@@ -260,8 +260,10 @@ packages/graphql-validation/src/
   field-issue-of.ts        fieldIssueOf, FIELD_CODES: a Zod issue as one of those fields,
                            the mapping codegen-msw's default refusal applies
   limits/                  maxDepth and maxListCost, one validation rule per file, a spec
-                           beside each; describe.ts holds what both share (never a constraint
-                           rule: registry.spec.ts only scans rules/ and formats/)
+                           beside each; helpers, no rule: describe.ts (what both share),
+                           introspection.ts (sizes of __schema/__type), list-size.ts (how a
+                           list field is sized). Never a constraint rule: registry.spec.ts
+                           only scans rules/ and formats/
   typedefs-command.ts      the bin's `typedefs` command; cli.ts is the bin itself
   codegen.ts               the `./codegen` subpath, for @nxgt/graphql-codegen-zod
   registry.spec.ts         the guards below
