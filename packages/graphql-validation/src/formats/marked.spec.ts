@@ -35,6 +35,7 @@ interface Issue {
 	path: string[];
 	code: string;
 	constraint?: string;
+	value?: string | number;
 	message: string;
 }
 
@@ -92,6 +93,7 @@ for (const [label, wrap] of internals) {
 					path: ['s'],
 					code: 'invalid_format',
 					constraint: 'format',
+					value: 'f',
 					message: 'Invalid code: lowercase letters',
 				},
 			]);
@@ -167,7 +169,13 @@ for (const [label, wrap] of internals) {
 			expect((await ask('ok')).result).toEqual({ data: { a: 'ok' } });
 			expect(calls).toBe(1);
 			expect((await ask('bad')).issues).toEqual([
-				{ path: ['s'], code: 'custom', constraint: 'format', message: 'taken' },
+				{
+					path: ['s'],
+					code: 'custom',
+					constraint: 'format',
+					value: 'f',
+					message: 'taken',
+				},
 			]);
 			expect(calls).toBe(2);
 		});
@@ -243,7 +251,13 @@ describe('an async check its definition does not show', () => {
 		expect((await ask('ok')).result).toEqual({ data: { a: 'ok' } });
 		expect(calls.n).toBe(1);
 		expect((await ask('bad')).issues).toEqual([
-			{ path: ['s'], code: 'custom', constraint: 'format', message: 'taken' },
+			{
+				path: ['s'],
+				code: 'custom',
+				constraint: 'format',
+				value: 'f',
+				message: 'taken',
+			},
 		]);
 		expect(calls.n).toBe(2);
 	});
