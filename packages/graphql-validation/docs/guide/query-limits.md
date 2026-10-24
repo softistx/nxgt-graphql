@@ -1,6 +1,6 @@
 # Limiting the depth and cost of a query
 
-`maxDepth` and `maxListCost` are graphql-js validation rules. They refuse an
+`maxDepth`, `maxListCost` and `maxFields` are graphql-js validation rules. They refuse an
 operation before any resolver runs, so a hostile query costs a walk of its
 document and nothing more. For `@constraint`, see
 [Constraints](constraints.md).
@@ -26,25 +26,31 @@ query {
 Four `items` levels of 100 each can ask for 100 million nodes in a query nine
 levels deep (`folder`, four `items`, three `folder`, `id`). `maxDepth` bounds the nesting; `maxListCost` bounds the work.
 
+Neither bounds breadth: a query of 2000 aliases of `item(id: "1") { id }` is two
+levels deep and costs 4000, yet selects 4000 fields for the executor to run; so does a
+query of thousands of aliases of `__typename`, which neither rule counts.
+`maxFields` bounds that.
+
 ## Use
 
 With graphql-js, add the rules to the ones `validate` already runs:
 
 ```ts
-import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
+import { maxDepth, maxFields, maxListCost } from '@nxgt/graphql-validation';
 import { parse, specifiedRules, validate } from 'graphql';
 
 const errors = validate(schema, parse(query), [
   ...specifiedRules,
   maxDepth({ depth: 8 }),
   maxListCost({ budget: 10_000, defaultFirst: 50 }),
+  maxFields({ limit: 500 }),
 ]);
 ```
 
 With graphql-yoga, in a plugin:
 
 ```ts
-import { maxDepth, maxListCost } from '@nxgt/graphql-validation';
+import { maxDepth, maxFields, maxListCost } from '@nxgt/graphql-validation';
 import { createYoga } from 'graphql-yoga';
 
 createYoga({
@@ -54,6 +60,7 @@ createYoga({
       onValidate: ({ addValidationRule }) => {
         addValidationRule(maxDepth({ depth: 8 }));
         addValidationRule(maxListCost({ budget: 10_000, defaultFirst: 50 }));
+        addValidationRule(maxFields({ limit: 500 }));
       },
     },
   ],
@@ -61,7 +68,7 @@ createYoga({
 ```
 
 Each rule reports **one** `GraphQLError` per operation, whose `nodes` is the
-operation. An invalid option (`depth: 0`, a fractional `budget`) throws a
+operation. An invalid option (`depth: 0`, a fractional `budget`, `limit: 0`) throws a
 `RangeError` when the rule is created.
 
 ## `maxDepth({ depth, ignoreIntrospection? })`
@@ -240,6 +247,54 @@ rule throws a `RangeError` otherwise.
 Costs are plain numbers, computed from memoized fragments (no exponential work
 on a hostile query) and held at `Number.MAX_SAFE_INTEGER`: `cost` is exact below
 it and never `Infinity`.
+
+## `maxFields({ limit, ignoreIntrospection? })`
+
+The size of an operation is the number of field selections in its document,
+fragment spreads expanded. It is not what the executor runs: how often a field
+runs inside a list is `maxListCost`'s business, so `maxFields` alone does not
+bound execution.
+
+- Every field node counts 1: aliases count (`a1: id a2: id` is 2), and so does
+  `__typename`.
+- A named fragment counts **at each spread**: a fragment of 3 fields spread
+  twice adds 6. Each fragment is walked once, so the work stays linear in the
+  size of the document even when spreads multiply. A fragment cycle counts 0
+  (`NoFragmentCyclesRule` reports it).
+- Inline fragments count their contents. No type condition prunes anything:
+  every branch of a union or an interface counts, so the figure can only be
+  over the document's field count.
+- `@skip` and `@include` are not evaluated (the rules read the document, not its
+  variables): a field they would remove is counted anyway.
+- `__schema` and `__type` and everything under them count like any field.
+  The standard introspection query (`getIntrospectionQuery()`) selects **220
+  fields** on graphql 16 and 17 (the fragments `FullType`, `InputValue` and
+  `TypeRef` are counted at each spread), so a limit under 220 refuses it. Where
+  introspection is disabled, or the client is trusted (GraphiQL in development),
+  pass `ignoreIntrospection: true`.
+
+The refusal:
+
+```json
+{
+  "message": "Operation \"Wide\" selects 4000 fields, more than the 500 allowed",
+  "extensions": { "code": "QUERY_TOO_WIDE", "fields": 4000, "limit": 500 }
+}
+```
+
+`fields` is the operation's real count, held at `Number.MAX_SAFE_INTEGER`
+whatever a hostile query multiplies. An anonymous operation reads
+`Operation selects 4000 fields, ...`. `limit` must be an integer from 1 to
+`Number.MAX_SAFE_INTEGER - 1`, else a `RangeError`.
+
+### Choosing a limit
+
+Count the fields of your largest legitimate query, spreads included (a page
+that spreads a 10-field fragment on 20 list entries reads 200 plus the rest),
+and add headroom: a few hundred covers most screens. Keep the introspection
+query in mind (220) if you leave it counted. `maxFields` complements the other
+two: `maxDepth` bounds nesting, `maxListCost` bounds list multiplication, and
+`maxFields` bounds how many fields one request may name.
 
 ## Not covered
 
