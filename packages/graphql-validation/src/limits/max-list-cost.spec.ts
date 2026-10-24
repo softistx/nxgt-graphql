@@ -322,6 +322,18 @@ describe('maxListCost', () => {
 			RangeError,
 		);
 	});
+
+	test('refuses a budget or a default the clamped cost could never exceed', () => {
+		const huge = Number.MAX_SAFE_INTEGER;
+		expect(() => maxListCost({ ...options, budget: huge })).toThrow(RangeError);
+		expect(() => maxListCost({ ...options, budget: huge + 1 })).toThrow(
+			RangeError,
+		);
+		expect(() => maxListCost({ ...options, defaultFirst: huge })).toThrow(
+			RangeError,
+		);
+		expect(() => maxListCost({ ...options, budget: huge - 1 })).not.toThrow();
+	});
 });
 
 describe('maxDepth and maxListCost together', () => {
