@@ -104,11 +104,9 @@ declare function render(message: { id: string; text: string }): void;
   subscription, except that an `apq` retry opens a second connection after the
   first was refused with `PersistedQueryNotFound`: `onOpen` is called for the
   one the server accepted, not for the refused one.
+- **Requires `@nxgt/httpyz` 0.5**, which reports the accepted response.
 - **An error it throws** is logged with `console.error` and does not end the
   subscription.
-- **On your own `http` client**, the first subscription with an `onOpen` adds
-  a middleware to it. It acts only on requests carrying a header the client
-  sets and removes before the request is sent.
 
 ## How it ends
 

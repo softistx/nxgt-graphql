@@ -1,9 +1,4 @@
-import type {
-	EventStream,
-	HttpClient,
-	Middleware,
-	ServerEvent,
-} from '@nxgt/httpyz';
+import type { EventStream, ServerEvent } from '@nxgt/httpyz';
 import type { Operation } from './document';
 import { ApiUnavailableError } from './errors';
 import type { SubscribeOptions, Subscription } from './options';
@@ -13,7 +8,6 @@ import {
 	type OperationBody,
 	withQuery,
 } from './persisted';
-import { logError } from './report';
 import {
 	dataOf,
 	isHttpyzError,
@@ -28,31 +22,6 @@ export type OnFailure = (error: unknown) => Promise<void>;
 /** graphql-sse's distinct connections mode: a result per `next`, then `complete`. */
 const events = { next: null, complete: null };
 
-/** Names the subscription whose `onOpen` a request stands for; removed before it is sent. */
-const openHeader = 'x-nxgt-subscription-open';
-
-/** The `onOpen` of each connection being opened, by the id its request carries. */
-const openers = new Map<string, () => void>();
-
-/** The httpyz clients that already carry `watchOpen`. */
-const watched = new WeakSet<HttpClient>();
-
-/**
- * httpyz's event stream does not say when its response arrived, so a
- * middleware does: it takes the marker header off the request, and calls the
- * subscription's `onOpen` when the answer is a 2xx. Requests with no marker
- * pass through untouched.
- */
-const watchOpen: Middleware = async (request, next) => {
-	const id = request.headers.get(openHeader);
-	if (id === null) return next(request);
-	const headers = new Headers(request.headers);
-	headers.delete(openHeader);
-	const response = await next(new Request(request, { headers }));
-	if (response.ok && response.status !== 204) openers.get(id)?.();
-	return response;
-};
-
 /**
  * One subscription over server-sent events: the operation posted with
  * `accept: text/event-stream`, each `next` event's result yielded. It is
@@ -65,7 +34,6 @@ export class EventSubscription implements Subscription<unknown> {
 	#started = false;
 	#closed = false;
 	#delivered = false;
-	#openId: string | undefined;
 
 	constructor(
 		private readonly transport: Transport,
@@ -132,7 +100,6 @@ export class EventSubscription implements Subscription<unknown> {
 			if (signal?.aborted) throw signal.reason;
 			throw await failureOf(error);
 		} finally {
-			if (this.#openId !== undefined) openers.delete(this.#openId);
 			stream.close();
 		}
 	}
@@ -140,30 +107,16 @@ export class EventSubscription implements Subscription<unknown> {
 	#open(body: OperationBody): EventStream<ServerEvent> {
 		const { signal } = this.options;
 		const { operationName } = this.operation;
+		const { onOpen } = this.options;
 		// Over the client's own headers: a client-level `accept` would ask for JSON.
 		const headers = new Headers(this.options.headers);
 		if (!headers.has('accept')) headers.set('accept', 'text/event-stream');
-		const { onOpen } = this.options;
-		if (onOpen) {
-			if (!watched.has(this.transport.http)) {
-				watched.add(this.transport.http);
-				this.transport.http.use(watchOpen);
-			}
-			this.#openId = crypto.randomUUID();
-			headers.set(openHeader, this.#openId);
-			openers.set(this.#openId, () => {
-				try {
-					onOpen();
-				} catch (error) {
-					logError(error);
-				}
-			});
-		}
 		this.#stream = this.transport.http.events(this.transport.path, {
 			method: 'post',
 			json: body,
 			events,
 			reconnect: false,
+			...(onOpen && { onOpen: () => onOpen() }),
 			retry: false,
 			headers,
 			...(signal && { signal }),

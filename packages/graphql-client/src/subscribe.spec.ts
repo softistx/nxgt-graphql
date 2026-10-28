@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { createHttpClient } from '@nxgt/httpyz';
 import { parse } from 'graphql';
 import { createGraphQLClient } from './client';
 import { ApiError, ApiStatusError, ApiUnavailableError } from './errors';
@@ -1155,18 +1154,6 @@ describe('onOpen', () => {
 		expect(order).toEqual(['open', 'tick 1']);
 	});
 
-	test('does not leak its marker to the server', async () => {
-		const api = server(() => eventStream([complete]).response);
-		const client = createGraphQLClient({ url, fetch: api.fetch });
-		await collect(client.subscribe(TickSubscription, {}, { onOpen() {} }));
-		expect([...(api.sent[0]?.request.headers.keys() ?? [])]).toEqual([
-			...new Headers({
-				'content-type': 'application/json',
-				accept: 'text/event-stream',
-			}).keys(),
-		]);
-	});
-
 	test('is not called for a refused connection', async () => {
 		const api = server(() => refusedStream(yoga.missingVariable, 400));
 		const client = createGraphQLClient({ url, fetch: api.fetch });
@@ -1229,29 +1216,5 @@ describe('onOpen', () => {
 			console.error = original;
 		}
 		expect(errors).toHaveLength(1);
-	});
-
-	test('works on an http client of the application, and leaves other requests alone', async () => {
-		const seen: string[] = [];
-		const http = createHttpClient({
-			baseUrl: url,
-			fetch: async (request: Request) => {
-				seen.push(request.url);
-				return request.headers.get('accept')?.includes('event-stream')
-					? eventStream([complete]).response
-					: Response.json({ data: { viewer: { id: '1' } } });
-			},
-		});
-		const client = createGraphQLClient({ http, path: '' });
-		let opened = 0;
-		await collect(
-			client.subscribe(TickSubscription, {}, { onOpen: () => opened++ }),
-		);
-		await collect(
-			client.subscribe(TickSubscription, {}, { onOpen: () => opened++ }),
-		);
-		expect(await client.query(ViewerQuery)).toEqual({ viewer: { id: '1' } });
-		expect(opened).toBe(2);
-		expect(seen).toHaveLength(3);
 	});
 });
