@@ -277,7 +277,13 @@ function Book({ id }: { id: string }) {
 
 Every hook sends from an effect, never during a render, so a server render
 sends nothing, and each aborts or closes what it started on unmount.
-`useSubscription` also takes `onOpen`, called once the stream is accepted. See [React](docs/guide/react.md).
+`useSubscription` also takes `onOpen`, called once the stream is accepted:
+
+```tsx
+useSubscription(OnBookChanged, { id }, { onOpen: () => setStatus('live') });
+```
+
+See [React](docs/guide/react.md).
 
 ## Traps
 

@@ -70,7 +70,7 @@ export function useSubscription<TResult, TVariables>(
 		}),
 		[client, document, variables, headers, skip],
 	);
-	const latest = useRef({ onData, onOpen } as Callbacks);
+	const latest = useRef<Callbacks>({});
 	useEffect(() => {
 		latest.current = { onData, onOpen } as Callbacks;
 	});

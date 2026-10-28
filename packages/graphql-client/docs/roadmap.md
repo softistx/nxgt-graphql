@@ -40,6 +40,7 @@ In the next minor.
 
 - **`subscribe` takes `onOpen`: know a quiet stream is open.** It is called
   once the server accepted the connection, before any event.
+  `useSubscription` takes `onOpen` too (#132).
 
 Released in 0.4.0.
 
