@@ -1,5 +1,11 @@
 # @nxgt/graphql-codegen-zod
 
+## 0.4.0
+
+### Minor Changes
+
+- [#127](https://github.com/softistx/nxgt-graphql/pull/127) [`76121fe`](https://github.com/softistx/nxgt-graphql/commit/76121fec160c00d3a4a692f14a7971afa5a0bcbd) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Export `variablesSchemaName(config, operationName, operationKind)` from the new `@nxgt/graphql-codegen-zod/naming` subpath: the exact name the plugin writes for an operation's variables schema, from the plugin's own config (with the `NamingConfig` and `OperationKind` types). The plugin names its schemas through it, so a companion plugin has one source of truth. Fixes [#126](https://github.com/softistx/nxgt-graphql/issues/126).
+
 ## 0.3.6
 
 ### Patch Changes
