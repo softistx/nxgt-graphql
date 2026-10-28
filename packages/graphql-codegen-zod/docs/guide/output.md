@@ -216,7 +216,7 @@ variablesSchemaName(config, 'getThingQuery', 'query'); // 'zGetThingQueryVariabl
 `namingConvention` (every form above), `typesPrefix`, `typesSuffix`,
 `schemaPrefix`, `omitOperationSuffix` and `dedupeOperationSuffix`
 (case-insensitive); `operationKind` is `'query'`, `'mutation'` or
-`'subscription'`. It is pure, and the subpath imports only `change-case`, not
+`'subscription'` (type `OperationKind`; `config` is a `NamingConfig`, so the plugin's whole config fits and other options are ignored). It is pure, and the subpath imports only `change-case`, not
 graphql-codegen nor `graphql`.
 
 ### One file of its own

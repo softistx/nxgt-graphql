@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import { buildSchema, parse } from 'graphql';
 import type { CodegenZodConfig } from './config';
 import { plugin } from './index';
-import { variablesSchemaName } from './naming';
+import { variablesSchemaName } from './variables-name';
 
 const sdl = `
-type Query { getHTTPThing(id: ID!): ID  get_book(id: ID!): ID  getThingQuery(id: ID!): ID }
+type Query { getHTTPThing(id: ID!): ID  get_book(id: ID!): ID   getTHINGQUERY(id: ID!): ID }
 type Mutation { createUser(id: ID!): ID }
 type Subscription { onTick(id: ID!): ID }
 `;
@@ -17,9 +18,9 @@ const operations = [
 	],
 	['get_book', 'query', 'query get_book($id: ID!) { get_book(id: $id) }'],
 	[
-		'getThingQuery',
+		'getTHINGQUERY',
 		'query',
-		'query getThingQuery($id: ID!) { getThingQuery(id: $id) }',
+		'query getTHINGQUERY($id: ID!) { getTHINGQUERY(id: $id) }',
 	],
 	[
 		'createUser',
@@ -58,6 +59,15 @@ const configs: [string, CodegenZodConfig][] = [
 	[
 		'prefix and suffix',
 		{ typesPrefix: 'I', typesSuffix: 'T', schemaPrefix: 'zz' },
+	],
+	[
+		'prefix, suffix and a case',
+		{
+			typesPrefix: 'I',
+			typesSuffix: 'T',
+			namingConvention: 'change-case-all#snakeCase',
+			dedupeOperationSuffix: true,
+		},
 	],
 	['keep', { namingConvention: 'keep' }],
 	['keep, dedupe', { namingConvention: 'keep', dedupeOperationSuffix: true }],
@@ -108,4 +118,34 @@ describe('variablesSchemaName', () => {
 	test.each(configs)('equals the plugin output: %s', async (_, config) => {
 		expect(await emitted(config)).toEqual(computed(config));
 	});
+});
+
+describe('the ./naming subpath', () => {
+	const dist = new URL('../dist/', import.meta.url);
+
+	test.skipIf(!existsSync(new URL('variables-name.js', dist)))(
+		'exports exactly the documented names',
+		async () => {
+			const entry = await import(new URL('variables-name.js', dist).href);
+			expect(Object.keys(entry)).toEqual(['variablesSchemaName']);
+			const declarations = await Bun.file(
+				new URL('variables-name.d.ts', dist),
+			).text();
+			expect(declarations).toContain('variablesSchemaName');
+			expect(declarations).not.toContain('class Naming');
+		},
+	);
+
+	test.skipIf(!existsSync(new URL('variables-name.js', dist)))(
+		'imports only its chunk and change-case',
+		async () => {
+			const source = await Bun.file(new URL('variables-name.js', dist)).text();
+			const chunk = source.match(/from "(\.\/chunks\/[^"]+)"/)?.[1] ?? '';
+			const specifiers = (text: string) =>
+				[...text.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+			expect(specifiers(source)).toEqual([chunk]);
+			const chunkSource = await Bun.file(new URL(chunk, dist)).text();
+			expect(specifiers(chunkSource)).toEqual(['change-case']);
+		},
+	);
 });

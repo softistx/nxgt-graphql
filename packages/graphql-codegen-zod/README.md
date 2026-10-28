@@ -296,12 +296,12 @@ variablesSchemaName({ dedupeOperationSuffix: true }, 'getHTTPThing', 'query');
 // 'zGetHttpThingQueryVariables'
 ```
 
-Pass the same `config` as the plugin's; the plugin names the schema through
+Pass the same `config` as the plugin's (the types `NamingConfig` and `OperationKind` are exported beside it); the plugin names the schema through
 this function, so the two never disagree.
 
 ## Documentation
 
-The package exports `plugin` and the `CodegenZodConfig` and `DocumentFile` types from `.`; graphql-codegen finds `plugin` by the package name. `@nxgt/graphql-codegen-zod/naming` exports `variablesSchemaName(config, operationName, operationKind)`, the name the plugin writes for an operation's variables schema (see [Naming](docs/guide/output.md#computing-a-name-from-another-plugin)). See [Output](docs/guide/output.md#the-plugin-function).
+The package exports `plugin` and the `CodegenZodConfig` and `DocumentFile` types from `.`; graphql-codegen finds `plugin` by the package name. The variables schema's name for a companion plugin is on `./naming` (see [Naming](docs/guide/output.md#computing-a-name-from-another-plugin)).
 
 - [Documentation index](docs/README.md)
 - Guides: [Output](docs/guide/output.md)

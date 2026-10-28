@@ -18,21 +18,6 @@ export type NamingConfig = Pick<
 >;
 
 /**
- * The name of the schema the plugin writes for an operation's variables, from
- * the plugin's own `config`: `zGetHttpThingQueryVariables`. The plugin names
- * it through this function, so a companion plugin importing it from
- * `@nxgt/graphql-codegen-zod/naming` always agrees with the generated file.
- */
-export function variablesSchemaName(
-	config: NamingConfig,
-	operationName: string,
-	operationKind: OperationKind,
-): string {
-	const naming = new Naming(config);
-	return naming.schema(naming.variables(operationName, operationKind));
-}
-
-/**
  * The names of what the plugin writes: each type as
  * `@graphql-codegen/typescript` and `typescript-operations` name it, each
  * schema the same name behind `schemaPrefix`.
@@ -64,6 +49,19 @@ export class Naming {
 		return this.#wrap(
 			this.#convert(`${operation}${this.#suffix(operation, kind)}Variables`),
 		);
+	}
+
+	/**
+	 * An operation's variables type and its schema: `SignUpMutationVariables`
+	 * and `zSignUpMutationVariables`. The one place the pair is computed, for
+	 * the plugin and for `variablesSchemaName`.
+	 */
+	variablesSchema(
+		operation: string,
+		kind: OperationKind,
+	): { readonly type: string; readonly schema: string } {
+		const type = this.variables(operation, kind);
+		return { type, schema: this.schema(type) };
 	}
 
 	/** An operation's result type name: `SignUpMutation`. */

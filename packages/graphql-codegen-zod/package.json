@@ -20,9 +20,9 @@
 			"default": "./dist/index.js"
 		},
 		"./naming": {
-			"types": "./dist/naming.d.ts",
-			"import": "./dist/naming.js",
-			"default": "./dist/naming.js"
+			"types": "./dist/variables-name.d.ts",
+			"import": "./dist/variables-name.js",
+			"default": "./dist/variables-name.js"
 		},
 		"./package.json": "./package.json"
 	},
@@ -53,7 +53,7 @@
 	"nxgt": {
 		"entrypoints": [
 			"src/index.ts",
-			"src/naming.ts"
+			"src/variables-name.ts"
 		]
 	},
 	"dependencies": {
