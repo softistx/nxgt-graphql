@@ -167,4 +167,44 @@ describe('useSubscription', () => {
 		expect(result.current.error).toBe(thrown);
 		expect(api.streams[0]?.signal.aborted).toBe(true);
 	});
+
+	test('onOpen is called once the stream is accepted, before any result', async () => {
+		const { api, client } = setup();
+		const order: string[] = [];
+		renderHook(
+			() =>
+				useSubscription(
+					TickSubscription,
+					{ room: 'a' },
+					{
+						onOpen: () => order.push('open'),
+						onData: () => order.push('data'),
+					},
+				),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(order).toEqual(['open']));
+		await act(async () => api.streams[0]?.next({ data: { tick: 1 } }));
+		await waitFor(() => expect(order).toEqual(['open', 'data']));
+	});
+
+	test('a new onOpen between renders does not reconnect; the latest one is used', async () => {
+		const { api, client } = setup();
+		const calls: string[] = [];
+		const { rerender } = renderHook(
+			({ tag }: { tag: string }) =>
+				useSubscription(
+					TickSubscription,
+					{ room: 'a' },
+					{ onOpen: () => calls.push(tag) },
+				),
+			{ wrapper: withClient(client), initialProps: { tag: 'first' } },
+		);
+		rerender({ tag: 'second' });
+		rerender({ tag: 'third' });
+		await waitFor(() => expect(calls).toHaveLength(1));
+		expect(api.streams).toHaveLength(1);
+		expect(api.streams[0]?.signal.aborted).toBe(false);
+		expect(calls).toEqual(['third']);
+	});
 });

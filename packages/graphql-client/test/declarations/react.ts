@@ -83,6 +83,7 @@ export function useRename() {
 export function useTicks(room: string) {
 	const options: UseSubscriptionOptions<{ tick: number }> = {
 		onData: ({ tick }) => tick,
+		onOpen: () => {},
 	};
 	const ticks: SubscriptionState<{ tick: number }> = useSubscription(
 		OnTick,

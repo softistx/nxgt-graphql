@@ -11,6 +11,12 @@ export interface UseSubscriptionOptions<TResult> {
 	readonly headers?: HeadersInit;
 	/** Called with each result, before the component renders it. */
 	readonly onData?: (data: TResult) => void;
+	/**
+	 * Called once the server accepted the stream, before any result, so a
+	 * quiet stream is known to be open. The latest function is called: a new
+	 * one does not reconnect.
+	 */
+	readonly onOpen?: () => void;
 }
 
 export interface SubscriptionState<TResult> {
@@ -30,6 +36,11 @@ interface Connection {
 	readonly skip: boolean;
 }
 
+interface Callbacks {
+	readonly onData?: (data: unknown) => void;
+	readonly onOpen?: () => void;
+}
+
 type Recorded = SubscriptionState<unknown> & {
 	readonly connection: Connection | undefined;
 };
@@ -46,7 +57,7 @@ export function useSubscription<TResult, TVariables>(
 	>
 ): SubscriptionState<TResult> {
 	const client = useClient();
-	const { skip = false, onData } = options;
+	const { skip = false, onData, onOpen } = options;
 	const variables = useStable(raw, variablesKey(raw));
 	const headers = useStable(options.headers, headersKey(options.headers));
 	const connection = useMemo<Connection>(
@@ -59,13 +70,21 @@ export function useSubscription<TResult, TVariables>(
 		}),
 		[client, document, variables, headers, skip],
 	);
-	const latest = useRef(onData as ((data: unknown) => void) | undefined);
+	const latest = useRef<Callbacks>({});
 	useEffect(() => {
-		latest.current = onData as ((data: unknown) => void) | undefined;
+		latest.current = { onData, onOpen } as Callbacks;
 	});
 	const [recorded, setRecorded] = useState<Recorded>(() => initial(undefined));
 	useEffect(
-		() => listen(connection, (data) => latest.current?.(data), setRecorded),
+		() =>
+			listen(
+				connection,
+				{
+					onData: (data) => latest.current.onData?.(data),
+					onOpen: () => latest.current.onOpen?.(),
+				},
+				setRecorded,
+			),
 		[connection],
 	);
 	const shown =
@@ -86,7 +105,7 @@ function initial(connection: Connection | undefined): Recorded {
 /** Reads the subscription until it ends; the cleanup closes it. */
 function listen(
 	connection: Connection,
-	onData: (data: unknown) => void,
+	callbacks: Required<Callbacks>,
 	record: (state: Recorded) => void,
 ): () => void {
 	if (connection.skip) return () => {};
@@ -97,6 +116,7 @@ function listen(
 	try {
 		subscription = client.subscribe(document, variables as never, {
 			signal,
+			onOpen: callbacks.onOpen,
 			...(headers !== undefined && { headers }),
 		});
 	} catch (error) {
@@ -110,7 +130,7 @@ function listen(
 			for await (const data of subscription) {
 				if (signal.aborted) return;
 				last = data;
-				onData(data);
+				callbacks.onData(data);
 				record({ connection, data, error: undefined, active: true });
 			}
 			if (!signal.aborted)
