@@ -259,6 +259,16 @@ in the message are yours.
 query Both($e: String, $u: String) { e(v: $e) u(v: $u) }
 ```
 
+### A companion plugin imports `zGetHttpThingQueryVariables` and the file has another name
+
+**When:** a second codegen plugin writes an import of a variables schema.
+**Why:** it computed the name with its own copy of the naming rules, which
+differs from this plugin's for the `config` in use (`dedupeOperationSuffix`,
+`namingConvention`, `typesPrefix`, ...).
+**Fix:** call `variablesSchemaName(config, operationName, operationKind)` from
+`@nxgt/graphql-codegen-zod/naming` with the plugin's own `config`, instead of
+copying the rules. See [Naming](guide/output.md#computing-a-name-from-another-plugin).
+
 ## The generated file
 
 ### `TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../formats.js'?`

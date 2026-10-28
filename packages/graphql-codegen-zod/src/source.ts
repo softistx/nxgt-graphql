@@ -37,7 +37,23 @@ export function declare(
 	side: 'input' | 'output',
 	description?: string | null,
 ): string {
-	const schemaName = naming.schema(typeName);
+	return declareNamed(
+		naming.schema(typeName),
+		typeName,
+		code,
+		side,
+		description,
+	);
+}
+
+/** As `declare`, with the schema's name already computed. */
+export function declareNamed(
+	schemaName: string,
+	typeName: string,
+	code: string,
+	side: 'input' | 'output',
+	description?: string | null,
+): string {
 	const doc = docComment(description);
 	return `${doc}export const ${schemaName} = ${code};\n${doc}export type ${typeName} = z.${side}<typeof ${schemaName}>;`;
 }

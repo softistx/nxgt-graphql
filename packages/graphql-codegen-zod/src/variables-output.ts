@@ -22,7 +22,7 @@ import {
 } from 'graphql';
 import type { DocumentFile } from './config';
 import type { Naming } from './naming';
-import { declare, objectMembers } from './source';
+import { declareNamed, objectMembers } from './source';
 import type { Writer } from './writer';
 
 /**
@@ -77,10 +77,14 @@ export function variablesBlocks(
 					] as const;
 				},
 			);
+			const { type, schema: schemaName } = naming.variablesSchema(
+				operationName,
+				operation.operation,
+			);
 			return [
-				declare(
-					naming.variables(operationName, operation.operation),
-					naming,
+				declareNamed(
+					schemaName,
+					type,
 					`z.object({\n${objectMembers(members)}\n})`,
 					'input',
 				),
