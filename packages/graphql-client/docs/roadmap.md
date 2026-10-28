@@ -36,6 +36,11 @@ Candidates, not commitments.
 
 ## Shipped
 
+In the next minor.
+
+- **`subscribe` takes `onOpen`: know a quiet stream is open.** It is called
+  once the server accepted the connection, before any event.
+
 Released in 0.4.0.
 
 - **A GraphQL error carried by an error status's event stream read as an
@@ -83,8 +88,7 @@ Released in 0.1.0.
 - **Subscriptions over SSE**. `subscribe`
   yields each result over server-sent events (the GraphQL over SSE protocol's
   distinct connections mode, as graphql-yoga serves it), closed on every way
-  out of the loop, with an `onOpen` callback for when the server accepted the
-  stream. No reconnection yet.
+  out of the loop. No reconnection yet.
 - **A normalized cache**. `normalizedCache({
   possibleTypes, keys })` for the browser: entities stored once, `cache-first`
   queries answered without a request, mutations' entities written back,

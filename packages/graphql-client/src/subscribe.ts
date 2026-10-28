@@ -105,9 +105,8 @@ export class EventSubscription implements Subscription<unknown> {
 	}
 
 	#open(body: OperationBody): EventStream<ServerEvent> {
-		const { signal } = this.options;
+		const { signal, onOpen } = this.options;
 		const { operationName } = this.operation;
-		const { onOpen } = this.options;
 		// Over the client's own headers: a client-level `accept` would ask for JSON.
 		const headers = new Headers(this.options.headers);
 		if (!headers.has('accept')) headers.set('accept', 'text/event-stream');

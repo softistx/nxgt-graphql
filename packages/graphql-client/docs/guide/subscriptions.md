@@ -58,7 +58,7 @@ an `AsyncIterable<TResult>` with a `close()` method.
 | --- | --- |
 | `signal` | Ends the subscription: the loop rejects with the signal's reason |
 | `headers` | Over the client's headers, for this subscription |
-| `onOpen` | Called each time the server accepts the stream (see below) |
+| `onOpen` | Called once the server accepted the connection, once per connection (see below) |
 
 `SubscribeOptions` takes no `retry` nor `timeout`. The request always asks for
 `accept: text/event-stream`, whatever `accept` the client's headers set; only
