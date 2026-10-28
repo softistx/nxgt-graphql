@@ -1,5 +1,11 @@
 # @nxgt/graphql-client
 
+## 0.5.0
+
+### Minor Changes
+
+- [#131](https://github.com/softistx/nxgt-graphql/pull/131) [`d920e67`](https://github.com/softistx/nxgt-graphql/commit/d920e67c994dcc3999f6eede473963eca2b8ab77) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `subscribe` takes an `onOpen` option, called when the server accepted the stream (a 2xx response), before any event, so a quiet stream is known to be open without a timer. It is not called for a refused connection, and an error it throws is logged and does not end the subscription. Requires `@nxgt/httpyz` `^0.5.0`. Fixes [#130](https://github.com/softistx/nxgt-graphql/issues/130).
+
 ## 0.4.0
 
 ### Minor Changes
