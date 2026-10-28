@@ -287,9 +287,21 @@ Each is detailed in [Output](docs/guide/output.md).
 
 Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 
+### From another plugin: the variables schema's name
+
+```ts
+import { variablesSchemaName } from '@nxgt/graphql-codegen-zod/naming';
+
+variablesSchemaName({ dedupeOperationSuffix: true }, 'getHTTPThing', 'query');
+// 'zGetHttpThingQueryVariables'
+```
+
+Pass the same `config` as the plugin's; the plugin names the schema through
+this function, so the two never disagree.
+
 ## Documentation
 
-The package exports `plugin` and the `CodegenZodConfig` and `DocumentFile` types from `.`; graphql-codegen finds `plugin` by the package name. See [Output](docs/guide/output.md#the-plugin-function).
+The package exports `plugin` and the `CodegenZodConfig` and `DocumentFile` types from `.`; graphql-codegen finds `plugin` by the package name. `@nxgt/graphql-codegen-zod/naming` exports `variablesSchemaName(config, operationName, operationKind)`, the name the plugin writes for an operation's variables schema (see [Naming](docs/guide/output.md#computing-a-name-from-another-plugin)). See [Output](docs/guide/output.md#the-plugin-function).
 
 - [Documentation index](docs/README.md)
 - Guides: [Output](docs/guide/output.md)

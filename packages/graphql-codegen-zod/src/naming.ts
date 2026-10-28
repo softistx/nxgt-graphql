@@ -2,16 +2,46 @@ import * as changeCase from 'change-case';
 import type { OperationTypeNode } from 'graphql';
 import type { CodegenZodConfig } from './config';
 
+/** An operation's kind, as graphql names it: `OperationTypeNode`'s values. */
+export type OperationKind = `${OperationTypeNode}`;
+
+/** The options of `CodegenZodConfig` that decide a name. */
+export type NamingConfig = Pick<
+	CodegenZodConfig,
+	| 'namingConvention'
+	| 'typesPrefix'
+	| 'typesSuffix'
+	| 'schemaPrefix'
+	| 'omitOperationSuffix'
+	| 'dedupeOperationSuffix'
+	| 'addUnderscoreToArgsType'
+>;
+
+/**
+ * The name of the schema the plugin writes for an operation's variables, from
+ * the plugin's own `config`: `zGetHttpThingQueryVariables`. The plugin names
+ * it through this function, so a companion plugin importing it from
+ * `@nxgt/graphql-codegen-zod/naming` always agrees with the generated file.
+ */
+export function variablesSchemaName(
+	config: NamingConfig,
+	operationName: string,
+	operationKind: OperationKind,
+): string {
+	const naming = new Naming(config);
+	return naming.schema(naming.variables(operationName, operationKind));
+}
+
 /**
  * The names of what the plugin writes: each type as
  * `@graphql-codegen/typescript` and `typescript-operations` name it, each
  * schema the same name behind `schemaPrefix`.
  */
 export class Naming {
-	readonly #config: CodegenZodConfig;
+	readonly #config: NamingConfig;
 	readonly #convert: (name: string) => string;
 
-	constructor(config: CodegenZodConfig) {
+	constructor(config: NamingConfig) {
 		this.#config = config;
 		this.#convert = converter(config.namingConvention);
 	}
@@ -30,14 +60,14 @@ export class Naming {
 	}
 
 	/** An operation's variables type name: `SignUpMutationVariables`. */
-	variables(operation: string, kind: OperationTypeNode): string {
+	variables(operation: string, kind: OperationKind): string {
 		return this.#wrap(
 			this.#convert(`${operation}${this.#suffix(operation, kind)}Variables`),
 		);
 	}
 
 	/** An operation's result type name: `SignUpMutation`. */
-	result(operation: string, kind: OperationTypeNode): string {
+	result(operation: string, kind: OperationKind): string {
 		return this.#wrap(
 			this.#convert(`${operation}${this.#suffix(operation, kind)}`),
 		);
@@ -51,7 +81,7 @@ export class Naming {
 	}
 
 	/** As visitor-plugin-common's `getOperationSuffix`, fragments included. */
-	#suffix(operation: string, kind: OperationTypeNode | 'fragment'): string {
+	#suffix(operation: string, kind: OperationKind | 'fragment'): string {
 		const type = changeCase.pascalCase(kind);
 		const { omitOperationSuffix, dedupeOperationSuffix } = this.#config;
 		return omitOperationSuffix ||

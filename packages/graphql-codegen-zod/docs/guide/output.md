@@ -195,6 +195,30 @@ config: { namingConvention: { transformUnderscore: true } } // sign_upInput → 
 Any other module string (`'my-module#myCase'`) throws, see
 [Troubleshooting](../troubleshooting.md).
 
+### Computing a name from another plugin
+
+A companion plugin that imports the generated variables schemas (a manifest, a
+client wrapper) needs the exact name this plugin wrote. Do not copy the rules:
+`@nxgt/graphql-codegen-zod/naming` exports the function the plugin itself
+names them with.
+
+```ts
+import { variablesSchemaName } from '@nxgt/graphql-codegen-zod/naming';
+
+const config = { dedupeOperationSuffix: true }; // the same `config` as the plugin's
+
+variablesSchemaName(config, 'getHTTPThing', 'query'); // 'zGetHttpThingQueryVariables'
+variablesSchemaName(config, 'get_book', 'query'); // 'zGet_BookQueryVariables'
+variablesSchemaName(config, 'getThingQuery', 'query'); // 'zGetThingQueryVariables'
+```
+
+`variablesSchemaName(config, operationName, operationKind)` takes the plugin's
+`namingConvention` (every form above), `typesPrefix`, `typesSuffix`,
+`schemaPrefix`, `omitOperationSuffix` and `dedupeOperationSuffix`
+(case-insensitive); `operationKind` is `'query'`, `'mutation'` or
+`'subscription'`. It is pure, and the subpath imports only `change-case`, not
+graphql-codegen nor `graphql`.
+
 ### One file of its own
 
 Generate into a file the typescript plugins do not write to: the names would

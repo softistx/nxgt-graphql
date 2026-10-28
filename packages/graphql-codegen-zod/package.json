@@ -19,6 +19,11 @@
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./naming": {
+			"types": "./dist/naming.d.ts",
+			"import": "./dist/naming.js",
+			"default": "./dist/naming.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"keywords": [
@@ -44,6 +49,12 @@
 		"test": "bun test src",
 		"typecheck": "tsc --noEmit",
 		"generated:write": "bun run test/write-generated.ts"
+	},
+	"nxgt": {
+		"entrypoints": [
+			"src/index.ts",
+			"src/naming.ts"
+		]
 	},
 	"dependencies": {
 		"@nxgt/graphql-validation": "workspace:^",
