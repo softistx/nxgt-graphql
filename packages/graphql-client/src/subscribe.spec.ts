@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { createHttpClient } from '@nxgt/httpyz';
 import { parse } from 'graphql';
 import { createGraphQLClient } from './client';
 import { ApiError, ApiStatusError, ApiUnavailableError } from './errors';
@@ -1110,5 +1111,147 @@ describe('races and transport', () => {
 			{ tick: 1 },
 		]);
 		expect(seen).toEqual(['Bearer old', 'Bearer new']);
+	});
+});
+
+describe('onOpen', () => {
+	/** A held-open stream that sends nothing until `send` is called. */
+	function quietStream() {
+		let controller!: ReadableStreamDefaultController<Uint8Array>;
+		const encoder = new TextEncoder();
+		const body = new ReadableStream<Uint8Array>({
+			start(c) {
+				controller = c;
+			},
+		});
+		const response = new Response(body, {
+			headers: { 'content-type': 'text/event-stream' },
+		});
+		return {
+			response,
+			send: (chunk: string) => controller.enqueue(encoder.encode(chunk)),
+		};
+	}
+
+	test('fires once the server accepted a quiet stream, before any event', async () => {
+		const stream = quietStream();
+		const api = server(() => stream.response);
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		const order: string[] = [];
+		const messages = client.subscribe(
+			TickSubscription,
+			{},
+			{ onOpen: () => order.push('open') },
+		);
+		const reading = (async () => {
+			for await (const { tick } of messages) order.push(`tick ${tick}`);
+		})();
+		await Bun.sleep(20);
+		// No event has arrived: the stream is quiet, and it is known to be open.
+		expect(order).toEqual(['open']);
+		stream.send(next({ data: { tick: 1 } }));
+		stream.send(complete);
+		await reading;
+		expect(order).toEqual(['open', 'tick 1']);
+	});
+
+	test('does not leak its marker to the server', async () => {
+		const api = server(() => eventStream([complete]).response);
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		await collect(client.subscribe(TickSubscription, {}, { onOpen() {} }));
+		expect([...(api.sent[0]?.request.headers.keys() ?? [])]).toEqual([
+			...new Headers({
+				'content-type': 'application/json',
+				accept: 'text/event-stream',
+			}).keys(),
+		]);
+	});
+
+	test('is not called for a refused connection', async () => {
+		const api = server(() => refusedStream(yoga.missingVariable, 400));
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		let opened = 0;
+		await expect(
+			collect(
+				client.subscribe(
+					RoomSubscription,
+					{ room: 'r1' },
+					{ onOpen: () => opened++ },
+				),
+			),
+		).rejects.toBeInstanceOf(ApiError);
+		expect(opened).toBe(0);
+	});
+
+	test('fires again on the connection an apq retry opens, not on the refused one', async () => {
+		const hashed = Object.assign(parse('subscription Tick { tick }'), {
+			__meta__: { hash: 'tick-hash' },
+		}) as TypedDocumentNode<Tick, Record<string, never>>;
+		const api = server(
+			() => refusedStream(yoga.notFound, 404),
+			() => eventStream([next({ data: { tick: 1 } }), complete]).response,
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: api.fetch,
+			persisted: { mode: 'apq' },
+		});
+		let opened = 0;
+		expect(
+			await collect(client.subscribe(hashed, {}, { onOpen: () => opened++ })),
+		).toEqual([{ tick: 1 }]);
+		expect(api.sent).toHaveLength(2);
+		expect(opened).toBe(1);
+	});
+
+	test('a callback that throws does not end the subscription', async () => {
+		const api = server(
+			() => eventStream([next({ data: { tick: 1 } }), complete]).response,
+		);
+		const errors: unknown[] = [];
+		const client = createGraphQLClient({ url, fetch: api.fetch });
+		const original = console.error;
+		console.error = (error: unknown) => errors.push(error);
+		try {
+			const values = await collect(
+				client.subscribe(
+					TickSubscription,
+					{},
+					{
+						onOpen() {
+							throw new Error('boom');
+						},
+					},
+				),
+			);
+			expect(values).toEqual([{ tick: 1 }]);
+		} finally {
+			console.error = original;
+		}
+		expect(errors).toHaveLength(1);
+	});
+
+	test('works on an http client of the application, and leaves other requests alone', async () => {
+		const seen: string[] = [];
+		const http = createHttpClient({
+			baseUrl: url,
+			fetch: async (request: Request) => {
+				seen.push(request.url);
+				return request.headers.get('accept')?.includes('event-stream')
+					? eventStream([complete]).response
+					: Response.json({ data: { viewer: { id: '1' } } });
+			},
+		});
+		const client = createGraphQLClient({ http, path: '' });
+		let opened = 0;
+		await collect(
+			client.subscribe(TickSubscription, {}, { onOpen: () => opened++ }),
+		);
+		await collect(
+			client.subscribe(TickSubscription, {}, { onOpen: () => opened++ }),
+		);
+		expect(await client.query(ViewerQuery)).toEqual({ viewer: { id: '1' } });
+		expect(opened).toBe(2);
+		expect(seen).toHaveLength(3);
 	});
 });

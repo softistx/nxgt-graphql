@@ -15,7 +15,8 @@ Candidates, not commitments.
   `@nxgt/httpyz`'s `auth.refresh` and be replayed once, as an HTTP 401 is.
 - **A subscription resumed after a dropped connection.** Today the loop
   rejects with `ApiUnavailableError('unreachable')` and subscribing again is
-  the application's to do; the client would reconnect and resume instead.
+  the application's to do; the client would reconnect and resume instead,
+  calling `onOpen` again on each new connection.
 - **Suspense for `useQuery`.** A query that suspends the component until its
   first answer, for a `<Suspense>` boundary and streaming server rendering,
   instead of returning `loading`.
@@ -82,7 +83,8 @@ Released in 0.1.0.
 - **Subscriptions over SSE**. `subscribe`
   yields each result over server-sent events (the GraphQL over SSE protocol's
   distinct connections mode, as graphql-yoga serves it), closed on every way
-  out of the loop. No reconnection yet.
+  out of the loop, with an `onOpen` callback for when the server accepted the
+  stream. No reconnection yet.
 - **A normalized cache**. `normalizedCache({
   possibleTypes, keys })` for the browser: entities stored once, `cache-first`
   queries answered without a request, mutations' entities written back,

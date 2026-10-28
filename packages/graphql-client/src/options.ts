@@ -93,6 +93,13 @@ export interface SubscribeOptions {
 	signal?: AbortSignal;
 	/** Over the client's headers, for this subscription. */
 	headers?: HeadersInit;
+	/**
+	 * Called each time the server accepts the stream: its response is a 2xx,
+	 * before any event is read, so on a quiet stream too. It is not called for
+	 * a refused connection. An error it throws is logged, never thrown, and
+	 * does not end the subscription.
+	 */
+	onOpen?: () => void;
 }
 
 /**

@@ -58,6 +58,7 @@ an `AsyncIterable<TResult>` with a `close()` method.
 | --- | --- |
 | `signal` | Ends the subscription: the loop rejects with the signal's reason |
 | `headers` | Over the client's headers, for this subscription |
+| `onOpen` | Called each time the server accepts the stream (see below) |
 
 `SubscribeOptions` takes no `retry` nor `timeout`. The request always asks for
 `accept: text/event-stream`, whatever `accept` the client's headers set; only
@@ -71,6 +72,43 @@ the subscription's own `headers` can change it.
   before anything is sent; `query` and `mutate` refuse a subscription.
 - **Variables are typed** as for a query: required when the operation requires
   some, an extra key refused.
+
+## Knowing it is open
+
+A subscription yields nothing until the server sends a result, which on a
+quiet stream may be never. `onOpen` says the connection itself was accepted, so
+a "connecting" state can be cleared without a timer:
+
+```ts
+const messages = client.subscribe(
+  OnMessage,
+  { room: 'r1' },
+  {
+    onOpen: () => setStatus('live'), // before the first message, if any
+  },
+);
+setStatus('connecting');
+
+for await (const { message } of messages) {
+  render(message);
+}
+
+declare function setStatus(status: 'connecting' | 'live'): void;
+declare function render(message: { id: string; text: string }): void;
+```
+
+- **When it is called**: once the response is a 2xx, before any event is read.
+  It is never called for a refused connection (the loop rejects instead).
+- **Once per connection**: the client does not reconnect (see
+  [below](#never-retried-never-shared)), so it is called once per
+  subscription, except that an `apq` retry opens a second connection after the
+  first was refused with `PersistedQueryNotFound`: `onOpen` is called for the
+  one the server accepted, not for the refused one.
+- **An error it throws** is logged with `console.error` and does not end the
+  subscription.
+- **On your own `http` client**, the first subscription with an `onOpen` adds
+  a middleware to it. It acts only on requests carrying a header the client
+  sets and removes before the request is sent.
 
 ## How it ends
 
