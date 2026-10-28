@@ -206,7 +206,10 @@ function Ticker({ room }: { room: string }) {
   const { data, error, active } = useSubscription(
     OnTick,
     { room },
-    { onData: ({ tick }) => console.log(tick) },
+    {
+      onOpen: () => console.log('live'),
+      onData: ({ tick }) => console.log(tick),
+    },
   );
   return <span>{active ? data?.tick : 'closed'}</span>;
 }
@@ -216,6 +219,7 @@ function Ticker({ room }: { room: string }) {
 | --- | --- |
 | `skip` | connects nothing while `true` |
 | `headers` | over the client's headers; compared by value |
+| `onOpen()` | called once the server accepted the stream, before any result, so a quiet stream is known to be open; the latest function is used, so an inline arrow does not reconnect |
 | `onData(data)` | called with each result before the component renders it; the latest function is used, so an inline arrow does not reconnect |
 
 - **`data`** is the last result, **`active`** is `true` from the first render

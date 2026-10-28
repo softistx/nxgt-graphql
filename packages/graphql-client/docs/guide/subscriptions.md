@@ -104,6 +104,10 @@ declare function render(message: { id: string; text: string }): void;
   subscription, except that an `apq` retry opens a second connection after the
   first was refused with `PersistedQueryNotFound`: `onOpen` is called for the
   one the server accepted, not for the refused one.
+- **In React**, `useSubscription` takes the same `onOpen` in its options
+  (`useSubscription(OnMessage, { room }, { onOpen })`). It is kept in a ref:
+  a new function on a render does not close and reopen the connection, and the
+  latest one is called.
 - **Requires `@nxgt/httpyz` 0.5**, which reports the accepted response.
 - **An error it throws** is logged with `console.error` and does not end the
   subscription.
