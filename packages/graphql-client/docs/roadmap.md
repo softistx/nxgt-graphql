@@ -15,7 +15,8 @@ Candidates, not commitments.
   `@nxgt/httpyz`'s `auth.refresh` and be replayed once, as an HTTP 401 is.
 - **A subscription resumed after a dropped connection.** Today the loop
   rejects with `ApiUnavailableError('unreachable')` and subscribing again is
-  the application's to do; the client would reconnect and resume instead.
+  the application's to do; the client would reconnect and resume instead,
+  calling `onOpen` again on each new connection.
 - **Suspense for `useQuery`.** A query that suspends the component until its
   first answer, for a `<Suspense>` boundary and streaming server rendering,
   instead of returning `loading`.
@@ -34,6 +35,11 @@ Candidates, not commitments.
 - **Subscriptions over WebSocket.**
 
 ## Shipped
+
+In the next minor.
+
+- **`subscribe` takes `onOpen`: know a quiet stream is open.** It is called
+  once the server accepted the connection, before any event.
 
 Released in 0.4.0.
 

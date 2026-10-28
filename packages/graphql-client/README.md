@@ -174,8 +174,15 @@ for await (const { message } of client.subscribe(
 `subscribe(document, variables?, options?)` returns a `Subscription<TResult>`:
 an `AsyncIterable` read once with `for await`, with a `close()` method. Its
 `SubscribeOptions` are `signal` (ends it: the loop rejects with the signal's
-reason) and `headers` (over the client's, for this subscription); it takes no
-`retry` nor `timeout`.
+reason), `headers` (over the client's, for this subscription) and `onOpen`
+(called when the server accepted the stream, before any event: a quiet stream
+is known to be open); it takes no `retry` nor `timeout`.
+
+```ts
+const messages = client.subscribe(OnMessage, { room: 'r1' }, {
+  onOpen: () => setStatus('live'),
+});
+```
 
 The server must speak the GraphQL over SSE protocol's distinct connections
 mode: graphql-yoga does out of the box; elsewhere, mount

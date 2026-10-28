@@ -120,6 +120,9 @@ ignores), or ends the stream before any result.
 graphql-yoga does it by default; elsewhere, mount graphql-sse's handler and
 point the client at its route (see
 [Subscriptions](guide/subscriptions.md#the-server)).
+To tell a quiet open stream from one that never connected, pass `onOpen`: it
+is called as soon as the server answers 2xx, before any event (see
+[Knowing it is open](guide/subscriptions.md#knowing-it-is-open)).
 
 ## `The document holds no operation`
 
