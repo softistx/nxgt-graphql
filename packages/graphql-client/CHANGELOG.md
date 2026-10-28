@@ -1,5 +1,11 @@
 # @nxgt/graphql-client
 
+## 0.6.0
+
+### Minor Changes
+
+- [#134](https://github.com/softistx/nxgt-graphql/pull/134) [`932f726`](https://github.com/softistx/nxgt-graphql/commit/932f726457e5a723d00cd0039c65b51986d64d1c) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `useSubscription` takes an `onOpen` option, forwarded to `subscribe`: called once the server accepted the stream, before any result, so a component knows a quiet stream is open. It is kept in a ref, so a new function on a render does not reconnect. Fixes [#132](https://github.com/softistx/nxgt-graphql/issues/132).
+
 ## 0.5.0
 
 ### Minor Changes
