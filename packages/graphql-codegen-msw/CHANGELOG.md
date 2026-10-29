@@ -1,5 +1,11 @@
 # @nxgt/graphql-codegen-msw
 
+## 0.3.0
+
+### Minor Changes
+
+- [#140](https://github.com/softistx/nxgt-graphql/pull/140) [`eae563a`](https://github.com/softistx/nxgt-graphql/commit/eae563a4d6822909d85122a2cd415aaef4e94bc0) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Generate `mock<Name>Subscription(execute, options?)` for each named subscription: an msw handler that streams a POST with `Accept: text/event-stream` through an executor such as `@nxgt/msw-graphql`'s `createExecutor({ schema })`, with no wrapper around `fetch`. Adds `mockSubscription` and the `SubscriptionExecutor` type to `./runtime`.
+
 ## 0.2.2
 
 ### Patch Changes
