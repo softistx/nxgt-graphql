@@ -15,10 +15,8 @@ Candidates, not commitments.
 
 ## Later
 
-- **Subscriptions.** msw 3 mocks them over WebSocket (`graphql-transport-ws`)
-  only, with a resolver that publishes rather than answers, and an invalid
-  input has no HTTP status there. `@nxgt/graphql-client` subscribes over SSE,
-  which msw's GraphQL subscription handler does not intercept.
+- **msw WebSocket subscriptions** (`graphql-transport-ws`), with a resolver
+  that publishes rather than answers; SSE subscriptions are shipped.
 - **Persisted queries**: matching a request that carries a hash and no query
   text (`documentId`, APQ).
 - **Batched requests**: answering an array of operations posted at once.
@@ -31,6 +29,9 @@ Candidates, not commitments.
 
 ## Shipped
 
+- **Subscription handlers** — `mock<Name>Subscription(execute)` streams a
+  subscription sent with `Accept: text/event-stream` through
+  `@nxgt/msw-graphql`'s executor, from the schema's `Subscription` resolvers.
 - **The first release** — 0.1.0. One typed msw 3 handler per named query
   and mutation, its variables checked with `@nxgt/graphql-codegen-zod`'s
   schemas, a value the API cannot coerce answered as graphql-yoga answers it

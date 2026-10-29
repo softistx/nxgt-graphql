@@ -44,6 +44,13 @@ export type JoinedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 export type JoinedSubscription = { joined: { id: string } | null };
 
+export type UserChangedSubscriptionVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type UserChangedSubscription = { userChanged: { id: string, name: string } | null };
+
 export type Unnamed_1_QueryVariables = Exact<{ [key: string]: never; }>;
 
 

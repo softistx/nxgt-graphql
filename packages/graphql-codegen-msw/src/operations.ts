@@ -2,7 +2,7 @@ import { Kind, type OperationDefinitionNode } from 'graphql';
 import type { DocumentFile } from './config';
 import type { MockedKind } from './naming';
 
-/** A named query or mutation of the documents. */
+/** A named query, mutation or subscription of the documents. */
 export interface MockedOperationNode {
 	readonly name: string;
 	readonly kind: MockedKind;
@@ -10,10 +10,8 @@ export interface MockedOperationNode {
 }
 
 /**
- * Every named query and mutation, in document order. An anonymous
- * operation has no name for msw to match, and a subscription is not an
- * HTTP request msw's `query` or `mutation` handler answers: neither gets a
- * handler.
+ * Every named operation, in document order. An anonymous operation has no
+ * name to match: it gets no handler.
  */
 export function mockedOperations(
 	documents: readonly DocumentFile[],
@@ -26,8 +24,8 @@ export function mockedOperations(
 		)
 		.flatMap((node) => {
 			const name = node.name?.value;
-			const kind: string = node.operation;
-			if (!name || (kind !== 'query' && kind !== 'mutation')) return [];
+			const kind = node.operation;
+			if (!name) return [];
 			return [{ name, kind: kind as MockedKind, node }];
 		});
 }

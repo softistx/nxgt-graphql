@@ -13,7 +13,7 @@ import {
 } from 'msw/graphql';
 import type { z } from 'zod';
 import { COERCION_STATUS, coercionErrors, type InputTypes } from './coercion';
-import type { InvalidInput } from './refusals';
+import type { InvalidInput, RefusedOperation } from './refusals';
 import { errorResponse, isGraphQLError } from './response';
 
 /**
@@ -100,19 +100,8 @@ export function mockOperation<
 	return link[operation.type](
 		operation.name,
 		async (info) => {
-			const checked = await operation.variables.safeParseAsync(info.variables);
-			if (!checked.success) {
-				const { issues } = checked.error;
-				// The API refuses these while coercing the variables, before
-				// its own validation: whatever invalidInput says.
-				const refused = coercionErrors(issues, info, operation);
-				if (refused.length > 0)
-					return errorResponse(refused, { status: COERCION_STATUS });
-				// A status no response can carry is ignored, as errorResponse
-				// ignores it: the error's own, else 200.
-				const { error, status } = await operation.invalidInput(issues, where);
-				return errorResponse(error, { status });
-			}
+			const refusal = await refuseInvalid(operation, info, where);
+			if (refusal) return refusal;
 			try {
 				const answer = await resolver(info as GraphQLMockInfo<Variables>);
 				assertNotIterator(answer, operation.name);
@@ -124,6 +113,33 @@ export function mockOperation<
 		},
 		handlerOptions,
 	);
+}
+
+/**
+ * The answer to variables `operation.variables` refuses, or `undefined`
+ * when they pass: a value graphql refuses while coercing is answered as
+ * graphql-yoga answers it (status 400), any other with `invalidInput`.
+ */
+export async function refuseInvalid(
+	operation: Pick<
+		MockedOperation,
+		'variables' | 'variableTypes' | 'inputTypes' | 'invalidInput'
+	>,
+	info: { query: string; operationName: string; variables: unknown },
+	where: RefusedOperation,
+): Promise<Response | undefined> {
+	const checked = await operation.variables.safeParseAsync(info.variables);
+	if (checked.success) return undefined;
+	const { issues } = checked.error;
+	// The API refuses these while coercing the variables, before its own
+	// validation: whatever invalidInput says.
+	const refused = coercionErrors(issues, info, operation);
+	if (refused.length > 0)
+		return errorResponse(refused, { status: COERCION_STATUS });
+	// A status no response can carry is ignored, as errorResponse ignores
+	// it: the error's own, else 200.
+	const { error, status } = await operation.invalidInput(issues, where);
+	return errorResponse(error, { status });
 }
 
 /**

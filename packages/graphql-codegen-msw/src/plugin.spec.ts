@@ -37,12 +37,26 @@ describe('the generated files', () => {
 });
 
 describe('plugin', () => {
-	test('writes one handler per named query and mutation, none for a subscription or an anonymous operation', () => {
+	test('writes one handler per named operation, none for an anonymous one', () => {
 		const output = plugin(schema, documents, base);
 		expect(
 			[...output.matchAll(/^export function (\w+)/gm)].map((m) => m[1]),
-		).toEqual(['mockUserQuery', 'mockUsersQuery', 'mockSignUpMutation']);
-		expect(output).not.toContain('Joined');
+		).toEqual([
+			'mockUserQuery',
+			'mockUsersQuery',
+			'mockSignUpMutation',
+			'mockJoinedSubscription',
+			'mockUserChangedSubscription',
+		]);
+	});
+
+	test('writes a subscription handler that takes an executor', () => {
+		const output = plugin(schema, documents, base);
+		expect(output).toContain('export function mockUserChangedSubscription(');
+		expect(output).toContain(
+			'execute: SubscriptionExecutor,\n\toptions?: MockOptions,\n): HttpHandler {',
+		);
+		expect(output).toContain('type: "subscription", name: "UserChanged"');
 	});
 
 	test('names the types and schemas as typescript-operations and codegen-zod do', () => {

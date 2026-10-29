@@ -40,6 +40,7 @@ type Mutation {
 
 type Subscription {
 	joined: User
+	userChanged(id: ID! @constraint(minLength: 3)): User
 }
 `;
 
@@ -52,10 +53,11 @@ export const documents = [
 			query User($id: ID!) { user(id: $id) { id name joined } }
 			query Users($first: Int, $role: Role) { users(first: $first, role: $role) { id } }
 			mutation SignUp($input: SignUpInput!) { signUp(input: $input) { id name } }
-			# A subscription and an anonymous operation get no handler.
 			subscription Joined { joined { id } }
+			subscription UserChanged($id: ID!) { userChanged(id: $id) { id name } }
 		`),
 	},
+	// An anonymous operation gets no handler.
 	{ location: 'anonymous.graphql', document: parse('query { users { id } }') },
 ];
 

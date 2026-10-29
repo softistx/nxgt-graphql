@@ -1,8 +1,9 @@
 # @nxgt/graphql-codegen-msw
 
 A [graphql-codegen](https://the-guild.dev/graphql/codegen) plugin that writes
-one typed [msw](https://mswjs.io) 3 handler per named query and mutation of
-your documents: `mockUserQuery(resolver, options?)`, built on msw's
+one typed [msw](https://mswjs.io) 3 handler per named query, mutation and
+subscription of your documents (subscriptions are streamed over SSE through an
+executor): `mockUserQuery(resolver, options?)`, built on msw's
 `graphql.link(endpoint)`. Each handler checks the variables it receives with
 the Zod schema
 [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod)
@@ -246,6 +247,49 @@ test('shows the user', async () => {
 Under Bun, msw 3's `setupServer` intercepts no `fetch`: see
 [Under Bun](docs/guide/handlers.md#under-bun).
 
+### Subscriptions over SSE
+
+A named `subscription` gets `mock<Name>Subscription(execute, options?)`, an
+msw `HttpHandler` that answers only a POST to the endpoint with
+`Accept: text/event-stream` whose operation is that subscription. It checks
+the variables as a query's are, then hands the request to `execute`, which
+streams it. Pass `createExecutor({ schema })` from
+[`@nxgt/msw-graphql`](https://www.npmjs.com/package/@nxgt/msw-graphql) (0.4.0
+or later) and the stream comes from the schema's `Subscription` resolvers
+(graphql-sse distinct connections: `next` events, then `complete`), with no
+wrapper around `fetch`. Any other request, this subscription sent without the
+event-stream `Accept` included, goes on to the next handler.
+
+```ts
+import { createExecutor } from '@nxgt/msw-graphql';
+import { buildMockSchema } from '@nxgt/msw-graphql/schema';
+import { mockItemChangedSubscription } from './generated/msw';
+
+const typeDefs = `
+	type Item { id: ID!, name: String! }
+	type Query { item(id: ID!): Item }
+	type Subscription { itemChanged(id: ID!): Item }
+`;
+
+const schema = buildMockSchema({
+	typeDefs,
+	resolvers: {
+		Subscription: {
+			itemChanged: {
+				subscribe: async function* (_, { id }) {
+					yield { itemChanged: { id, name: 'first' } };
+				},
+			},
+		},
+	},
+});
+
+server.use(mockItemChangedSubscription(createExecutor({ schema })));
+```
+
+`execute` is any `(input: { query, variables, operationName, request }) =>
+Promise<Response>`; this package does not depend on `@nxgt/msw-graphql`.
+
 ## Options
 
 | Option | Type | Default | Effect |
@@ -263,8 +307,9 @@ Each is detailed in [Handlers](docs/guide/handlers.md).
 ## Traps
 
 - A handler is written for a **named** query or mutation. An anonymous
-  operation has no name for msw to match, and a subscription none: msw 3 mocks
-  subscriptions over WebSocket only (see the [roadmap](docs/roadmap.md)).
+  operation has no name for msw to match. A subscription's handler streams
+  over SSE only, through the executor you give it; msw's own WebSocket
+  subscription handler is not generated.
 - Take the types from the client preset or `typescript-operations` (the wire
   types), not from codegen-zod's file, whose result types are decoded (a
   `DateTime` is a `Date` there).
@@ -286,8 +331,9 @@ Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 The package exports `plugin` and the `CodegenMswConfig` and `DocumentFile`
 types from `.`; graphql-codegen finds `plugin` by the package name. The
 generated file's runtime is `./runtime`: `mockOperation`,
-`invalidInputRefusal`, `badUserInputRefusal`, `errorResponse`,
-`isGraphQLError` and their types, and, re-exported from
+`mockSubscription`, `invalidInputRefusal`, `badUserInputRefusal`, `errorResponse`,
+`isGraphQLError` and their types (`MockedSubscription`,
+`SubscriptionExecutor` among them), and, re-exported from
 `@nxgt/graphql-validation`, `invalidInputError`, `fieldsError`,
 `fieldIssueOf`, `inputPath`, `Translate`, `FieldIssue` and `FieldError`.
 
