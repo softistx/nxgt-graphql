@@ -4,7 +4,7 @@
 
 | Page | Read it when |
 | --- | --- |
-| [Handlers](guide/handlers.md) | you want to know what the plugin writes: the handlers, where their types and schemas come from, naming, the endpoint, the resolver, how an invalid input is answered (`invalid-input`, `bad-user-input`, your own), tests under Node and Bun, and the runtime |
+| [Handlers](guide/handlers.md) | you want to know what the plugin writes: the handlers, where their types and schemas come from, naming, the endpoint, the resolver, how an invalid input is answered (`invalid-input`, `bad-user-input`, your own), subscriptions over SSE, tests under Node and Bun, and the runtime |
 
 ## Reference
 

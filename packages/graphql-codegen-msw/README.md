@@ -2,7 +2,8 @@
 
 A [graphql-codegen](https://the-guild.dev/graphql/codegen) plugin that writes
 one typed [msw](https://mswjs.io) 3 handler per named query, mutation and
-subscription of your documents: `mockUserQuery(resolver, options?)`, built on msw's
+subscription of your documents (subscriptions are streamed over SSE through an
+executor): `mockUserQuery(resolver, options?)`, built on msw's
 `graphql.link(endpoint)`. Each handler checks the variables it receives with
 the Zod schema
 [`@nxgt/graphql-codegen-zod`](https://www.npmjs.com/package/@nxgt/graphql-codegen-zod)
@@ -264,6 +265,12 @@ import { createExecutor } from '@nxgt/msw-graphql';
 import { buildMockSchema } from '@nxgt/msw-graphql/schema';
 import { mockItemChangedSubscription } from './generated/msw';
 
+const typeDefs = `
+	type Item { id: ID!, name: String! }
+	type Query { item(id: ID!): Item }
+	type Subscription { itemChanged(id: ID!): Item }
+`;
+
 const schema = buildMockSchema({
 	typeDefs,
 	resolvers: {
@@ -324,8 +331,9 @@ Every error and its fix is in [Troubleshooting](docs/troubleshooting.md).
 The package exports `plugin` and the `CodegenMswConfig` and `DocumentFile`
 types from `.`; graphql-codegen finds `plugin` by the package name. The
 generated file's runtime is `./runtime`: `mockOperation`,
-`invalidInputRefusal`, `badUserInputRefusal`, `errorResponse`,
-`isGraphQLError` and their types, and, re-exported from
+`mockSubscription`, `invalidInputRefusal`, `badUserInputRefusal`, `errorResponse`,
+`isGraphQLError` and their types (`MockedSubscription`,
+`SubscriptionExecutor` among them), and, re-exported from
 `@nxgt/graphql-validation`, `invalidInputError`, `fieldsError`,
 `fieldIssueOf`, `inputPath`, `Translate`, `FieldIssue` and `FieldError`.
 

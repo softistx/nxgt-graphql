@@ -561,7 +561,9 @@ test('a missing user', async () => {
 - **A fragment**: it is not an operation.
 
 Persisted queries (a request with a hash and no query text) and batched
-requests (an array of operations in one POST) are not matched either.
+requests (an array of operations in one POST) are not matched either: a body
+without a `query` string, or an array, falls through to the next handler, a
+subscription handler's included.
 
 ## Subscriptions over SSE
 
@@ -580,6 +582,12 @@ event-stream `Accept` included, goes on to the next handler.
 import { createExecutor } from '@nxgt/msw-graphql';
 import { buildMockSchema } from '@nxgt/msw-graphql/schema';
 import { mockItemChangedSubscription } from './generated/msw';
+
+const typeDefs = `
+	type Item { id: ID!, name: String! }
+	type Query { item(id: ID!): Item }
+	type Subscription { itemChanged(id: ID!): Item }
+`;
 
 const schema = buildMockSchema({
 	typeDefs,

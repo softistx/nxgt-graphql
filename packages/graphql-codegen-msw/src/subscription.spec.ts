@@ -39,6 +39,7 @@ function executor(calls: unknown[] = []): SubscriptionExecutor {
 			schema,
 			document: parse(query),
 			variableValues: variables ?? {},
+			operationName,
 			rootValue: {
 				userChanged: async function* (args: { id: string }) {
 					yield { userChanged: { id: args.id, name: 'Ada' } };
@@ -153,4 +154,78 @@ describe('a subscription handler', () => {
 		);
 		expect(await response.text()).toContain('event: next');
 	});
+});
+
+describe('what a subscription handler leaves alone', () => {
+	const other = 'query UserChanged { userChanged(id: "u_1") { id } }';
+	const cases: {
+		name: string;
+		body: BodyInit;
+		streams?: boolean;
+	}[] = [
+		{
+			name: 'a multi-operation document whose operationName selects the subscription',
+			body: JSON.stringify({
+				query: `query Other { userChanged(id: "u_1") { id } } ${USER_CHANGED}`,
+				operationName: 'UserChanged',
+				variables: { id: 'u_1' },
+			}),
+			streams: true,
+		},
+		{
+			name: 'a multi-operation document without operationName',
+			body: JSON.stringify({
+				query: `query Other { userChanged(id: "u_1") { id } } ${USER_CHANGED}`,
+				variables: { id: 'u_1' },
+			}),
+		},
+		{
+			name: 'an operationName that matches nothing',
+			body: JSON.stringify({
+				query: USER_CHANGED,
+				operationName: 'Nope',
+				variables: { id: 'u_1' },
+			}),
+		},
+		{
+			name: 'a query of the same name',
+			body: JSON.stringify({ query: other }),
+		},
+		{
+			name: 'a mutation of the same name',
+			body: JSON.stringify({ query: 'mutation UserChanged { x }' }),
+		},
+		{ name: 'a body that is not JSON', body: 'not json' },
+		{ name: 'a body without query', body: JSON.stringify({ id: 'abc' }) },
+		{
+			name: 'a batched body',
+			body: JSON.stringify([{ query: USER_CHANGED }]),
+		},
+		{
+			name: 'a query that does not parse',
+			body: JSON.stringify({ query: '{{' }),
+		},
+	];
+
+	for (const { name, body, streams } of cases) {
+		test(`${name}: ${streams ? 'streams' : 'falls through to the next handler'}`, async () => {
+			const calls: unknown[] = [];
+			server.use(
+				defaults.mockUserChangedSubscription(executor(calls)),
+				http.post(ENDPOINT, () => HttpResponse.json({ data: 'next' })),
+			);
+			const response = await fetch(ENDPOINT, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', accept: SSE },
+				body,
+			});
+			if (streams) {
+				expect(await response.text()).toContain('event: next');
+				expect(calls).toHaveLength(1);
+			} else {
+				expect(await response.json()).toEqual({ data: 'next' });
+				expect(calls).toEqual([]);
+			}
+		});
+	}
 });
