@@ -87,7 +87,7 @@
     },
     "packages/graphql-scalars": {
       "name": "@nxgt/graphql-scalars",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "bin": {
         "nxgt-graphql-scalars": "./dist/cli.js",
       },
