@@ -2,7 +2,7 @@ import * as changeCase from 'change-case';
 import type { CodegenMswConfig } from './config';
 
 /** The operation kinds a handler is written for. */
-export type MockedKind = 'query' | 'mutation';
+export type MockedKind = 'query' | 'mutation' | 'subscription';
 
 /**
  * The names the generated file uses: each type as `typescript-operations`

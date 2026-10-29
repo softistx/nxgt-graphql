@@ -9,7 +9,7 @@ import type { AnyGraphQLError } from './response';
 
 /** The operation whose variables were refused. */
 export interface RefusedOperation {
-	readonly type: 'query' | 'mutation';
+	readonly type: 'query' | 'mutation' | 'subscription';
 	/** The operation's name in the document: `SignUp`. */
 	readonly name: string;
 }

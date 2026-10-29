@@ -46,17 +46,36 @@ export function plugin(
 	]);
 	// Only what the file uses is imported: no operation, no handler types.
 	const any = operations.length > 0;
-	const handler = any ? imports.type('msw/graphql', 'GraphQLHandler') : '';
+	const plain = operations.some(({ kind }) => kind !== 'subscription');
+	const handler = plain ? imports.type('msw/graphql', 'GraphQLHandler') : '';
+	const subscribing = operations.some(({ kind }) => kind === 'subscription');
+	const subscription = {
+		handler: subscribing ? imports.type('msw', 'HttpHandler') : '',
+		executor: subscribing ? imports.type(RUNTIME, 'SubscriptionExecutor') : '',
+		mock: subscribing ? imports.value(RUNTIME, 'mockSubscription') : '',
+	};
 	const runtime = {
-		resolver: any ? imports.type(RUNTIME, 'GraphQLMockResolver') : '',
+		resolver: plain ? imports.type(RUNTIME, 'GraphQLMockResolver') : '',
 		options: any ? imports.type(RUNTIME, 'MockOptions') : '',
 		invalidInput: imports.type(RUNTIME, 'InvalidInput'),
 		inputTypes: any ? imports.type(RUNTIME, 'InputTypes') : '',
-		mock: any ? imports.value(RUNTIME, 'mockOperation') : '',
+		mock: plain ? imports.value(RUNTIME, 'mockOperation') : '',
 	};
 	const refusal = refusalCode(options, imports);
 	const blocks = operations.map((operation) => {
 		const { name, kind } = operation;
+		const factory = naming.handler(name, kind);
+		if (kind === 'subscription') {
+			const schema = imports.value(
+				options.schemasImport,
+				naming.schema(naming.variables(name, kind)),
+			);
+			return subscriptionBlock(operation, factory, {
+				...subscription,
+				options: runtime.options,
+				schema,
+			});
+		}
 		const result = imports.type(options.typesImport, naming.result(name, kind));
 		const variables = imports.type(
 			options.typesImport,
@@ -66,7 +85,7 @@ export function plugin(
 			options.schemasImport,
 			naming.schema(naming.variables(name, kind)),
 		);
-		return handlerBlock(operation, naming.handler(name, kind), {
+		return handlerBlock(operation, factory, {
 			...runtime,
 			handler,
 			result,
@@ -127,6 +146,32 @@ interface HandlerNames {
 	readonly result: string;
 	readonly variables: string;
 	readonly schema: string;
+}
+
+/** The local names one subscription handler's source uses. */
+interface SubscriptionNames {
+	readonly handler: string;
+	readonly executor: string;
+	readonly options: string;
+	readonly mock: string;
+	readonly schema: string;
+}
+
+function subscriptionBlock(
+	{ name, node }: MockedOperationNode,
+	factory: string,
+	names: SubscriptionNames,
+): string {
+	const operation = `{ type: "subscription", name: ${JSON.stringify(name)}, variables: ${names.schema}, variableTypes: ${variableTypesCode(node)}, inputTypes, endpoint, invalidInput }`;
+	return [
+		`/** Mocks the ${name} subscription: a POST with \`Accept: text/event-stream\` is streamed by \`execute\` once the variables pass \`${names.schema}\`. */`,
+		`export function ${factory}(`,
+		`\texecute: ${names.executor},`,
+		`\toptions?: ${names.options},`,
+		`): ${names.handler} {`,
+		`\treturn ${names.mock}(${operation}, execute, options);`,
+		'}',
+	].join('\n');
 }
 
 function handlerBlock(

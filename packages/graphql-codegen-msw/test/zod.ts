@@ -37,6 +37,11 @@ export const zMutationSignUpArgs = z.object({
 });
 export type MutationSignUpArgs = z.output<typeof zMutationSignUpArgs>;
 
+export const zSubscriptionUserChangedArgs = z.object({
+	id: z.string().min(3),
+});
+export type SubscriptionUserChangedArgs = z.output<typeof zSubscriptionUserChangedArgs>;
+
 export const zUser = z.object({
 	__typename: z.literal("User").optional(),
 	id: z.string(),
@@ -69,6 +74,9 @@ export const zSubscription = z.object({
 	get joined() {
 		return zUser.nullish();
 	},
+	get userChanged() {
+		return zUser.nullish();
+	},
 });
 export type Subscription = z.output<typeof zSubscription>;
 
@@ -94,6 +102,11 @@ export const zJoinedSubscriptionVariables = z.object({
 
 });
 export type JoinedSubscriptionVariables = z.input<typeof zJoinedSubscriptionVariables>;
+
+export const zUserChangedSubscriptionVariables = z.object({
+	id: z.string().min(3),
+});
+export type UserChangedSubscriptionVariables = z.input<typeof zUserChangedSubscriptionVariables>;
 
 export const zUserQuery = z.object({
 	user: z.object({
@@ -125,3 +138,11 @@ export const zJoinedSubscription = z.object({
 	}).nullable(),
 });
 export type JoinedSubscription = z.output<typeof zJoinedSubscription>;
+
+export const zUserChangedSubscription = z.object({
+	userChanged: z.object({
+		id: z.string(),
+		name: z.string(),
+	}).nullable(),
+});
+export type UserChangedSubscription = z.output<typeof zUserChangedSubscription>;

@@ -558,13 +558,52 @@ test('a missing user', async () => {
 ## What gets no handler
 
 - **An anonymous operation**: msw matches by name, and has none to match.
-- **A subscription**: msw 3 mocks subscriptions over WebSocket
-  (`graphql-transport-ws`) only, through another resolver shape. See the
-  [roadmap](../roadmap.md).
 - **A fragment**: it is not an operation.
 
 Persisted queries (a request with a hash and no query text) and batched
 requests (an array of operations in one POST) are not matched either.
+
+## Subscriptions over SSE
+
+A named `subscription` gets `mock<Name>Subscription(execute, options?)`, an
+msw `HttpHandler` that answers only a POST to the endpoint with
+`Accept: text/event-stream` whose operation is that subscription. It checks
+the variables as a query's are, then hands the request to `execute`, which
+streams it. Pass `createExecutor({ schema })` from
+[`@nxgt/msw-graphql`](https://www.npmjs.com/package/@nxgt/msw-graphql) (0.4.0
+or later) and the stream comes from the schema's `Subscription` resolvers
+(graphql-sse distinct connections: `next` events, then `complete`), with no
+wrapper around `fetch`. Any other request, this subscription sent without the
+event-stream `Accept` included, goes on to the next handler.
+
+```ts
+import { createExecutor } from '@nxgt/msw-graphql';
+import { buildMockSchema } from '@nxgt/msw-graphql/schema';
+import { mockItemChangedSubscription } from './generated/msw';
+
+const schema = buildMockSchema({
+	typeDefs,
+	resolvers: {
+		Subscription: {
+			itemChanged: {
+				subscribe: async function* (_, { id }) {
+					yield { itemChanged: { id, name: 'first' } };
+				},
+			},
+		},
+	},
+});
+
+server.use(mockItemChangedSubscription(createExecutor({ schema })));
+```
+
+`execute` is any `(input: { query, variables, operationName, request }) =>
+Promise<Response>`; this package does not depend on `@nxgt/msw-graphql`.
+
+The handler is `mockSubscription` from the runtime; a `SubscriptionExecutor`
+is the type of `execute`. An invalid input is refused before the stream with a
+real status and a JSON `{ errors }`, as for a query. msw 3's WebSocket
+subscriptions (`graphql-transport-ws`) are not generated.
 
 ## The runtime
 

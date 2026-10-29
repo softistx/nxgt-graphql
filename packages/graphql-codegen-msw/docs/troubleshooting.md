@@ -128,10 +128,8 @@ would collide, as their types do in the typescript plugins' files.
 
 **When:** an operation is in the documents, but the generated file has no
 `mock…` for it.
-**Why:** it is anonymous (msw matches by name), or a subscription (msw 3 mocks
-subscriptions over WebSocket only; see the [roadmap](roadmap.md)).
-**Fix:** name the operation. For a subscription, use msw's own
-`graphql.link(endpoint).subscription(name, resolver)`.
+**Why:** it is anonymous (msw matches by name).
+**Fix:** name the operation.
 
 ## The generated file
 
@@ -302,3 +300,11 @@ schema, and their shape may change with this package.
 and `toJSON`) is answered as a GraphQL error; anything else is msw's, which
 answers 500.
 **Fix:** throw a `GraphQLError`, or return `errorResponse(...)`.
+
+### A subscription handler never answers
+
+**When:** `mock<Name>Subscription(execute)` is registered, but the request
+falls through to the next handler or is unhandled.
+**Why:** it answers only a POST with `Accept: text/event-stream` whose
+operation is that subscription, named in the document (or by `operationName`).
+**Fix:** send the header, and name the subscription operation.

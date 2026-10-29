@@ -18,6 +18,11 @@ export {
 	mockOperation,
 } from './mock-operation';
 export {
+	type MockedSubscription,
+	mockSubscription,
+	type SubscriptionExecutor,
+} from './mock-subscription';
+export {
 	badUserInputRefusal,
 	type InvalidInput,
 	type InvalidInputAnswer,
