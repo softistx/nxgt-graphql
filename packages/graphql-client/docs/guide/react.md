@@ -221,6 +221,9 @@ function Ticker({ room }: { room: string }) {
 | `headers` | over the client's headers; compared by value |
 | `onOpen()` | called once the server accepted the stream, before any result, so a quiet stream is known to be open; the latest function is used, so an inline arrow does not reconnect |
 | `onData(data)` | called with each result before the component renders it; the latest function is used, so an inline arrow does not reconnect |
+| `onComplete()` | called when the stream ended cleanly (`complete`, or the server closed it), never for an error or an unmount; the latest function is used |
+| `onError(error)` | called with what ended the subscription when it failed, never for an abort; the latest function is used |
+| `onUnauthenticated(error)` | called after `onError` when the failure is an `ApiStatusError` or `ApiError` with `status` 401, or an `ApiError` whose `code` is `UNAUTHENTICATED`; the latest function is used |
 
 - **`data`** is the last result, **`active`** is `true` from the first render
   until the subscription ends (`complete`, an error), and **`error`** is what
@@ -230,8 +233,32 @@ function Ticker({ room }: { room: string }) {
 - **It connects from an effect**, so a server render opens nothing.
 - **The connection is closed** on unmount and when the variables (by value),
   `skip` or `headers` change; a new one is opened for the new variables.
-- It is never reconnected: subscribe again (a `key` on the component, or new
-  variables) to resume after an error.
+- **It is never reconnected on its own.** The hook also returns **`restart()`**
+  (stable between renders): it closes the stream if it is open, opens a new
+  one with the same document, variables and headers, and clears `data` and
+  `error`. Nothing happens while `skip` is `true`.
+
+```tsx
+function Ticker({ room }: { room: string }) {
+  const { data, restart } = useSubscription(
+    OnTick,
+    { room },
+    {
+      // the server closes the stream after a bounded time: open the next one
+      onComplete: () => restart(),
+      // a 401, or an UNAUTHENTICATED error event: refresh, then reconnect
+      onUnauthenticated: async () => {
+        await refreshSession();
+        restart();
+      },
+    },
+  );
+  return <span>{data?.tick}</span>;
+}
+```
+
+  A backoff is the caller's: `onComplete: () => setTimeout(restart, 1000)`
+  (clear the timer on unmount).
 - A result is not written to the cache.
 
 ## `useFragment`

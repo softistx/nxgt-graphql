@@ -283,6 +283,20 @@ sends nothing, and each aborts or closes what it started on unmount.
 useSubscription(OnBookChanged, { id }, { onOpen: () => setStatus('live') });
 ```
 
+For a stream the server closes after a while, `onComplete` says it ended,
+`onUnauthenticated` receives a 401 (or an `UNAUTHENTICATED` error), and the
+returned `restart()` opens a new stream with the same variables:
+
+```tsx
+const { restart } = useSubscription(OnBookChanged, { id }, {
+  onComplete: () => restart(),
+  onUnauthenticated: async () => {
+    await refreshSession();
+    restart();
+  },
+});
+```
+
 See [React](docs/guide/react.md).
 
 ## Traps

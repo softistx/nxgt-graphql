@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GraphQLDocument } from '../document';
+import { ApiError, ApiStatusError } from '../errors';
 import type { GraphQLClient, Subscription, VariablesArgs } from '../options';
 import { useClient } from './context';
 import { headersKey, useStable, variablesKey } from './stable';
@@ -17,6 +18,24 @@ export interface UseSubscriptionOptions<TResult> {
 	 * one does not reconnect.
 	 */
 	readonly onOpen?: () => void;
+	/**
+	 * Called when the stream ended cleanly (`complete`, or the server closed
+	 * it), not for an error or an unmount, so a bounded stream is known to be
+	 * over. The latest function is called: a new one does not reconnect.
+	 */
+	readonly onComplete?: () => void;
+	/**
+	 * Called with what ended the subscription when it failed, never for an
+	 * abort. The latest function is called: a new one does not reconnect.
+	 */
+	readonly onError?: (error: unknown) => void;
+	/**
+	 * Called, after `onError`, when the failure is an unauthenticated one: an
+	 * `ApiStatusError` or an `ApiError` whose `status` is 401, or whose first
+	 * error's `extensions.code` is `UNAUTHENTICATED`. Refresh the credentials,
+	 * then call `restart()`.
+	 */
+	readonly onUnauthenticated?: (error: ApiError | ApiStatusError) => void;
 }
 
 export interface SubscriptionState<TResult> {
@@ -26,6 +45,12 @@ export interface SubscriptionState<TResult> {
 	readonly error: unknown;
 	/** The subscription is open, or connecting. */
 	readonly active: boolean;
+	/**
+	 * Closes the subscription, if open, and opens a new one with the same
+	 * document, variables and headers; `data` and `error` are cleared. Stable
+	 * between renders. Nothing happens while `skip` is `true`.
+	 */
+	readonly restart: () => void;
 }
 
 interface Connection {
@@ -34,14 +59,19 @@ interface Connection {
 	readonly variables: unknown;
 	readonly headers: HeadersInit | undefined;
 	readonly skip: boolean;
+	/** Bumped by `restart()`, so the connection is a new one. */
+	readonly attempt: number;
 }
 
 interface Callbacks {
 	readonly onData?: (data: unknown) => void;
 	readonly onOpen?: () => void;
+	readonly onComplete?: () => void;
+	readonly onError?: (error: unknown) => void;
+	readonly onUnauthenticated?: (error: ApiError | ApiStatusError) => void;
 }
 
-type Recorded = SubscriptionState<unknown> & {
+type Recorded = Omit<SubscriptionState<unknown>, 'restart'> & {
 	readonly connection: Connection | undefined;
 };
 
@@ -57,7 +87,10 @@ export function useSubscription<TResult, TVariables>(
 	>
 ): SubscriptionState<TResult> {
 	const client = useClient();
-	const { skip = false, onData, onOpen } = options;
+	const { skip = false, onData, onOpen, onComplete, onError } = options;
+	const { onUnauthenticated } = options;
+	const [attempt, setAttempt] = useState(0);
+	const restart = useCallback(() => setAttempt((n) => n + 1), []);
 	const variables = useStable(raw, variablesKey(raw));
 	const headers = useStable(options.headers, headersKey(options.headers));
 	const connection = useMemo<Connection>(
@@ -67,12 +100,19 @@ export function useSubscription<TResult, TVariables>(
 			variables,
 			headers,
 			skip,
+			attempt,
 		}),
-		[client, document, variables, headers, skip],
+		[client, document, variables, headers, skip, attempt],
 	);
 	const latest = useRef<Callbacks>({});
 	useEffect(() => {
-		latest.current = { onData, onOpen } as Callbacks;
+		latest.current = {
+			onData,
+			onOpen,
+			onComplete,
+			onError,
+			onUnauthenticated,
+		} as Callbacks;
 	});
 	const [recorded, setRecorded] = useState<Recorded>(() => initial(undefined));
 	useEffect(
@@ -82,6 +122,12 @@ export function useSubscription<TResult, TVariables>(
 				{
 					onData: (data) => latest.current.onData?.(data),
 					onOpen: () => latest.current.onOpen?.(),
+					onComplete: () => latest.current.onComplete?.(),
+					onError: (error) => {
+						latest.current.onError?.(error);
+						if (isUnauthenticated(error))
+							latest.current.onUnauthenticated?.(error);
+					},
 				},
 				setRecorded,
 			),
@@ -90,7 +136,15 @@ export function useSubscription<TResult, TVariables>(
 	const shown =
 		recorded.connection === connection ? recorded : initial(connection);
 	const { data, error, active } = shown;
-	return { data: data as TResult | undefined, error, active };
+	return { data: data as TResult | undefined, error, active, restart };
+}
+
+function isUnauthenticated(error: unknown): error is ApiError | ApiStatusError {
+	if (error instanceof ApiStatusError) return error.status === 401;
+	return (
+		error instanceof ApiError &&
+		(error.status === 401 || error.code === 'UNAUTHENTICATED')
+	);
 }
 
 function initial(connection: Connection | undefined): Recorded {
@@ -105,7 +159,7 @@ function initial(connection: Connection | undefined): Recorded {
 /** Reads the subscription until it ends; the cleanup closes it. */
 function listen(
 	connection: Connection,
-	callbacks: Required<Callbacks>,
+	callbacks: Required<Omit<Callbacks, 'onUnauthenticated'>>,
 	record: (state: Recorded) => void,
 ): () => void {
 	if (connection.skip) return () => {};
@@ -122,6 +176,7 @@ function listen(
 	} catch (error) {
 		// A query given to subscribe(), a document with no persisted hash.
 		record({ connection, data: undefined, error, active: false });
+		callbacks.onError(error);
 		return () => {};
 	}
 	let last: unknown;
@@ -133,11 +188,15 @@ function listen(
 				callbacks.onData(data);
 				record({ connection, data, error: undefined, active: true });
 			}
-			if (!signal.aborted)
+			if (!signal.aborted) {
 				record({ connection, data: last, error: undefined, active: false });
+				callbacks.onComplete();
+			}
 		} catch (error) {
-			if (!signal.aborted)
+			if (!signal.aborted) {
 				record({ connection, data: last, error, active: false });
+				callbacks.onError(error);
+			}
 		}
 	};
 	loop();
