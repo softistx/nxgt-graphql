@@ -108,6 +108,10 @@ declare function render(message: { id: string; text: string }): void;
   (`useSubscription(OnMessage, { room }, { onOpen })`). It is kept in a ref:
   a new function on a render does not close and reopen the connection, and the
   latest one is called.
+- **Also in React**, `useSubscription` takes `onComplete`, `onError` and
+  `onUnauthenticated` (a 401 or an `UNAUTHENTICATED` error), and returns
+  `restart()` to open the stream again; see
+  [React](react.md#usesubscription).
 - **Requires `@nxgt/httpyz` 0.5**, which reports the accepted response.
 - **An error it throws** is logged with `console.error` and does not end the
   subscription.

@@ -1,5 +1,13 @@
 import '../../test/dom';
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	mock,
+	spyOn,
+	test,
+} from 'bun:test';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react/pure';
 import { useDom } from '../../test/dom';
 import {
@@ -206,5 +214,110 @@ describe('useSubscription', () => {
 		expect(api.streams).toHaveLength(1);
 		expect(api.streams[0]?.signal.aborted).toBe(false);
 		expect(calls).toEqual(['third']);
+	});
+
+	test('onComplete is called when the stream ends cleanly, not on an error', async () => {
+		const { api, client } = setup();
+		const onComplete = mock(() => {});
+		const onError = mock(() => {});
+		renderHook(
+			() =>
+				useSubscription(
+					TickSubscription,
+					{ room: 'a' },
+					{ onComplete, onError },
+				),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(api.streams).toHaveLength(1));
+		await act(async () => api.streams[0]?.complete());
+		await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+		expect(onError).not.toHaveBeenCalled();
+	});
+
+	test('restart opens a new stream with the same variables and clears the state', async () => {
+		const { api, client } = setup();
+		const { result } = renderHook(
+			() => useSubscription(TickSubscription, { room: 'a' }),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(api.streams).toHaveLength(1));
+		const { restart } = result.current;
+		await act(async () => {
+			api.streams[0]?.next({ data: { tick: 1 } });
+			api.streams[0]?.complete();
+		});
+		await waitFor(() => expect(result.current.active).toBe(false));
+		act(() => result.current.restart());
+		await waitFor(() => expect(api.streams).toHaveLength(2));
+		expect(api.streams[1]?.variables).toEqual({ room: 'a' });
+		expect(result.current).toMatchObject({ data: undefined, active: true });
+		expect(result.current.restart).toBe(restart);
+		await act(async () => api.streams[1]?.next({ data: { tick: 2 } }));
+		await waitFor(() => expect(result.current.data).toEqual({ tick: 2 }));
+	});
+
+	test('restart closes an open stream before opening the next', async () => {
+		const { api, client } = setup();
+		const { result } = renderHook(
+			() => useSubscription(TickSubscription, { room: 'a' }),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(api.streams).toHaveLength(1));
+		act(() => result.current.restart());
+		await waitFor(() => expect(api.streams).toHaveLength(2));
+		expect(api.streams[0]?.signal.aborted).toBe(true);
+		expect(api.streams[1]?.signal.aborted).toBe(false);
+	});
+
+	test('a 401 reaches onError, then onUnauthenticated', async () => {
+		const calls: string[] = [];
+		const client = createGraphQLClient({
+			url,
+			fetch: async () => new Response('{}', { status: 401 }),
+		});
+		const { result } = renderHook(
+			() =>
+				useSubscription(
+					TickSubscription,
+					{ room: 'a' },
+					{
+						onError: () => calls.push('error'),
+						onUnauthenticated: (error) => calls.push(`401:${error.status}`),
+					},
+				),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(calls).toEqual(['error', '401:401']));
+		expect(result.current.error).toMatchObject({ status: 401 });
+	});
+
+	test('an UNAUTHENTICATED error event reaches onUnauthenticated; another error does not', async () => {
+		const { api, client } = setup();
+		const onUnauthenticated = mock(() => {});
+		const onError = mock(() => {});
+		const { result } = renderHook(
+			() =>
+				useSubscription(
+					TickSubscription,
+					{ room: 'a' },
+					{ onError, onUnauthenticated },
+				),
+			{ wrapper: withClient(client) },
+		);
+		await waitFor(() => expect(api.streams).toHaveLength(1));
+		await act(async () =>
+			api.streams[0]?.next({
+				errors: [{ message: 'No', extensions: { code: 'UNAUTHENTICATED' } }],
+			}),
+		);
+		await waitFor(() => expect(onUnauthenticated).toHaveBeenCalledTimes(1));
+		act(() => result.current.restart());
+		await waitFor(() => expect(api.streams).toHaveLength(2));
+		await act(async () =>
+			api.streams[1]?.next({ errors: [{ message: 'Other' }] }),
+		);
+		await waitFor(() => expect(onError).toHaveBeenCalledTimes(2));
+		expect(onUnauthenticated).toHaveBeenCalledTimes(1);
 	});
 });

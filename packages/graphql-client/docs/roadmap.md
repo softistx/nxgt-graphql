@@ -41,6 +41,9 @@ In the next minor.
 - **`subscribe` takes `onOpen`: know a quiet stream is open.** It is called
   once the server accepted the connection, before any event.
   `useSubscription` takes `onOpen` too (#132).
+- **`useSubscription` handles a bounded stream.** `onComplete`, `onError`,
+  `onUnauthenticated` (a 401 or an `UNAUTHENTICATED` error) and a returned
+  `restart()` that reopens the stream with the same variables (#136).
 
 Released in 0.4.0.
 
