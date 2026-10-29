@@ -1,5 +1,11 @@
 # @nxgt/graphql-scalars
 
+## 0.7.1
+
+### Patch Changes
+
+- [#143](https://github.com/softistx/nxgt-graphql/pull/143) [`ac899b8`](https://github.com/softistx/nxgt-graphql/commit/ac899b8e9d0a3b3eb63eae4de73ddcee7c28906f) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Bump `@nxgt/zod` to `^0.2.0`.
+
 ## 0.7.0
 
 ### Minor Changes
