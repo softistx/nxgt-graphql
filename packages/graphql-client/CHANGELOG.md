@@ -1,5 +1,11 @@
 # @nxgt/graphql-client
 
+## 0.7.0
+
+### Minor Changes
+
+- [#137](https://github.com/softistx/nxgt-graphql/pull/137) [`e653d8a`](https://github.com/softistx/nxgt-graphql/commit/e653d8ab41175603a0002c389a693b1c737fb407) Thanks [@SteveGT96](https://github.com/SteveGT96)! - `useSubscription` handles a bounded stream: new options `onComplete` (the stream ended cleanly), `onError` and `onUnauthenticated` (a 401 or an `UNAUTHENTICATED` error), and a stable `restart()` in the returned state that reopens the stream with the same variables. Additive. Fixes [#136](https://github.com/softistx/nxgt-graphql/issues/136).
+
 ## 0.6.0
 
 ### Minor Changes
