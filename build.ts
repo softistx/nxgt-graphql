@@ -26,7 +26,7 @@
  * `dist/`, and what it declares would vanish for every consumer.
  */
 
-import { readdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { $ } from 'bun';
 import { declarationSpecifiers } from './scripts/artifacts/declarations';
@@ -41,6 +41,26 @@ const entrypoints: string[] = pkg.nxgt?.entrypoints ?? ['src/index.ts'];
 // instead of caching a sibling as a package without types until it restarts.
 // What this build did not write is removed at the end.
 const written = new Set<string>();
+
+// The moment this build starts, read from the file system's own clock: a file
+// in dist/ modified at or after it was written by this build. Linux stamps a
+// file with a coarse clock that can lag `Date.now()` by a tick, so the mark is
+// a file's mtime rather than the process's time.
+await mkdir('dist', { recursive: true });
+const startMark = 'dist/.build-start';
+await Bun.write(startMark, '');
+const buildStart = (await stat(startMark)).mtimeMs;
+await rm(startMark);
+async function* walk(dir: string): AsyncGenerator<string> {
+	for (const entry of await readdir(dir, { withFileTypes: true })) {
+		const full = join(dir, entry.name);
+		if (entry.isDirectory()) yield* walk(full);
+		else yield full;
+	}
+}
+async function writtenByThisBuild(file: string): Promise<boolean> {
+	return (await stat(file)).mtimeMs >= buildStart;
+}
 
 const result = await Bun.build({
 	entrypoints,
@@ -75,8 +95,17 @@ if (tsc.exitCode !== 0) {
 	console.error(listed.replace(/^TSFILE: .*\n/gm, ''), tsc.stderr.toString());
 	process.exit(1);
 }
+// What tsc emitted, read from dist/ as well as from its
+// `--listEmittedFiles` output: that output is not always the whole list. Where
+// no Node is installed (the oven/bun image) tsc runs on Bun's `node`, and its
+// stdout into a pipe can lose its last lines under load, which pruned
+// declarations as stale and failed a dependent package with TS7016
+// (softistx/nxgt-data#342).
 for (const line of listed.split('\n')) {
 	if (line.startsWith('TSFILE: ')) written.add(resolve(line.slice(8).trim()));
+}
+for await (const file of walk('dist')) {
+	if (await writtenByThisBuild(file)) written.add(resolve(file));
 }
 const emitted = new Set(written);
 
@@ -107,14 +136,6 @@ for (const file of emitted) {
 }
 
 // Copy hand-written declarations, preserving their path under src/.
-async function* walk(dir: string): AsyncGenerator<string> {
-	for (const entry of await readdir(dir, { withFileTypes: true })) {
-		const full = join(dir, entry.name);
-		if (entry.isDirectory()) yield* walk(full);
-		else yield full;
-	}
-}
-
 let copied = 0;
 for await (const file of walk('src')) {
 	if (!file.endsWith('.d.ts')) continue;
@@ -140,6 +161,9 @@ for await (const file of walk('src')) {
 let pruned = 0;
 for await (const file of walk('dist')) {
 	if (written.has(resolve(file))) continue;
+	// Belt and braces: whatever the lists above missed, a file this build
+	// wrote is never stale.
+	if (await writtenByThisBuild(file)) continue;
 	await rm(file);
 	pruned++;
 }
@@ -153,6 +177,34 @@ async function removeEmpty(dir: string): Promise<void> {
 	}
 }
 await removeEmpty('dist');
+
+// Every `types` the manifest points at must exist, or the package ships
+// without declarations and each consumer fails with TS7016. Fail here, in the
+// package that lost them, rather than in the next one to typecheck.
+const typesPaths = new Set<string>();
+function collectTypes(value: unknown, key?: string): void {
+	if (typeof value === 'string') {
+		if (key === 'types' || key === 'typings') typesPaths.add(value);
+		return;
+	}
+	if (value === null || typeof value !== 'object') return;
+	for (const [k, v] of Object.entries(value)) collectTypes(v, k);
+}
+collectTypes(pkg.exports);
+collectTypes({ types: pkg.types, typings: pkg.typings });
+const missingTypes: string[] = [];
+for (const path of typesPaths) {
+	if (!path.includes('*') && !(await Bun.file(path).exists())) {
+		missingTypes.push(path);
+	}
+}
+if (missingTypes.length > 0) {
+	console.error(
+		`${name}: the manifest's types point at ${missingTypes.join(', ')}, ` +
+			'which this build did not leave in dist/.',
+	);
+	process.exit(1);
+}
 
 // A bin runs as a file: it keeps the `#!` line Bun.build carries over from
 // its entry, and it must be executable, or `node_modules/.bin/<cmd>` fails.
