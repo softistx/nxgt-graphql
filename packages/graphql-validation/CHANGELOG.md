@@ -1,5 +1,11 @@
 # @nxgt/graphql-validation
 
+## 0.8.1
+
+### Patch Changes
+
+- [#146](https://github.com/softistx/nxgt-graphql/pull/146) [`e727a0c`](https://github.com/softistx/nxgt-graphql/commit/e727a0caa7aac128cb4cbb448406d418722ac647) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Describe the shipped `@constraint` SDL: the directive and each of its 15 arguments now carry a description (what it enforces, bounds, the values it applies to, how a refusal reaches the client), in `constraintTypeDefs`, `graphql/constraint.graphqls` and `nxgt-graphql-validation typedefs`. A spec fails when any shipped SDL element lacks one. A rule now declares its `description`.
+
 ## 0.8.0
 
 ### Minor Changes
