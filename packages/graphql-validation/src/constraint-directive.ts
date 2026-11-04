@@ -11,9 +11,15 @@ import { rules } from './rules';
  * resolver's result is the output scalars' job, and a directive that checked
  * nothing there would be a promise broken in silence.
  */
-export const constraintTypeDefs: string = `directive @constraint(
+export const constraintTypeDefs: string = `"""
+Validates an argument or an input field when the request arrives, before the resolver runs. A value that breaks a constraint is refused with a BAD_USER_INPUT error whose extensions list each issue with its path and the constraint that refused it; null and omitted values are not checked. Each argument below is one constraint, and they combine on one field.
+"""
+directive @constraint(
 ${Object.values(rules)
-	.map((rule) => `\t${rule.argument}: ${rule.type}`)
+	.map(
+		(rule) =>
+			`\t"""\n\t${rule.description}\n\t"""\n\t${rule.argument}: ${rule.type}`,
+	)
 	.join('\n')}
 ) on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
 `;
