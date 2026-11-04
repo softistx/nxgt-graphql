@@ -45,6 +45,11 @@ export interface Rule<
 	readonly argument: A;
 	readonly type: T;
 	readonly target: K;
+	/**
+	 * The argument's description in the shipped SDL: what it enforces, its
+	 * bounds, the values it applies to and how a refusal reaches the client.
+	 */
+	readonly description: string;
 	readonly base?: true;
 	readonly toZod: (
 		schema: Targets[K],

@@ -326,6 +326,7 @@ packages/graphql-validation/graphql/constraint.graphqls   shipped, generated: `b
 ### Invariants
 
 - **graphql 16 and 17 both work**, proved as for scalars.
+- **Every shipped SDL element is described.** The directive and each argument carry a description (a rule's `description`); `described.spec.ts` fails on one without. The SDL is the only documentation an agent reading the schema gets.
 - **`@constraint` is never a silent promise.** It is declared on
   `ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION` only. `withValidation` throws,
   naming the place, on a constraint that cannot apply (wrong kind, custom

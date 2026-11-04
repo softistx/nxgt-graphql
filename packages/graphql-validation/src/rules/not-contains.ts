@@ -6,6 +6,8 @@ export const notContainsRule = defineRule({
 	argument: 'notContains',
 	type: 'String',
 	target: 'string',
+	description:
+		'The string must not contain this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values.',
 	// `refine` keeps the schema's own type, so later rules still chain.
 	toZod: (schema, value) =>
 		schema.refine((input) => !input.includes(value), message(value)),
