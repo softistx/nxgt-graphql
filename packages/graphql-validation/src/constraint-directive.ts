@@ -17,7 +17,8 @@ Validates an argument or an input field when the request arrives, before the res
 directive @constraint(
 ${Object.values(rules)
 	.map(
-		(rule) => `\t"""${rule.description}"""\n\t${rule.argument}: ${rule.type}`,
+		(rule) =>
+			`\t"""\n\t${rule.description}\n\t"""\n\t${rule.argument}: ${rule.type}`,
 	)
 	.join('\n')}
 ) on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION

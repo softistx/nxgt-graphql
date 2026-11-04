@@ -8,7 +8,7 @@ export const formatRule = defineRule({
 	type: 'String',
 	target: 'string',
 	description:
-		'The string must match this named format: byte, date, date-time, email, ipv4, ipv6, uri or uuid, or a format the server registered. An unknown name fails at server startup. Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values.',
+		'The string must match this named format: byte, date, date-time, email, ipv4, ipv6, uri or uuid, or a format the server registered. An unknown name fails at server startup. Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.',
 	base: true,
 	toZod: (_schema, value, { formats }) => formats.named(value).toZod(),
 	toCode: (_schema, value, { formats, formatCode }) => {

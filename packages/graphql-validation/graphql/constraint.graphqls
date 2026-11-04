@@ -5,34 +5,64 @@
 Validates an argument or an input field when the request arrives, before the resolver runs. A value that breaks a constraint is refused with a BAD_USER_INPUT error whose extensions list each issue with its path and the constraint that refused it; null and omitted values are not checked. Each argument below is one constraint, and they combine on one field.
 """
 directive @constraint(
-	"""The string must contain this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must contain this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	contains: String
-	"""The string must end with this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must end with this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	endsWith: String
-	"""The number must be strictly less than this value (the value itself is refused). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values."""
+	"""
+	The number must be strictly less than this value (the value itself is refused). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values.
+	"""
 	exclusiveMax: Float
-	"""The number must be strictly greater than this value (the value itself is refused). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values."""
+	"""
+	The number must be strictly greater than this value (the value itself is refused). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values.
+	"""
 	exclusiveMin: Float
-	"""The string must match this named format: byte, date, date-time, email, ipv4, ipv6, uri or uuid, or a format the server registered. An unknown name fails at server startup. Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must match this named format: byte, date, date-time, email, ipv4, ipv6, uri or uuid, or a format the server registered. An unknown name fails at server startup. Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	format: String
-	"""The list must hold at most this many items (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to list values."""
+	"""
+	The list must hold at most this many items (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to list values.
+	"""
 	maxItems: Int
-	"""The string must be at most this many characters long (UTF-16 code units, inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must be at most this many characters long (UTF-16 code units, inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	maxLength: Int
-	"""The number must be less than or equal to this value (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values."""
+	"""
+	The number must be less than or equal to this value (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values.
+	"""
 	max: Float
-	"""The list must hold at least this many items (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to list values."""
+	"""
+	The list must hold at least this many items (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to list values.
+	"""
 	minItems: Int
-	"""The string must be at least this many characters long (UTF-16 code units, inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must be at least this many characters long (UTF-16 code units, inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	minLength: Int
-	"""The number must be greater than or equal to this value (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values."""
+	"""
+	The number must be greater than or equal to this value (inclusive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values.
+	"""
 	min: Float
-	"""The number must be a whole multiple of this value (for example 5 accepts 0, 5 and 10). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values."""
+	"""
+	The number must be a whole multiple of this value (for example 5 accepts 0, 5 and 10). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to Int and Float values.
+	"""
 	multipleOf: Float
-	"""The string must not contain this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must not contain this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	notContains: String
-	"""The string must match this regular expression (JavaScript syntax, not anchored unless it uses ^ and $). An invalid expression fails at server startup. Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must match this regular expression (JavaScript syntax, not anchored unless it uses ^ and $). An invalid expression fails at server startup. Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	pattern: String
-	"""The string must start with this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String values."""
+	"""
+	The string must start with this text (case-sensitive). Refused otherwise with a BAD_USER_INPUT error naming the constraint. Applies to String and ID values.
+	"""
 	startsWith: String
 ) on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
