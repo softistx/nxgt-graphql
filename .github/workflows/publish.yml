@@ -1,0 +1,46 @@
+name: Publish
+
+# Publishing to npm happens here and only here: a tag or a GitHub release
+# triggers it, with the organisation secret NPM_TOKEN. Never publish locally.
+# A release that creates a tag fires both events; the concurrency group makes
+# the second run wait, and scripts/publish.ts skips every version the registry
+# already has, so nothing is published twice.
+on:
+  push:
+    tags: ['v*', '**@*']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # No `environment: npm`: its develop-only branch policy blocks tag refs.
+    # NPM_TOKEN is the softistx organisation secret.
+    steps:
+      - name: Checkout the tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Build packages
+        run: bun run build
+      - name: Verify the artifacts
+        run: bun run verify:artifacts
+      # scripts/publish.ts skips versions already on npm; bunfig.toml reads
+      # $NPM_TOKEN. Errors fail the job. Not changeset:publish: it would
+      # build a second time.
+      - name: Publish
+        run: bun run scripts/publish.ts
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
