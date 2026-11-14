@@ -12,6 +12,7 @@ import {
 	fieldsError,
 	inputPath,
 	invalidInputError,
+	invalidInputOf,
 	type Translate,
 	validated,
 	withValidation,
@@ -21,7 +22,7 @@ import {
 	constraintsOn,
 	inputCode,
 } from '@nxgt/graphql-validation/codegen';
-import { buildSchema } from 'graphql';
+import { buildSchema, GraphQLError } from 'graphql';
 import { z } from 'zod';
 
 export const signUp = validated(
@@ -145,6 +146,15 @@ export const fromZod = invalidInputError(
 	{ translate },
 );
 export const mapIssue = fieldIssueOf;
+export const reshape = invalidInputOf;
+export const reshapeAll = () =>
+	invalidInputOf(new GraphQLError('x'), { translate });
+export const reshapeBad = () =>
+	invalidInputOf(
+		new GraphQLError('x'),
+		// @ts-expect-error -- only `translate` is an option
+		{ status: 400 },
+	);
 export const codes = FIELD_CODES;
 export const symbolPath = inputPath(['input', Symbol('k'), 0]);
 

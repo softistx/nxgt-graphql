@@ -148,7 +148,7 @@ const issueOf = (issue: z.core.$ZodIssue): FieldIssue =>
 
 ## From a `@constraint` refusal
 
-`constraintInvalidInput(error, { translate })` turns the `BAD_USER_INPUT`
+`invalidInputOf(error, { translate })` turns the `BAD_USER_INPUT`
 error of `withValidation` / `validated`, thrown directly or wrapped by
 graphql-js (its `originalError`), into `invalidInputError`'s shape, so a
 server answers one error whatever raised it. Any other error comes back as
@@ -158,14 +158,19 @@ location (`nodes`, `source`, `positions`, `path`) is kept.
 | `@constraint` argument | `code` (under `validation.errors.`) | `params` |
 | --- | --- | --- |
 | `minLength` / `maxLength` | `too-short` / `too-long` | `{ min }` / `{ max }` |
-| `min`, `exclusiveMin` / `max`, `exclusiveMax` | `out-of-range` | `{ min }` / `{ max }` |
-| `multipleOf` | `out-of-range` | none |
+| `min` / `max` | `out-of-range` | `{ min }` / `{ max }` |
+| `exclusiveMin` / `exclusiveMax` | `out-of-range` | `{ exclusiveMin }` / `{ exclusiveMax }` |
+| `multipleOf` | `out-of-range` | `{ multipleOf }` |
 | `minItems` / `maxItems` | `too-few` / `too-many` | `{ min }` / `{ max }` |
-| `format`, `pattern` | `invalid-format` | none |
+| `format` | `invalid-format` | `{ format }` (`'email'`) |
+| `pattern` | `invalid-format` | none, the regex never reaches a client |
 | `startsWith`, `endsWith`, `contains`, `notContains`, or an issue with no `constraint` | `invalid` | none |
 
+The exclusive bounds keep their own keys, so a message can say "more than
+{exclusiveMin}" rather than "at least {min}" for a refused `0`.
+
 ```ts
-import { constraintInvalidInput } from '@nxgt/graphql-validation';
+import { invalidInputOf } from '@nxgt/graphql-validation';
 
 const plugin = {
   onExecute: () => ({
@@ -174,7 +179,7 @@ const plugin = {
       setResult({
         ...result,
         errors: result.errors.map((error) =>
-          constraintInvalidInput(error, { translate: t }),
+          invalidInputOf(error, { translate: t }),
         ),
       });
     },
@@ -254,6 +259,12 @@ interface FieldError {
 }
 
 type Translate = (code: string, params?: IssueParams) => string;
+
+/** A `@constraint` refusal as `invalidInputError`; any other error as it is. */
+declare function invalidInputOf(
+  error: GraphQLError,
+  options?: { readonly translate?: Translate },
+): GraphQLError;
 
 type InvalidInputOptions = GraphQLErrorOptions & { readonly translate?: Translate };
 type FieldsErrorOptions = InvalidInputOptions & {

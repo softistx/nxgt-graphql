@@ -234,24 +234,36 @@ if (!result.success)
 ```
 
 For an API that uses `withValidation` or `validated` and answers invalid input
-this way, `constraintInvalidInput(error, { translate })` converts their
+this way, `invalidInputOf(error, { translate })` converts their
 `BAD_USER_INPUT` refusal (thrown directly, or wrapped by graphql-js with the
-field's location) into the same error, and returns any other error as it is.
-Each field carries the bound the directive declared in `params`:
+field's location) into the same error, and returns any other error as it is
+(the same object). Each field carries the value the directive declared in
+`params`, under the argument's own key (`{ max }`, `{ exclusiveMin }`, …):
 
 ```ts
-import { constraintInvalidInput } from '@nxgt/graphql-validation';
+import { invalidInputOf } from '@nxgt/graphql-validation';
 
-// in a Yoga plugin's onExecuteDone, or a maskedError / formatError hook
-const reshaped = result.errors.map((error) =>
-  constraintInvalidInput(error, { translate: t }),
-);
+// in a graphql-yoga plugin
+const plugin = {
+  onExecute: () => ({
+    onExecuteDone: ({ result, setResult }) => {
+      if (!('errors' in result) || !result.errors) return;
+      setResult({
+        ...result,
+        errors: result.errors.map((error) => invalidInputOf(error)),
+      });
+    },
+  }),
+};
 ```
 
-For `name: String @constraint(maxLength: 100)` sent with 101 characters:
+For `signUp(input: { name: String! @constraint(maxLength: 100) })` sent with a
+101-character name, the response (without `translate`, so `message` is the
+code) is:
 
 ```json
 {
+  "data": null,
   "errors": [{
     "message": "validation.errors.invalid-input",
     "path": ["signUp"],
@@ -259,7 +271,7 @@ For `name: String @constraint(maxLength: 100)` sent with 101 characters:
       "code": "validation.errors.invalid-input",
       "http": { "status": 400 },
       "fields": [{
-        "path": "person.name",
+        "path": "name",
         "code": "validation.errors.too-long",
         "message": "validation.errors.too-long",
         "params": { "max": 100 }
@@ -385,7 +397,7 @@ the directive declared is this package's. Both at once throw
 | `fieldsError(code, issues, options?)` | a refusal of your own naming fields, `extensions: { code, params?, http?, fields }`; `options` adds `status` and `params` |
 | `inputPath(path)` | `['input', 'person', 'firstName']` as `person.firstName`: dotted, the leading `input` argument dropped; a symbol written as `String(key)` |
 | `fieldIssueOf(issue)` | a Zod issue as a `FieldIssue`: `inputPath(issue.path)` and a code under `validation.errors.` (`too-short`, `too-long`, `out-of-range`, `too-few`, `too-many`, `invalid-format`, `invalid`), no params |
-| `constraintInvalidInput(error, options?)` | a `@constraint` `BAD_USER_INPUT` refusal (direct or wrapped) as `invalidInputError`: fields `{ path, code, params }`, `params` the declared bound (`{ min }` or `{ max }`), `invalid` for an issue with no `constraint`, `originalError` kept; another error returned as it is |
+| `invalidInputOf(error, { translate? })` | a `@constraint` `BAD_USER_INPUT` refusal (direct, or the `originalError` of another error) as `invalidInputError`: fields `{ path, code, params }`, `params` the declared value under the argument's key (`min`, `max`, `exclusiveMin`, `exclusiveMax`, `multipleOf`, `format`; none for `pattern`), `invalid` for an issue with no `constraint`, `originalError` kept; any other error returned as the same object |
 | `FIELD_CODES` | those codes, keyed `tooShort`, `tooLong`, `outOfRange`, `tooFew`, `tooMany`, `invalidFormat`, `invalid` |
 | `INVALID_INPUT` | `'validation.errors.invalid-input'` |
 | `FieldIssue`, `FieldError`, `IssueParams`, `Translate`, `InvalidInputOptions`, `FieldsErrorOptions` | their types: an issue you write, a `fields` entry, its params, your translator, the options |

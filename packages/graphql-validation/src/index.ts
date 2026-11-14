@@ -5,7 +5,6 @@ export {
 	type ValidationIssue,
 } from './bad-user-input';
 export { constraintTypeDefs } from './constraint-directive';
-export { constraintInvalidInput } from './constraint-invalid-input';
 export { FIELD_CODES, fieldIssueOf } from './field-issue-of';
 export type { FormatName } from './formats';
 export type { StringSchema } from './formats/format';
@@ -22,6 +21,7 @@ export {
 	invalidInputError,
 	type Translate,
 } from './invalid-input';
+export { invalidInputOf } from './invalid-input-of';
 export { type MaxDepthOptions, maxDepth } from './limits/max-depth';
 export { type MaxFieldsOptions, maxFields } from './limits/max-fields';
 export { type MaxListCostOptions, maxListCost } from './limits/max-list-cost';
