@@ -1,5 +1,11 @@
 # @nxgt/graphql-validation
 
+## 0.9.0
+
+### Minor Changes
+
+- [#153](https://github.com/softistx/nxgt-graphql/pull/153) [`80fc651`](https://github.com/softistx/nxgt-graphql/commit/80fc651b82e8bda0f9a344ffb421c205f8fec0f3) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Add `invalidInputOf(error, { translate? })`, which converts a `@constraint` `BAD_USER_INPUT` refusal (thrown directly or wrapped by graphql-js) into `invalidInputError`, with per-field codes from `FIELD_CODES` and the declared value as `params` under the argument's own key (`min`, `max`, `exclusiveMin`, `exclusiveMax`, `multipleOf`, `format`; none for `pattern`). An issue with no `constraint` is `validation.errors.invalid`; `originalError` is kept and any other error is returned as the same object.
+
 ## 0.8.1
 
 ### Patch Changes
