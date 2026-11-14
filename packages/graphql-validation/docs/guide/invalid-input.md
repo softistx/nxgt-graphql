@@ -146,6 +146,45 @@ const issueOf = (issue: z.core.$ZodIssue): FieldIssue =>
     : fieldIssueOf(issue);
 ```
 
+## From a `@constraint` refusal
+
+`constraintInvalidInput(error, { translate })` turns the `BAD_USER_INPUT`
+error of `withValidation` / `validated`, thrown directly or wrapped by
+graphql-js (its `originalError`), into `invalidInputError`'s shape, so a
+server answers one error whatever raised it. Any other error comes back as
+it is, and the given error becomes the new one's `originalError`; the
+location (`nodes`, `source`, `positions`, `path`) is kept.
+
+| `@constraint` argument | `code` (under `validation.errors.`) | `params` |
+| --- | --- | --- |
+| `minLength` / `maxLength` | `too-short` / `too-long` | `{ min }` / `{ max }` |
+| `min`, `exclusiveMin` / `max`, `exclusiveMax` | `out-of-range` | `{ min }` / `{ max }` |
+| `multipleOf` | `out-of-range` | none |
+| `minItems` / `maxItems` | `too-few` / `too-many` | `{ min }` / `{ max }` |
+| `format`, `pattern` | `invalid-format` | none |
+| `startsWith`, `endsWith`, `contains`, `notContains`, or an issue with no `constraint` | `invalid` | none |
+
+```ts
+import { constraintInvalidInput } from '@nxgt/graphql-validation';
+
+const plugin = {
+  onExecute: () => ({
+    onExecuteDone: ({ result, setResult }) => {
+      if (!('errors' in result) || !result.errors) return;
+      setResult({
+        ...result,
+        errors: result.errors.map((error) =>
+          constraintInvalidInput(error, { translate: t }),
+        ),
+      });
+    },
+  }),
+};
+// maxLength: 100 refused:
+// fields: [{ path: 'person.name', code: 'validation.errors.too-long',
+//            message: '…', params: { max: 100 } }]
+```
+
 `inputPath` turns a GraphQL or Zod path into a dotted one, dropping the
 leading `input` argument: `inputPath(['input', 'person', 'firstName'])` is
 `person.firstName`, `['input', 'tags', 1]` is `tags.1`; a path that does not
