@@ -14,10 +14,14 @@ Nothing planned yet.
 
 - **Emit the invalid-input shape directly.** An option for `withValidation`
   and `validated` to raise the `invalidInputError` shape in place of
-  `BAD_USER_INPUT`, so an API using it needs no mapping of its own.
+  `BAD_USER_INPUT`, so an API using it needs no mapping of its own. Today
+  `invalidInputOf` converts the refusal after the fact.
 
 ## Shipped
 
+- **Constraint refusals as invalid input** — `invalidInputOf` converts a
+  `@constraint` `BAD_USER_INPUT` refusal into `invalidInputError`, with the
+  declared value as `params`.
 - **Relay connection sizing** — `maxListCost` sizes the `edges` and `nodes` of
   a connection from the connection field's size argument (`items(first: 100)
   { edges { … } }`), not `defaultFirst`.

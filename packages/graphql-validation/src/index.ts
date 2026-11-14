@@ -21,6 +21,7 @@ export {
 	invalidInputError,
 	type Translate,
 } from './invalid-input';
+export { invalidInputOf } from './invalid-input-of';
 export { type MaxDepthOptions, maxDepth } from './limits/max-depth';
 export { type MaxFieldsOptions, maxFields } from './limits/max-fields';
 export { type MaxListCostOptions, maxListCost } from './limits/max-list-cost';
