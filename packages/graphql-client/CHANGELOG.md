@@ -1,5 +1,11 @@
 # @nxgt/graphql-client
 
+## 0.8.0
+
+### Minor Changes
+
+- [#157](https://github.com/softistx/nxgt-graphql/pull/157) [`f992286`](https://github.com/softistx/nxgt-graphql/commit/f99228658727faceae67dd0d0222873177a2c335) Thanks [@SteveGT96](https://github.com/SteveGT96)! - Add an `onResponse(response)` call option to `query`, `mutate` and `execute`: it receives the call's HTTP `Response`, so its headers (`Set-Cookie`, `Retry-After`, a request id) are readable per call, for a failed answer too. A call that sets it is sent on its own, never shared with an identical query nor batched. Fixes [#156](https://github.com/softistx/nxgt-graphql/issues/156).
+
 ## 0.7.0
 
 ### Minor Changes
