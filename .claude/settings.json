@@ -5,7 +5,7 @@
 		}
 	},
 	"enabledPlugins": {
-		"nxgt-base@softistx": true,
-		"nxgt-package@softistx": true
+		"base@softistx": true,
+		"package@softistx": true
 	}
 }
