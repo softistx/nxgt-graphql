@@ -224,8 +224,8 @@ await client.execute(RenameUser, { id: '42', name: 'Ada' }, {     // a mutation
 ```
 
 Its options are what `query` and `mutate` both take: `signal`, `headers`,
-`timeout` and `onResponse` (see [Response headers](#response-headers)). A document's types carry its result and variables, not
-whether it is a query, so `retry` and `fetchPolicy`, a query's only, are not
+`timeout` and `onResponse` (see [Response headers](#response-headers)). A
+document's types carry its result and variables, not whether it is a query, so `retry` and `fetchPolicy`, a query's only, are not
 accepted; a query through `execute` gets the client's `retry` and the default
 fetch policy. Call `query` when you need them.
 
@@ -259,6 +259,8 @@ const data = await client.execute(UserQuery, { id: '42' }, {
   an identical query in flight and is never batched, so its response is its own.
 - With `persisted: { mode: 'apq' }`, it runs for each answer, the one that
   asked for the query text included.
+- With `retry`, it runs once per call, with the final response, not once per
+  attempt.
 - An error it throws rejects the call.
 
 ## Retry

@@ -81,7 +81,8 @@ export interface CallOptions {
 	 * answered (a network failure, a timeout, a cache hit). The body is
 	 * already read: use `data`, not `response.json()`. A call that sets it
 	 * is sent on its own: never shared with an identical query in flight,
-	 * never batched. With `apq`, it also runs for the answer that asked for
+	 * never batched. With retries it runs once, with the final response, not
+	 * once per attempt. With `apq`, it also runs for the answer that asked for
 	 * the text. An error it throws rejects the call.
 	 */
 	onResponse?: (response: Response) => void;

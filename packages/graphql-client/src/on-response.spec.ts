@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
+import { normalizedCache } from './cache/normalized-cache';
 import { createGraphQLClient } from './client';
 import { ApiError, ApiStatusError } from './errors';
 
@@ -155,5 +156,57 @@ describe('onResponse', () => {
 			})
 			.catch((e: unknown) => e);
 		expect(error).toBe(boom);
+	});
+
+	test('with retries it runs once, with the final response', async () => {
+		let attempts = 0;
+		const fetch = async () => {
+			attempts++;
+			return attempts === 1
+				? reply('1', { errors: [{ message: 'down' }] }, 503)
+				: reply('2');
+		};
+		const client = createGraphQLClient({
+			url,
+			fetch,
+			retry: { attempts: 1, delay: () => 0 },
+		});
+		const seen: number[] = [];
+		await client.query(ViewerQuery, undefined, {
+			onResponse: (response) => {
+				seen.push(response.status);
+			},
+		});
+		expect(attempts).toBe(2);
+		expect(seen).toEqual([200]);
+	});
+
+	test('it is not called when nothing answered', async () => {
+		const fetch = async () => {
+			throw new TypeError('network down');
+		};
+		const client = createGraphQLClient({ url, fetch });
+		let called = 0;
+		const error = await client
+			.query(ViewerQuery, undefined, { onResponse: () => called++ })
+			.catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(Error);
+		expect(called).toBe(0);
+	});
+
+	test('it is not called for a result served from the cache', async () => {
+		const server = api((n) =>
+			reply(n, { data: { viewer: { __typename: 'User', id: 'u' } } }),
+		);
+		const client = createGraphQLClient({
+			url,
+			fetch: server.fetch,
+			cache: normalizedCache(),
+		});
+		await client.query(ViewerQuery);
+		let called = 0;
+		await client.query(ViewerQuery, undefined, { onResponse: () => called++ });
+		expect(server.count()).toBe(1);
+		expect(called).toBe(0);
 	});
 });
