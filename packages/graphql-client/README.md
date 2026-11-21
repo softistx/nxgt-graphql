@@ -108,6 +108,18 @@ const data = await client.execute(document, variables); // query() or mutate(), 
 
 See [Client](docs/guide/client.md) and [Execute](docs/guide/client.md#execute).
 
+Need a header of the answer (`Set-Cookie` to relay, `Retry-After`, a request
+id)? The `onResponse` call option of `query`, `mutate` and `execute` receives
+that call's `Response`, an error answer included:
+
+```ts
+await client.execute(document, variables, {
+  onResponse: (response) => console.log(response.headers.get('x-request-id')),
+});
+```
+
+See [Response headers](docs/guide/client.md#response-headers).
+
 Already have an `@nxgt/httpyz` client (its auth, middleware, base URL)? Pass
 it instead of `url`:
 

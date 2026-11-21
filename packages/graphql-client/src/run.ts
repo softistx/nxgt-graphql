@@ -88,11 +88,12 @@ function sendQuery(
 	const retry = call.retry ?? clientRetry;
 	const go = (signal: AbortSignal | undefined) => {
 		const sending: Sending = { call, retry, signal };
-		return batcher
+		return batcher && !call.onResponse
 			? batcher.run(operation, variables, sending)
 			: send(transport, operation, variables, sending);
 	};
-	if (!dedupe) return go(call.signal);
+	// Its hook is its own: a shared request would answer one caller's.
+	if (!dedupe || call.onResponse) return go(call.signal);
 	return flights.run(
 		dedupeKey(operation, variables, call, retry),
 		call.signal,

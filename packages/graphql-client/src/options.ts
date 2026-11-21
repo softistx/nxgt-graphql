@@ -74,6 +74,17 @@ export interface CallOptions {
 	headers?: HeadersInit;
 	/** This call's timeout in milliseconds, instead of the client's. */
 	timeout?: number;
+	/**
+	 * Called with the HTTP `Response` of this call, headers and status
+	 * readable, before the result is read: for an answered call, an error
+	 * included (`Retry-After` of a throttled one), and not when nothing was
+	 * answered (a network failure, a timeout, a cache hit). The body is
+	 * already read: use `data`, not `response.json()`. A call that sets it
+	 * is sent on its own: never shared with an identical query in flight,
+	 * never batched. With `apq`, it also runs for the answer that asked for
+	 * the text. An error it throws rejects the call.
+	 */
+	onResponse?: (response: Response) => void;
 }
 
 export interface QueryOptions extends CallOptions {
