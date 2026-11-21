@@ -38,6 +38,10 @@ Candidates, not commitments.
 
 In the next minor.
 
+- **`onResponse`: read a call's response headers.** `query`, `mutate` and
+  `execute` take `onResponse(response)`, called with the call's HTTP
+  `Response` (`Set-Cookie`, `Retry-After`, a request id), error answers
+  included; such a call is never shared nor batched (#156).
 - **`subscribe` takes `onOpen`: know a quiet stream is open.** It is called
   once the server accepted the connection, before any event.
   `useSubscription` takes `onOpen` too (#132).

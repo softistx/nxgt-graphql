@@ -186,6 +186,7 @@ Per-call options:
 | `signal` | `AbortSignal` | both | aborts the call: it rejects with the signal's reason |
 | `headers` | `HeadersInit` | both | over the client's headers, for this call |
 | `timeout` | `number` | both | milliseconds, instead of the client's |
+| `onResponse` | `(response: Response) => void` | both | receives this call's HTTP response, its headers included; see [Response headers](#response-headers) |
 | `retry` | `number \| Omit<RetryOptions, 'methods'> \| false` | `query` only | instead of the client's |
 | `fetchPolicy` | `'cache-first' \| 'network-only' \| 'cache-only' \| 'no-cache'` | `query` only | whether the cache answers; see [Fetch policies](cache.md#fetch-policies) |
 
@@ -222,15 +223,45 @@ await client.execute(RenameUser, { id: '42', name: 'Ada' }, {     // a mutation
 });
 ```
 
-Its options are what `query` and `mutate` both take: `signal`, `headers`
-and `timeout`. A document's types carry its result and variables, not
-whether it is a query, so `retry` and `fetchPolicy`, a query's only, are not
+Its options are what `query` and `mutate` both take: `signal`, `headers`,
+`timeout` and `onResponse` (see [Response headers](#response-headers)). A
+document's types carry its result and variables, not whether it is a query, so `retry` and `fetchPolicy`, a query's only, are not
 accepted; a query through `execute` gets the client's `retry` and the default
 fetch policy. Call `query` when you need them.
 
 A subscription document rejects with a `TypeError`, `execute() was given a
 subscription: use subscribe()`, before anything is sent. Like `query` and
 `mutate`, `execute` never throws: every refusal is a rejected promise.
+
+## Response headers
+
+A server-side caller often needs a header of the answer: `Set-Cookie` to relay,
+`Retry-After` of a throttled call, a request id. The `onResponse` call option
+receives the HTTP `Response` of that call (`query`, `mutate` and `execute`),
+so nothing is shared between concurrent calls.
+
+```ts
+let requestId: string | null = null;
+const data = await client.execute(UserQuery, { id: '42' }, {
+  onResponse: (response) => {
+    requestId = response.headers.get('x-request-id');
+  },
+});
+```
+
+- It runs for every answered call, a failed one included: it runs before the
+  `ApiError` or `ApiStatusError` is thrown, so `Retry-After` is readable.
+- It does not run when nothing was answered (a network failure, a timeout, an
+  abort) nor for a result served from the cache.
+- The body is already read: take the result from `data`, not from
+  `response.json()`.
+- A call with `onResponse` is sent on its own: it never shares a request with
+  an identical query in flight and is never batched, so its response is its own.
+- With `persisted: { mode: 'apq' }`, it runs for each answer, the one that
+  asked for the query text included.
+- With `retry`, it runs once per call, with the final response, not once per
+  attempt.
+- An error it throws rejects the call.
 
 ## Retry
 

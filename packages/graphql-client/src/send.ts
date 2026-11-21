@@ -76,8 +76,9 @@ export async function post(
 ): Promise<AnyReply> {
 	const headers = new Headers(call.headers);
 	if (!headers.has('accept')) headers.set('accept', accept);
+	let reply: AnyReply;
 	try {
-		return await transport.http.post(transport.path, {
+		reply = await transport.http.post(transport.path, {
 			json,
 			headers,
 			...(signal && { signal }),
@@ -90,6 +91,10 @@ export async function post(
 		if (signal?.aborted) throw signal.reason;
 		throw transportError(error);
 	}
+	// Outside the try: what the caller's hook throws is not a transport error.
+	const { response } = reply as { response?: Response };
+	if (call.onResponse && response) call.onResponse(response);
+	return reply;
 }
 
 /** httpyz retries no POST by default: a query's retries name it. */
